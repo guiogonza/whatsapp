@@ -1,0 +1,12 @@
+node_modules/
+.wwebjs_auth/
+.wwebjs_cache/
+*.log
+combined.log
+error.log
+whatsapp-server-*.log
+app/
+uploads/
+*.bak
+*.backup
+public/*.bak
