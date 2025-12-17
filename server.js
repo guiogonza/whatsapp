@@ -147,6 +147,51 @@ async function monitorSessions() {
 sessionMonitorInterval = setInterval(monitorSessions, 30000);
 console.log('Monitor de sesiones activo (verifica cada 30 segundos)');
 
+// Función para verificar y notificar sesiones inactivas
+async function checkInactiveSessions() {
+    const allSessions = Object.values(sessions);
+    const inactiveSessions = allSessions.filter(s => s.state !== SESSION_STATES.READY);
+    
+    if (inactiveSessions.length > 0) {
+        let statusReport = `📊 *REPORTE DE SESIONES*\n\n`;
+        statusReport += `⏰ Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n\n`;
+        statusReport += `📈 Total de sesiones: ${allSessions.length}\n`;
+        statusReport += `✅ Activas: ${allSessions.length - inactiveSessions.length}\n`;
+        statusReport += `⚠️ Inactivas: ${inactiveSessions.length}\n\n`;
+        statusReport += `*Sesiones que requieren atención:*\n\n`;
+        
+        inactiveSessions.forEach((session, index) => {
+            let statusIcon = '❌';
+            let statusText = session.state;
+            
+            if (session.state === SESSION_STATES.WAITING_FOR_QR) {
+                statusIcon = '📱';
+                statusText = 'Esperando QR';
+            } else if (session.state === SESSION_STATES.DISCONNECTED) {
+                statusIcon = '🔌';
+                statusText = 'Desconectada';
+            } else if (session.state === SESSION_STATES.ERROR) {
+                statusIcon = '⚠️';
+                statusText = 'Error';
+            }
+            
+            statusReport += `${index + 1}. ${statusIcon} *${session.name}*\n`;
+            statusReport += `   Estado: ${statusText}\n`;
+            if (session.error) {
+                statusReport += `   Error: ${session.error}\n`;
+            }
+            statusReport += `\n`;
+        });
+        
+        await sendNotificationToAdmin(statusReport);
+    } else {
+        console.log('✅ Todas las sesiones están activas - No se envía notificación');
+    }
+}
+
+// Configurar verificación de sesiones inactivas cada hora
+const inactiveSessionCheckInterval = setInterval(checkInactiveSessions, 60 * 60 * 1000);
+console.log('Monitor de sesiones inactivas activo (verifica cada hora)');
 
 // Función para limpiar consola
 function clearConsole() {
@@ -1447,6 +1492,15 @@ async function startServer() {
             console.log(`Panel de control: http://localhost:${PORT}`);
             console.log(`Health check: http://localhost:${PORT}/health`);
             console.log(`Sesiones activas: ${Object.keys(sessions).length}`);
+            
+            // Esperar 30 segundos después del inicio para dar tiempo a que las sesiones se conecten
+            // y luego hacer la primera verificación de sesiones inactivas
+            setTimeout(() => {
+                console.log('Ejecutando verificación inicial de sesiones inactivas...');
+                checkInactiveSessions().catch(err => 
+                    console.log(`Error en verificación inicial: ${err.message}`)
+                );
+            }, 30000);
         });
 
         return server;
