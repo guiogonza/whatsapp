@@ -550,9 +550,11 @@ async function initializeClient(sessionName) {
 
         // EVENTO DISCONNECTED
         client.on('disconnected', (reason) => {
-            console.log(`${sessionName} desconectado: ${reason}`);
+            console.log(`🔴 ${sessionName} desconectado: ${reason}`);
+            console.log(`🔍 Verificando sesión ${sessionName} en memoria: ${sessions[sessionName] ? 'EXISTE' : 'NO EXISTE'}`);
 
             if (sessions[sessionName]) {
+                console.log(`📝 Cambiando estado de ${sessionName} a DISCONNECTED`);
                 sessions[sessionName].state = SESSION_STATES.DISCONNECTED;
                 sessions[sessionName].qr = null;
                 sessions[sessionName].lastActivity = new Date();
@@ -564,7 +566,7 @@ async function initializeClient(sessionName) {
                     `📝 Razón: ${reason}\n\n` +
                     `Por favor, revise y reconecte la sesión si es necesario.`;
                 
-                console.log(`Intentando enviar notificación de desconexión para ${sessionName}...`);
+                console.log(`📤 Intentando enviar notificación de desconexión para ${sessionName}...`);
                 sendNotificationToAdmin(notificationMsg)
                     .then(success => {
                         if (success) {
@@ -576,6 +578,8 @@ async function initializeClient(sessionName) {
                     .catch(err => {
                         console.log(`❌ Error enviando notificación de desconexión: ${err.message}`);
                     });
+            } else {
+                console.log(`⚠️ No se pudo encontrar la sesión ${sessionName} para enviar notificación`);
             }
 
             clearTimeouts();
