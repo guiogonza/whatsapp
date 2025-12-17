@@ -150,15 +150,30 @@ console.log('Monitor de sesiones activo (verifica cada 30 segundos)');
 // Función para verificar y notificar sesiones inactivas
 async function checkInactiveSessions() {
     const allSessions = Object.values(sessions);
+    const activeSessions = allSessions.filter(s => s.state === SESSION_STATES.READY);
     const inactiveSessions = allSessions.filter(s => s.state !== SESSION_STATES.READY);
     
+    // Siempre enviar reporte, incluso si todas están activas
+    let statusReport = `📊 *REPORTE DE SESIONES*\n\n`;
+    statusReport += `⏰ Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n\n`;
+    statusReport += `📈 Total de sesiones: ${allSessions.length}\n`;
+    statusReport += `✅ Activas: ${activeSessions.length}\n`;
+    statusReport += `⚠️ Inactivas: ${inactiveSessions.length}\n\n`;
+    
+    if (activeSessions.length > 0) {
+        statusReport += `*Sesiones Activas:*\n`;
+        activeSessions.forEach((session, index) => {
+            statusReport += `${index + 1}. ✅ *${session.name}*`;
+            if (session.userInfo && session.userInfo.pushname) {
+                statusReport += ` (${session.userInfo.pushname})`;
+            }
+            statusReport += `\n`;
+        });
+        statusReport += `\n`;
+    }
+    
     if (inactiveSessions.length > 0) {
-        let statusReport = `📊 *REPORTE DE SESIONES*\n\n`;
-        statusReport += `⏰ Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n\n`;
-        statusReport += `📈 Total de sesiones: ${allSessions.length}\n`;
-        statusReport += `✅ Activas: ${allSessions.length - inactiveSessions.length}\n`;
-        statusReport += `⚠️ Inactivas: ${inactiveSessions.length}\n\n`;
-        statusReport += `*Sesiones que requieren atención:*\n\n`;
+        statusReport += `*Sesiones que requieren atención:*\n`;
         
         inactiveSessions.forEach((session, index) => {
             let statusIcon = '❌';
@@ -173,20 +188,25 @@ async function checkInactiveSessions() {
             } else if (session.state === SESSION_STATES.ERROR) {
                 statusIcon = '⚠️';
                 statusText = 'Error';
+            } else if (session.state === SESSION_STATES.STARTING) {
+                statusIcon = '🔄';
+                statusText = 'Iniciando';
+            } else if (session.state === SESSION_STATES.LOADING) {
+                statusIcon = '⏳';
+                statusText = 'Cargando';
             }
             
-            statusReport += `${index + 1}. ${statusIcon} *${session.name}*\n`;
-            statusReport += `   Estado: ${statusText}\n`;
+            statusReport += `${index + 1}. ${statusIcon} *${session.name}* - ${statusText}\n`;
             if (session.error) {
                 statusReport += `   Error: ${session.error}\n`;
             }
-            statusReport += `\n`;
         });
-        
-        await sendNotificationToAdmin(statusReport);
     } else {
-        console.log('✅ Todas las sesiones están activas - No se envía notificación');
+        statusReport += `✅ *Todas las sesiones están funcionando correctamente*`;
     }
+    
+    await sendNotificationToAdmin(statusReport);
+    console.log(`📊 Reporte de sesiones enviado: ${activeSessions.length} activas, ${inactiveSessions.length} inactivas`);
 }
 
 // Configurar verificación de sesiones inactivas cada hora
