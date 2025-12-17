@@ -57,6 +57,14 @@ let sessionMonitorInterval = null;
 // Número de notificación para alertas
 const NOTIFICATION_NUMBER = '573183499539';
 
+// Función para formatear número de teléfono
+function formatPhoneNumber(phoneNumber) {
+    if (!phoneNumber) return null;
+    const cleaned = phoneNumber.toString().replace(/[^\d]/g, '');
+    if (cleaned.length < 10 || cleaned.length > 15) return null;
+    return phoneNumber.endsWith('@c.us') ? phoneNumber : `${cleaned}@c.us`;
+}
+
 // Función para enviar notificación usando una sesión activa
 async function sendNotificationToAdmin(message) {
     // Buscar una sesión activa para enviar la notificación
@@ -206,14 +214,6 @@ function validateSessionName(sessionName) {
         return { valid: false, error: 'Nombre inválido. Use solo letras, números, guiones y guiones bajos' };
     }
     return { valid: true };
-}
-
-// Función para formatear número de teléfono
-function formatPhoneNumber(phoneNumber) {
-    if (!phoneNumber) return null;
-    const cleaned = phoneNumber.toString().replace(/[^\d]/g, '');
-    if (cleaned.length < 10 || cleaned.length > 15) return null;
-    return phoneNumber.endsWith('@c.us') ? phoneNumber : `${cleaned}@c.us`;
 }
 
 // Función para verificar si el cliente está realmente listo para enviar mensajes
