@@ -1323,36 +1323,37 @@ app.post('/api/session/:sessionName/reconnect', async (req, res) => {
     const session = sessions[sessionName];
     
     try {
-        console.log(`Reconectando sesión: ${sessionName}`);
-        session.state = SESSION_STATES.RECONNECTING;
+        console.log(`🔄 Reconectando sesión: ${sessionName}`);
         
-        // Intentar refrescar la página de Puppeteer
-        if (session.client && session.client.pupPage) {
-            await session.client.pupPage.reload({ waitUntil: 'networkidle0', timeout: 30000 });
-            await new Promise(resolve => setTimeout(resolve, 10000));
-            
-            // Verificar si está listo
-            const isReady = await isClientTrulyReady(session);
-            
-            if (isReady) {
-                session.state = SESSION_STATES.READY;
-                session.needsReconnect = false;
-                
-                res.json({
-                    success: true,
-                    message: `Sesión ${sessionName} reconectada exitosamente`
-                });
-            } else {
-                session.state = SESSION_STATES.ERROR;
-                res.status(500).json({
-                    error: 'No se pudo reconectar. Intente eliminar y recrear la sesión.'
-                });
+        // Destruir cliente existente si hay uno
+        if (session.client) {
+            try {
+                console.log(`🗑️ Destruyendo cliente existente de ${sessionName}`);
+                await session.client.destroy();
+            } catch (destroyError) {
+                console.log(`Advertencia al destruir cliente: ${destroyError.message}`);
             }
-        } else {
-            res.status(400).json({
-                error: 'No hay cliente activo para reconectar'
-            });
         }
+        
+        // Limpiar estado de sesión
+        session.client = null;
+        session.qr = null;
+        session.state = SESSION_STATES.STARTING;
+        session.error = null;
+        
+        // Responder inmediatamente
+        res.json({
+            success: true,
+            message: `Sesión ${sessionName} reiniciándose. Generando nuevo código QR...`
+        });
+        
+        // Inicializar nuevo cliente en background
+        initializeClient(sessionName).catch(error => {
+            console.error(`Error reinicializando ${sessionName}: ${error.message}`);
+            session.state = SESSION_STATES.ERROR;
+            session.error = error.message;
+        });
+        
     } catch (error) {
         console.error(`Error reconectando ${sessionName}: ${error.message}`);
         session.state = SESSION_STATES.ERROR;
