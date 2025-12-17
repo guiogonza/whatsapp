@@ -54,6 +54,40 @@ let lastClearTime = new Date();
 let consoleClearInterval = null;
 let sessionMonitorInterval = null;
 
+// Número de notificación para alertas
+const NOTIFICATION_NUMBER = '573183499539';
+
+// Función para enviar notificación usando una sesión activa
+async function sendNotificationToAdmin(message) {
+    // Buscar una sesión activa para enviar la notificación
+    const activeSessions = Object.values(sessions).filter(s => 
+        s.state === SESSION_STATES.READY && s.client
+    );
+    
+    if (activeSessions.length === 0) {
+        console.log('⚠️ No hay sesiones activas para enviar notificación');
+        return false;
+    }
+    
+    // Usar la primera sesión activa
+    const notifySession = activeSessions[0];
+    const formattedNumber = formatPhoneNumber(NOTIFICATION_NUMBER);
+    
+    if (!formattedNumber) {
+        console.log('⚠️ Número de notificación inválido');
+        return false;
+    }
+    
+    try {
+        await notifySession.client.sendMessage(formattedNumber, message);
+        console.log(`✅ Notificación enviada a ${NOTIFICATION_NUMBER} usando sesión ${notifySession.name}`);
+        return true;
+    } catch (error) {
+        console.log(`❌ Error enviando notificación: ${error.message}`);
+        return false;
+    }
+}
+
 // Función para monitorear estado de sesiones
 async function monitorSessions() {
     const sessionNames = Object.keys(sessions);
@@ -70,11 +104,32 @@ async function monitorSessions() {
                     console.log(`⚠️ Sesión ${sessionName} se detectó desconectada (estado: ${state})`);
                     session.state = SESSION_STATES.DISCONNECTED;
                     session.qr = null;
+                    
+                    // Enviar notificación al administrador
+                    const notificationMsg = `🚨 *ALERTA DE SESIÓN*\n\n` +
+                        `La sesión *${sessionName}* se ha desconectado.\n\n` +
+                        `📅 Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n` +
+                        `📊 Estado detectado: ${state}\n\n` +
+                        `Por favor, revise y reconecte la sesión si es necesario.`;
+                    
+                    await sendNotificationToAdmin(notificationMsg);
                 }
             } catch (error) {
                 console.log(`⚠️ Sesión ${sessionName} no responde, marcando como desconectada`);
+                const previousState = session.state;
                 session.state = SESSION_STATES.DISCONNECTED;
                 session.qr = null;
+                
+                // Solo notificar si era una sesión que estaba activa
+                if (previousState === SESSION_STATES.READY) {
+                    const notificationMsg = `🚨 *ALERTA DE SESIÓN*\n\n` +
+                        `La sesión *${sessionName}* ha dejado de responder.\n\n` +
+                        `📅 Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n` +
+                        `❌ Error: ${error.message}\n\n` +
+                        `Por favor, revise y reconecte la sesión si es necesario.`;
+                    
+                    await sendNotificationToAdmin(notificationMsg);
+                }
             }
         }
     }
@@ -443,6 +498,17 @@ async function initializeClient(sessionName) {
                 sessions[sessionName].state = SESSION_STATES.DISCONNECTED;
                 sessions[sessionName].qr = null;
                 sessions[sessionName].lastActivity = new Date();
+                
+                // Enviar notificación de desconexión
+                const notificationMsg = `🚨 *ALERTA DE SESIÓN*\n\n` +
+                    `La sesión *${sessionName}* se ha desconectado.\n\n` +
+                    `📅 Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n` +
+                    `📝 Razón: ${reason}\n\n` +
+                    `Por favor, revise y reconecte la sesión si es necesario.`;
+                
+                sendNotificationToAdmin(notificationMsg).catch(err => 
+                    console.log(`Error enviando notificación de desconexión: ${err.message}`)
+                );
             }
 
             clearTimeouts();
