@@ -67,10 +67,14 @@ function formatPhoneNumber(phoneNumber) {
 
 // Función para enviar notificación usando una sesión activa
 async function sendNotificationToAdmin(message) {
+    console.log(`📨 Iniciando envío de notificación al admin...`);
+    
     // Buscar una sesión activa para enviar la notificación
     const activeSessions = Object.values(sessions).filter(s => 
         s.state === SESSION_STATES.READY && s.client
     );
+    
+    console.log(`📊 Sesiones activas disponibles: ${activeSessions.length}`);
     
     if (activeSessions.length === 0) {
         console.log('⚠️ No hay sesiones activas para enviar notificación');
@@ -79,6 +83,8 @@ async function sendNotificationToAdmin(message) {
     
     // Usar la primera sesión activa
     const notifySession = activeSessions[0];
+    console.log(`📱 Usando sesión ${notifySession.name} para enviar notificación`);
+    
     const formattedNumber = formatPhoneNumber(NOTIFICATION_NUMBER);
     
     if (!formattedNumber) {
@@ -87,6 +93,7 @@ async function sendNotificationToAdmin(message) {
     }
     
     try {
+        console.log(`📤 Enviando mensaje a ${NOTIFICATION_NUMBER}...`);
         await notifySession.client.sendMessage(formattedNumber, message);
         console.log(`✅ Notificación enviada a ${NOTIFICATION_NUMBER} usando sesión ${notifySession.name}`);
         return true;
@@ -551,9 +558,18 @@ async function initializeClient(sessionName) {
                     `📝 Razón: ${reason}\n\n` +
                     `Por favor, revise y reconecte la sesión si es necesario.`;
                 
-                sendNotificationToAdmin(notificationMsg).catch(err => 
-                    console.log(`Error enviando notificación de desconexión: ${err.message}`)
-                );
+                console.log(`Intentando enviar notificación de desconexión para ${sessionName}...`);
+                sendNotificationToAdmin(notificationMsg)
+                    .then(success => {
+                        if (success) {
+                            console.log(`✅ Notificación de desconexión enviada para ${sessionName}`);
+                        } else {
+                            console.log(`❌ No se pudo enviar notificación de desconexión para ${sessionName}`);
+                        }
+                    })
+                    .catch(err => {
+                        console.log(`❌ Error enviando notificación de desconexión: ${err.message}`);
+                    });
             }
 
             clearTimeouts();
