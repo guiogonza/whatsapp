@@ -52,6 +52,38 @@ const CONSOLE_CLEAR_INTERVAL = parseInt(process.env.CONSOLE_CLEAR_INTERVAL_MINUT
 let consoleLogCount = 0;
 let lastClearTime = new Date();
 let consoleClearInterval = null;
+let sessionMonitorInterval = null;
+
+// Función para monitorear estado de sesiones
+async function monitorSessions() {
+    const sessionNames = Object.keys(sessions);
+    
+    for (const sessionName of sessionNames) {
+        const session = sessions[sessionName];
+        
+        // Solo verificar sesiones que están marcadas como READY
+        if (session.state === SESSION_STATES.READY && session.client) {
+            try {
+                const state = await session.client.getState();
+                
+                if (state !== 'CONNECTED') {
+                    console.log(`⚠️ Sesión ${sessionName} se detectó desconectada (estado: ${state})`);
+                    session.state = SESSION_STATES.DISCONNECTED;
+                    session.qr = null;
+                }
+            } catch (error) {
+                console.log(`⚠️ Sesión ${sessionName} no responde, marcando como desconectada`);
+                session.state = SESSION_STATES.DISCONNECTED;
+                session.qr = null;
+            }
+        }
+    }
+}
+
+// Configurar monitoreo de sesiones cada 30 segundos
+sessionMonitorInterval = setInterval(monitorSessions, 30000);
+console.log('Monitor de sesiones activo (verifica cada 30 segundos)');
+
 
 // Función para limpiar consola
 function clearConsole() {
@@ -547,17 +579,39 @@ async function loadExistingSessions() {
 // ======================== ENDPOINTS API ========================
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+    // Verificar estado real de las sesiones
+    const sessionStates = await Promise.all(Object.keys(sessions).map(async key => {
+        const session = sessions[key];
+        let actualState = session.state;
+        
+        // Si está marcada como READY, verificar que realmente lo esté
+        if (session.state === SESSION_STATES.READY && session.client) {
+            try {
+                const state = await session.client.getState();
+                if (state !== 'CONNECTED') {
+                    actualState = SESSION_STATES.DISCONNECTED;
+                    session.state = SESSION_STATES.DISCONNECTED;
+                }
+            } catch (error) {
+                actualState = SESSION_STATES.DISCONNECTED;
+                session.state = SESSION_STATES.DISCONNECTED;
+            }
+        }
+        
+        return {
+            name: key,
+            state: actualState
+        };
+    }));
+    
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         sessions: {
             count: Object.keys(sessions).length,
-            ready: Object.values(sessions).filter(s => s.state === SESSION_STATES.READY).length,
-            states: Object.keys(sessions).map(key => ({
-                name: key,
-                state: sessions[key].state
-            }))
+            ready: sessionStates.filter(s => s.state === SESSION_STATES.READY).length,
+            states: sessionStates
         },
         console: {
             clearEnabled: CONSOLE_CLEAR_ENABLED,
@@ -607,16 +661,38 @@ app.post('/api/console/clear', (req, res) => {
 });
 
 // Obtener todas las sesiones
-app.get('/api/sessions', (req, res) => {
+app.get('/api/sessions', async (req, res) => {
     try {
-        const sessionsArray = Object.values(sessions).map(session => ({
-            name: session.name,
-            state: session.state,
-            hasQR: !!session.qr && session.state === SESSION_STATES.WAITING_FOR_QR,
-            messageCount: session.messages ? session.messages.length : 0,
-            lastActivity: session.lastActivity,
-            error: session.error,
-            userInfo: session.userInfo || null
+        const sessionsArray = await Promise.all(Object.values(sessions).map(async session => {
+            // Verificar estado real del cliente si está marcado como READY
+            let actualState = session.state;
+            
+            if (session.state === SESSION_STATES.READY && session.client) {
+                try {
+                    // Verificar si el cliente realmente está conectado
+                    const state = await session.client.getState();
+                    if (state !== 'CONNECTED') {
+                        console.log(`Sesión ${session.name} reportaba READY pero está ${state}`);
+                        actualState = SESSION_STATES.DISCONNECTED;
+                        session.state = SESSION_STATES.DISCONNECTED;
+                    }
+                } catch (error) {
+                    // Si hay error obteniendo el estado, la sesión está desconectada
+                    console.log(`Sesión ${session.name} no responde, marcando como DISCONNECTED`);
+                    actualState = SESSION_STATES.DISCONNECTED;
+                    session.state = SESSION_STATES.DISCONNECTED;
+                }
+            }
+            
+            return {
+                name: session.name,
+                state: actualState,
+                hasQR: !!session.qr && session.state === SESSION_STATES.WAITING_FOR_QR,
+                messageCount: session.messages ? session.messages.length : 0,
+                lastActivity: session.lastActivity,
+                error: session.error,
+                userInfo: session.userInfo || null
+            };
         }));
 
         res.json(sessionsArray);
