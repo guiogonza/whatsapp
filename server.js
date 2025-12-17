@@ -412,6 +412,12 @@ async function checkClientReady(sessionName) {
     const session = sessions[sessionName];
     if (!session || !session.client) return false;
 
+    // No cambiar el estado si la sesión está desconectada o en error
+    if (session.state === SESSION_STATES.DISCONNECTED || session.state === SESSION_STATES.ERROR) {
+        console.log(`Cliente ${sessionName} está ${session.state}, no se verifica`);
+        return false;
+    }
+
     try {
         const info = session.client.info;
         if (info && info.wid) {
