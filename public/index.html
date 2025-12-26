@@ -219,7 +219,12 @@
                 </div>
                 <div class="text-right">
                     <div id="activeSessionsCount" class="text-sm text-gray-600 mb-1"></div>
-                    <div id="rotationInfo" class="text-xs text-purple-600 font-medium"></div>
+                    <div class="flex items-center gap-2 justify-end">
+                        <div id="rotationInfo" class="text-xs text-purple-600 font-medium"></div>
+                        <button onclick="rotateSessionManually()" id="rotateBtn" class="bg-purple-500 text-white px-3 py-1 text-xs rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-1" title="Rotar sesión manualmente">
+                            🔄 Rotar
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -396,6 +401,56 @@
                         <p class="text-red-600">Error al cargar sesiones: ${error.message}</p>
                         <button onclick="loadSessions()" class="mt-2 bg-red-500 text-white px-4 py-2 rounded-lg">Reintentar</button>
                     </div>`;
+            }
+        }
+
+        async function rotateSessionManually() {
+            const btn = document.getElementById('rotateBtn');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Rotando...';
+                btn.classList.add('opacity-50');
+                
+                const response = await fetch(`${API_URL}/api/sessions/rotation/rotate`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Actualizar info de rotación y sesiones
+                    await updateRotationInfo();
+                    await loadSessions();
+                    
+                    // Mostrar feedback visual
+                    btn.innerHTML = '✅ Rotado!';
+                    btn.classList.remove('bg-purple-500');
+                    btn.classList.add('bg-green-500');
+                    
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.classList.remove('bg-green-500');
+                        btn.classList.add('bg-purple-500');
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Error al rotar sesión');
+                }
+            } catch (error) {
+                console.error('Error rotando sesión:', error);
+                btn.innerHTML = '❌ Error';
+                btn.classList.remove('bg-purple-500');
+                btn.classList.add('bg-red-500');
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('bg-red-500');
+                    btn.classList.add('bg-purple-500');
+                }, 2000);
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
             }
         }
 
