@@ -364,8 +364,14 @@
                 const infoEl = document.getElementById('rotationInfo');
                 if (rotationData.totalActiveSessions > 0) {
                     const nextRotation = new Date(rotationData.nextRotation);
-                    const timeUntil = Math.round((nextRotation - new Date()) / 1000 / 60);
-                    infoEl.innerHTML = `🔄 Sesión activa: <strong>${currentRotationSession || 'N/A'}</strong> | Próxima rotación: ${timeUntil} min`;
+                    const timeUntilMs = nextRotation - new Date();
+                    const timeUntilMin = Math.floor(timeUntilMs / 1000 / 60);
+                    const timeUntilSec = Math.floor((timeUntilMs / 1000) % 60);
+                    
+                    let timeDisplay = timeUntilMin > 0 ? `${timeUntilMin}m ${timeUntilSec}s` : `${timeUntilSec}s`;
+                    if (timeUntilMs <= 0) timeDisplay = '🔄 Rotando...';
+                    
+                    infoEl.innerHTML = `🔄 <strong class="text-purple-700">${currentRotationSession || 'N/A'}</strong> enviando | Próxima rotación: <span class="font-mono">${timeDisplay}</span>`;
                 } else {
                     infoEl.innerHTML = '⚠️ No hay sesiones activas para rotación';
                 }
@@ -377,10 +383,11 @@
         function startRotationUpdates() {
             if (rotationUpdateInterval) clearInterval(rotationUpdateInterval);
             updateRotationInfo();
+            loadSessions();
             rotationUpdateInterval = setInterval(() => {
                 updateRotationInfo();
-                updateSessionsList();
-            }, 60000); // Actualizar cada minuto
+                loadSessions(); // Recargar sesiones para actualizar badge ACTIVA
+            }, 30000); // Actualizar cada 30 segundos
         }
 
         function stopRotationUpdates() {
