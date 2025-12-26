@@ -10,3 +10,4 @@ uploads/
 *.bak
 *.backup
 public/*.bak
+.env

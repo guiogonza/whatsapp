@@ -57,12 +57,60 @@ let sessionMonitorInterval = null;
 // Número de notificación para alertas
 const NOTIFICATION_NUMBER = '573183499539';
 
+// Configuración API SMS Hablame.co
+const SMS_API_URL = 'https://www.hablame.co/api/sms/v5/send';
+const SMS_API_KEY = process.env.HABLAME_API_KEY || ''; // Configurar en .env
+
 // Función para formatear número de teléfono
 function formatPhoneNumber(phoneNumber) {
     if (!phoneNumber) return null;
     const cleaned = phoneNumber.toString().replace(/[^\d]/g, '');
     if (cleaned.length < 10 || cleaned.length > 15) return null;
     return phoneNumber.endsWith('@c.us') ? phoneNumber : `${cleaned}@c.us`;
+}
+
+// Función para enviar SMS usando API de Hablame.co
+async function sendSMSNotification(message) {
+    if (!SMS_API_KEY) {
+        console.log('⚠️ API Key de Hablame.co no configurada');
+        return false;
+    }
+
+    // Limpiar el mensaje de caracteres markdown para SMS
+    const cleanMessage = message
+        .replace(/\*/g, '')
+        .replace(/\n\n/g, '\n')
+        .substring(0, 160); // Limitar a 160 caracteres para SMS estándar
+
+    try {
+        const response = await fetch(SMS_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Hablame-Key': SMS_API_KEY
+            },
+            body: JSON.stringify({
+                messages: [{ to: NOTIFICATION_NUMBER, text: cleanMessage }],
+                priority: true,
+                sendDate: 'Now'
+            })
+        });
+
+        const result = await response.json();
+        
+        // Verificar si el SMS fue enviado exitosamente (statusId: 1)
+        if (response.ok && result.statusCode === 200 && result.payLoad?.messages?.[0]?.statusId === 1) {
+            console.log('✅ SMS enviado exitosamente via Hablame.co');
+            return true;
+        } else {
+            console.log(`❌ Error enviando SMS: ${JSON.stringify(result)}`);
+            return false;
+        }
+    } catch (error) {
+        console.log(`❌ Error enviando SMS: ${error.message}`);
+        return false;
+    }
 }
 
 // Función para enviar notificación usando una sesión activa
@@ -73,8 +121,9 @@ async function sendNotificationToAdmin(message) {
     );
     
     if (activeSessions.length === 0) {
-        console.log('⚠️ No hay sesiones activas para enviar notificación');
-        return false;
+        console.log('⚠️ No hay sesiones activas para enviar notificación por WhatsApp');
+        console.log('📱 Intentando enviar SMS como alternativa...');
+        return await sendSMSNotification(message);
     }
     
     // Usar la primera sesión activa
@@ -91,8 +140,9 @@ async function sendNotificationToAdmin(message) {
         console.log(`✅ Notificación enviada usando sesión ${notifySession.name}`);
         return true;
     } catch (error) {
-        console.log(`❌ Error enviando notificación: ${error.message}`);
-        return false;
+        console.log(`❌ Error enviando notificación por WhatsApp: ${error.message}`);
+        console.log('📱 Intentando enviar SMS como alternativa...');
+        return await sendSMSNotification(message);
     }
 }
 
@@ -143,9 +193,9 @@ async function monitorSessions() {
     }
 }
 
-// Configurar monitoreo de sesiones cada 30 segundos
-sessionMonitorInterval = setInterval(monitorSessions, 30000);
-console.log('Monitor de sesiones activo (verifica cada 30 segundos)');
+// Configurar monitoreo de sesiones cada 30 minutos
+sessionMonitorInterval = setInterval(monitorSessions, 30 * 60 * 1000);
+console.log('Monitor de sesiones activo (verifica cada 30 minutos)');
 
 // Función para verificar y notificar sesiones inactivas
 async function checkInactiveSessions() {
