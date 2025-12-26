@@ -44,7 +44,8 @@
     </style>
     <script>
         const CREDENTIALS = { username: 'admin', password: 'guio123*' };
-        const SESSION_TIMEOUT = 5 * 60 * 1000;
+        const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 minutos
+        const SESSION_KEY = 'wpp_dashboard_session';
         let sessionTimer = null;
         let timerInterval = null;
         let timeRemaining = SESSION_TIMEOUT;
@@ -54,21 +55,32 @@
             const password = document.getElementById('password').value;
             const errorEl = document.getElementById('loginError');
             if (username === CREDENTIALS.username && password === CREDENTIALS.password) {
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('mainApp').classList.remove('hidden');
-                startSessionTimer();
-                loadSessions();
-                startRotationUpdates();
+                // Guardar sesión en localStorage
+                const sessionData = {
+                    loggedIn: true,
+                    expiry: Date.now() + SESSION_TIMEOUT
+                };
+                localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+                showMainApp();
             } else {
                 errorEl.textContent = 'Usuario o contraseña incorrectos';
                 errorEl.classList.remove('hidden');
             }
         }
 
+        function showMainApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            startSessionTimer();
+            loadSessions();
+            startRotationUpdates();
+        }
+
         function logout() {
             clearTimeout(sessionTimer);
             clearInterval(timerInterval);
             stopRotationUpdates();
+            localStorage.removeItem(SESSION_KEY);
             document.getElementById('mainApp').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('username').value = '';
@@ -76,12 +88,32 @@
             document.getElementById('loginError').classList.add('hidden');
         }
 
+        function checkSavedSession() {
+            const saved = localStorage.getItem(SESSION_KEY);
+            if (saved) {
+                const session = JSON.parse(saved);
+                if (session.loggedIn && session.expiry > Date.now()) {
+                    timeRemaining = session.expiry - Date.now();
+                    showMainApp();
+                    return true;
+                } else {
+                    localStorage.removeItem(SESSION_KEY);
+                }
+            }
+            return false;
+        }
+
         function startSessionTimer() {
-            timeRemaining = SESSION_TIMEOUT;
             updateTimerDisplay();
             timerInterval = setInterval(() => {
                 timeRemaining -= 1000;
                 updateTimerDisplay();
+                // Actualizar localStorage con tiempo restante
+                const sessionData = {
+                    loggedIn: true,
+                    expiry: Date.now() + timeRemaining
+                };
+                localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
                 if (timeRemaining <= 0) {
                     logout();
                     alert('Sesión expirada por inactividad');
@@ -95,9 +127,21 @@
             document.getElementById('sessionTimer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
-        function resetTimer() { timeRemaining = SESSION_TIMEOUT; }
+        function resetTimer() { 
+            timeRemaining = SESSION_TIMEOUT;
+            const sessionData = {
+                loggedIn: true,
+                expiry: Date.now() + SESSION_TIMEOUT
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+        }
         document.addEventListener('click', resetTimer);
         document.addEventListener('keypress', resetTimer);
+
+        // Al cargar la página, verificar si hay sesión guardada
+        window.addEventListener('DOMContentLoaded', () => {
+            checkSavedSession();
+        });
     </script>
 </head>
 <body class="bg-gray-100 min-h-screen">
