@@ -79,5 +79,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Entrypoint para señales limpias
 ENTRYPOINT ["dumb-init", "--"]
 
-# Arranque (usar server-new.js optimizado con rotación de sesiones)
+# Arranque (usar la versión optimizada)
 CMD ["node", "server-new.js"]
