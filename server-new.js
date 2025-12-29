@@ -85,15 +85,38 @@ app.get('/health', async (req, res) => {
         return { name: key, state: actualState };
     }));
     
+    const rotationInfo = sessionManager.getRotationInfo();
+    const readySessions = sessionStates.filter(s => s.state === config.SESSION_STATES.READY);
+    
+    // Determinar el estado del sistema
+    let systemStatus = 'CRITICAL';
+    if (readySessions.length > 0) {
+        systemStatus = readySessions.length >= 2 ? 'HEALTHY' : 'WARNING';
+    }
+    
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         sessions: {
             count: Object.keys(sessions).length,
-            ready: sessionStates.filter(s => s.state === config.SESSION_STATES.READY).length,
+            ready: readySessions.length,
             states: sessionStates
         },
-        rotation: sessionManager.getRotationInfo(),
+        rotation: rotationInfo,
+        // Campos adicionales para el dashboard de analytics
+        system_status: {
+            status: systemStatus,
+            active_sessions: readySessions.length,
+            total_sessions: Object.keys(sessions).length
+        },
+        rotation_info: {
+            current_session: rotationInfo.currentSession,
+            messages_sent_current: 0, // No tenemos contador por sesión
+            max_per_session: 100,
+            next_rotation: rotationInfo.nextRotation
+        },
+        available_sessions: rotationInfo.activeSessions || [],
+        server_url: `http://localhost:${config.PORT}`,
         console: {
             clearEnabled: config.CONSOLE_CLEAR_ENABLED,
             clearInterval: config.CONSOLE_CLEAR_INTERVAL,
@@ -138,6 +161,48 @@ app.post('/api/console/clear', (req, res) => {
     }
 });
 
+// Base de datos para analytics
+const database = require('./database');
+
+// Endpoint de analytics para el dashboard
+app.get('/analytics', (req, res) => {
+    try {
+        const { period, range, top, start_date, end_date } = req.query;
+        const data = database.getAnalytics({
+            period: period || 'day',
+            range: range || 'today',
+            top: top || 10,
+            startDate: start_date,
+            endDate: end_date
+        });
+        res.json(data);
+    } catch (error) {
+        console.error('Error en analytics:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Endpoint de configuración de rotación para el dashboard
+app.post('/rotation-config', (req, res) => {
+    try {
+        const { force_rotation, reset_counter } = req.body;
+        
+        if (force_rotation) {
+            sessionManager.rotateSession();
+        }
+        
+        // reset_counter no aplica en esta implementación ya que no hay contador por sesión
+        
+        res.json({
+            success: true,
+            message: force_rotation ? 'Sesión rotada' : 'Configuración actualizada',
+            ...sessionManager.getRotationInfo()
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Información de rotación
 app.get('/api/rotation', (req, res) => {
     res.json(sessionManager.getRotationInfo());
@@ -153,9 +218,110 @@ app.post('/api/rotation/rotate', (req, res) => {
     });
 });
 
+// También para compatibilidad
+app.post('/api/sessions/rotation/rotate', (req, res) => {
+    sessionManager.rotateSession();
+    res.json({
+        success: true,
+        message: 'Sesión rotada manualmente',
+        ...sessionManager.getRotationInfo()
+    });
+});
+
+// ======================== ENDPOINTS DE MONITOR ========================
+
+// Obtener mensajes recientes
+app.get('/api/monitor/messages', (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    const messages = sessionManager.getRecentMessages(limit);
+    res.json({ messages, total: messages.length });
+});
+
+// Obtener estadísticas del monitor
+app.get('/api/monitor/stats', async (req, res) => {
+    try {
+        const { sessions } = sessionManager;
+        const rotationInfo = sessionManager.getRotationInfo();
+        const sessionsStats = Object.values(sessions).map(s => ({
+            name: s.name,
+            state: s.state,
+            messageCount: s.messages ? s.messages.length : 0
+        }));
+        
+        const totalMessages = sessionsStats.reduce((sum, s) => sum + s.messageCount, 0);
+        
+        res.json({
+            activeSession: rotationInfo.currentSession,
+            nextRotation: rotationInfo.nextRotation,
+            rotationIntervalMinutes: rotationInfo.rotationIntervalMinutes,
+            totalMessages,
+            sessions: sessionsStats
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Obtener historial agrupado por fecha y sesión
+app.get('/api/monitor/history', async (req, res) => {
+    try {
+        const { sessions } = sessionManager;
+        const messages = sessionManager.getRecentMessages(1000); // Obtener más mensajes para historial
+        
+        // Agrupar por fecha
+        const byDate = {};
+        const bySession = {};
+        
+        messages.forEach(msg => {
+            // Por fecha (YYYY-MM-DD)
+            const date = msg.timestamp.substring(0, 10);
+            if (!byDate[date]) {
+                byDate[date] = { total: 0, success: 0, error: 0 };
+            }
+            byDate[date].total++;
+            if (msg.status === 'success') byDate[date].success++;
+            else byDate[date].error++;
+            
+            // Por sesión
+            if (!bySession[msg.session]) {
+                bySession[msg.session] = { total: 0, success: 0, error: 0 };
+            }
+            bySession[msg.session].total++;
+            if (msg.status === 'success') bySession[msg.session].success++;
+            else bySession[msg.session].error++;
+        });
+        
+        // Estadísticas de sesiones activas
+        const sessionsInfo = Object.values(sessions).map(s => ({
+            name: s.name,
+            state: s.state,
+            messageCount: s.messages ? s.messages.length : 0,
+            isActive: s.name === sessionManager.getRotationInfo().currentSession
+        }));
+        
+        res.json({
+            byDate: Object.entries(byDate).map(([date, stats]) => ({ date, ...stats }))
+                .sort((a, b) => b.date.localeCompare(a.date)),
+            bySession: Object.entries(bySession).map(([session, stats]) => ({ session, ...stats }))
+                .sort((a, b) => b.total - a.total),
+            sessions: sessionsInfo,
+            totalMessages: messages.length
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ======================== FIN ENDPOINTS DE MONITOR ========================
+
 // Página principal
 app.get('/', (req, res) => {
     res.sendFile(path.join(config.PUBLIC_PATH, 'index.html'));
+});
+
+// Dashboard de analytics
+app.get('/analytics.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'analytics.html'));
 });
 
 // Manejo de errores
@@ -179,6 +345,9 @@ function clearConsole() {
 
 async function startServer() {
     try {
+        // Inicializar base de datos de analytics
+        await database.initDatabase();
+        
         // Preparar directorio de sesiones
         await sessionManager.ensureSessionDirectory();
         

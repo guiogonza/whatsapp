@@ -38,11 +38,13 @@ router.post('/send-auto', async (req, res) => {
         const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
         
         if (!result.success) {
+            sessionManager.logMessageSent(result.sessionUsed || 'unknown', phoneNumber, message, 'error');
             return res.status(500).json({
                 error: result.error?.message || 'Error enviando mensaje'
             });
         }
 
+        sessionManager.logMessageSent(result.sessionUsed, phoneNumber, message, 'success');
         console.log(`✅ Mensaje enviado via ${result.sessionUsed} a ${phoneNumber}`);
 
         res.json({
@@ -131,6 +133,7 @@ router.post('/send-message', async (req, res) => {
             session.messages = session.messages.slice(-config.MAX_MESSAGE_HISTORY);
         }
 
+        sessionManager.logMessageSent(sessionName, phoneNumber, message, 'success');
         console.log(`Mensaje enviado desde ${sessionName} a ${phoneNumber}`);
 
         res.json({

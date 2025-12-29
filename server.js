@@ -53,6 +53,37 @@ let consoleLogCount = 0;
 let lastClearTime = new Date();
 let consoleClearInterval = null;
 let sessionMonitorInterval = null;
+let sessionRecoveryInterval = null;
+
+// Control de SMS para evitar spam
+let lastSMSSentTime = null;
+const SMS_MIN_INTERVAL_MS = 30 * 60 * 1000; // Mínimo 30 minutos entre SMS
+
+// Variables de rotación de sesiones
+let currentSessionIndex = 0;
+let lastRotationTime = new Date();
+let rotationInterval = null;
+const SESSION_ROTATION_INTERVAL = parseInt(process.env.SESSION_ROTATION_INTERVAL) || 30; // minutos
+
+// Buffer de mensajes recientes para el monitor (no persiste, solo en memoria)
+let recentMessages = [];
+const MAX_RECENT_MESSAGES = 100;
+
+// Función para registrar mensaje enviado
+function logMessageSent(sessionName, destination, message, status) {
+    const logEntry = {
+        timestamp: new Date().toISOString(),
+        session: sessionName,
+        destination: destination,
+        message: message.substring(0, 100),
+        status: status
+    };
+    
+    recentMessages.unshift(logEntry);
+    if (recentMessages.length > MAX_RECENT_MESSAGES) {
+        recentMessages.pop();
+    }
+}
 
 // Número de notificación para alertas
 const NOTIFICATION_NUMBER = '573183499539';
@@ -69,11 +100,113 @@ function formatPhoneNumber(phoneNumber) {
     return phoneNumber.endsWith('@c.us') ? phoneNumber : `${cleaned}@c.us`;
 }
 
+// ======================== FUNCIONES DE ROTACIÓN ========================
+
+/**
+ * Obtiene todas las sesiones que están activas (READY)
+ */
+function getActiveSessions() {
+    return Object.values(sessions).filter(s =>
+        s.state === SESSION_STATES.READY && s.client
+    );
+}
+
+/**
+ * Obtiene la sesión activa actual para envío de mensajes
+ */
+function getCurrentSession() {
+    const activeSessions = getActiveSessions();
+    if (activeSessions.length === 0) return null;
+
+    if (currentSessionIndex >= activeSessions.length) {
+        currentSessionIndex = 0;
+    }
+
+    return activeSessions[currentSessionIndex];
+}
+
+/**
+ * Rota a la siguiente sesión activa
+ */
+function rotateSession() {
+    const activeSessions = getActiveSessions();
+    if (activeSessions.length <= 1) {
+        console.log('📌 Solo hay una sesión activa, no se requiere rotación');
+        return;
+    }
+
+    const previousIndex = currentSessionIndex;
+    currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+    lastRotationTime = new Date();
+
+    const previousSession = activeSessions[previousIndex];
+    const newSession = activeSessions[currentSessionIndex];
+
+    console.log(`🔄 Rotación de sesión: ${previousSession?.name || 'N/A'} → ${newSession?.name || 'N/A'}`);
+    console.log(`📊 Sesiones activas: ${activeSessions.map(s => s.name).join(', ')}`);
+}
+
+/**
+ * Inicia el intervalo de rotación automática
+ */
+function startSessionRotation() {
+    if (rotationInterval) {
+        clearInterval(rotationInterval);
+    }
+
+    const intervalMs = SESSION_ROTATION_INTERVAL * 60 * 1000;
+    rotationInterval = setInterval(() => {
+        rotateSession();
+    }, intervalMs);
+
+    console.log(`⏱️ Rotación de sesiones activa (cada ${SESSION_ROTATION_INTERVAL} minutos)`);
+}
+
+/**
+ * Detiene el intervalo de rotación
+ */
+function stopSessionRotation() {
+    if (rotationInterval) {
+        clearInterval(rotationInterval);
+        rotationInterval = null;
+    }
+}
+
+/**
+ * Obtiene información sobre la rotación actual
+ */
+function getRotationInfo() {
+    const activeSessions = getActiveSessions();
+    const currentSession = getCurrentSession();
+
+    return {
+        currentSession: currentSession?.name || null,
+        currentIndex: currentSessionIndex,
+        totalActiveSessions: activeSessions.length,
+        activeSessions: activeSessions.map(s => s.name),
+        lastRotation: lastRotationTime.toISOString(),
+        rotationIntervalMinutes: SESSION_ROTATION_INTERVAL,
+        nextRotation: new Date(lastRotationTime.getTime() + SESSION_ROTATION_INTERVAL * 60 * 1000).toISOString()
+    };
+}
+
+// ======================== FIN FUNCIONES DE ROTACIÓN ========================
+
 // Función para enviar SMS usando API de Hablame.co
-async function sendSMSNotification(message) {
+async function sendSMSNotification(message, forceImmediate = false) {
     if (!SMS_API_KEY) {
         console.log('⚠️ API Key de Hablame.co no configurada');
         return false;
+    }
+
+    // Rate limiting: evitar spam de SMS (mínimo 30 minutos entre envíos)
+    if (!forceImmediate && lastSMSSentTime) {
+        const timeSinceLastSMS = Date.now() - lastSMSSentTime;
+        if (timeSinceLastSMS < SMS_MIN_INTERVAL_MS) {
+            const minutesRemaining = Math.ceil((SMS_MIN_INTERVAL_MS - timeSinceLastSMS) / 60000);
+            console.log(`⏳ SMS omitido (rate limit). Próximo envío permitido en ${minutesRemaining} minutos`);
+            return false;
+        }
     }
 
     // Limpiar el mensaje de caracteres markdown para SMS
@@ -102,6 +235,7 @@ async function sendSMSNotification(message) {
         // Verificar si el SMS fue enviado exitosamente (statusId: 1)
         if (response.ok && result.statusCode === 200 && result.payLoad?.messages?.[0]?.statusId === 1) {
             console.log('✅ SMS enviado exitosamente via Hablame.co');
+            lastSMSSentTime = Date.now(); // Registrar tiempo de envío
             return true;
         } else {
             console.log(`❌ Error enviando SMS: ${JSON.stringify(result)}`);
@@ -196,6 +330,91 @@ async function monitorSessions() {
 // Configurar monitoreo de sesiones cada 30 minutos
 sessionMonitorInterval = setInterval(monitorSessions, 30 * 60 * 1000);
 console.log('Monitor de sesiones activo (verifica cada 30 minutos)');
+
+// Función para intentar recuperar sesiones caídas automáticamente
+async function recoverFailedSessions() {
+    const sessionNames = Object.keys(sessions);
+    let recoveredCount = 0;
+    let attemptedCount = 0;
+    
+    for (const sessionName of sessionNames) {
+        const session = sessions[sessionName];
+        
+        // Intentar recuperar sesiones que están desconectadas o en error
+        const needsRecovery = [
+            SESSION_STATES.DISCONNECTED,
+            SESSION_STATES.ERROR
+        ].includes(session.state);
+        
+        // También verificar sesiones READY que no responden
+        let isUnresponsive = false;
+        if (session.state === SESSION_STATES.READY && session.client) {
+            try {
+                await Promise.race([
+                    session.client.getState(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+                ]);
+            } catch (error) {
+                console.log(`⚠️ Sesión ${sessionName} no responde: ${error.message}`);
+                isUnresponsive = true;
+                session.state = SESSION_STATES.DISCONNECTED;
+            }
+        }
+        
+        if (needsRecovery || isUnresponsive) {
+            attemptedCount++;
+            console.log(`🔄 Intentando recuperar sesión: ${sessionName}`);
+            
+            try {
+                // Destruir cliente anterior si existe
+                if (session.client) {
+                    try {
+                        await session.client.destroy();
+                    } catch (destroyError) {
+                        console.log(`⚠️ Error destruyendo cliente anterior de ${sessionName}: ${destroyError.message}`);
+                    }
+                }
+                
+                // Esperar un momento antes de reiniciar
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Reiniciar la sesión
+                session.state = SESSION_STATES.STARTING;
+                session.qr = null;
+                session.error = null;
+                
+                await initializeClient(sessionName);
+                recoveredCount++;
+                console.log(`✅ Sesión ${sessionName} reiniciada exitosamente`);
+                
+            } catch (error) {
+                console.log(`❌ Error recuperando sesión ${sessionName}: ${error.message}`);
+                session.state = SESSION_STATES.ERROR;
+                session.error = error.message;
+            }
+            
+            // Esperar entre intentos de recuperación para no saturar
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+    
+    if (attemptedCount > 0) {
+        console.log(`📊 Recuperación completada: ${recoveredCount}/${attemptedCount} sesiones recuperadas`);
+        
+        // Notificar solo si hubo intentos de recuperación
+        if (recoveredCount > 0) {
+            await sendNotificationToAdmin(
+                `🔄 *RECUPERACIÓN AUTOMÁTICA*\n\n` +
+                `Se recuperaron ${recoveredCount} de ${attemptedCount} sesiones caídas.\n` +
+                `📅 ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`
+            );
+        }
+    }
+}
+
+// Configurar recuperación automática de sesiones cada 30 minutos
+sessionRecoveryInterval = setInterval(recoverFailedSessions, 30 * 60 * 1000);
+console.log('Recuperación automática de sesiones activa (cada 30 minutos)');
 
 // Función para verificar y notificar sesiones inactivas
 async function checkInactiveSessions() {
@@ -847,6 +1066,73 @@ app.post('/api/console/clear', (req, res) => {
     }
 });
 
+// ======================== ENDPOINTS DE ROTACIÓN ========================
+
+// Obtener información de rotación
+app.get('/api/rotation', (req, res) => {
+    res.json(getRotationInfo());
+});
+
+// Rotar sesión manualmente
+app.post('/api/rotation/rotate', (req, res) => {
+    rotateSession();
+    res.json({
+        success: true,
+        message: 'Sesión rotada exitosamente',
+        ...getRotationInfo()
+    });
+});
+
+// También disponible como /api/sessions/rotation/rotate para compatibilidad
+app.post('/api/sessions/rotation/rotate', (req, res) => {
+    rotateSession();
+    res.json({
+        success: true,
+        message: 'Sesión rotada exitosamente',
+        ...getRotationInfo()
+    });
+});
+
+// ======================== FIN ENDPOINTS DE ROTACIÓN ========================
+
+// ======================== ENDPOINTS DE MONITOR ========================
+
+// Obtener mensajes recientes
+app.get('/api/monitor/messages', (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    res.json({
+        messages: recentMessages.slice(0, limit),
+        total: recentMessages.length
+    });
+});
+
+// Obtener estadísticas del monitor
+app.get('/api/monitor/stats', async (req, res) => {
+    try {
+        const rotationInfo = getRotationInfo();
+        const sessionsStats = Object.values(sessions).map(s => ({
+            name: s.name,
+            state: s.state,
+            messageCount: s.messages ? s.messages.length : 0
+        }));
+        
+        const totalMessages = sessionsStats.reduce((sum, s) => sum + s.messageCount, 0);
+        
+        res.json({
+            activeSession: rotationInfo.currentSession,
+            nextRotation: rotationInfo.nextRotation,
+            rotationIntervalMinutes: rotationInfo.rotationIntervalMinutes,
+            totalMessages: totalMessages,
+            sessions: sessionsStats,
+            recentMessagesCount: recentMessages.length
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ======================== FIN ENDPOINTS DE MONITOR ========================
+
 // Obtener todas las sesiones
 app.get('/api/sessions', async (req, res) => {
     try {
@@ -1037,6 +1323,9 @@ app.post('/api/session/send-message', async (req, res) => {
             session.messages = session.messages.slice(-100);
         }
 
+        // Registrar en el monitor
+        logMessageSent(sessionName, phoneNumber, message, 'success');
+
         console.log(`Mensaje enviado desde ${sessionName} a ${phoneNumber}`);
 
         res.json({
@@ -1048,6 +1337,9 @@ app.post('/api/session/send-message', async (req, res) => {
 
     } catch (error) {
         console.error(`Error enviando mensaje desde ${sessionName}: ${error.message}`);
+
+        // Registrar error en el monitor
+        logMessageSent(sessionName, phoneNumber, message, 'error');
 
         // Detectar si necesita reconexión
         const errorMsg = error.message || String(error);
@@ -1300,11 +1592,13 @@ app.post('/api/session/send-bulk', async (req, res) => {
                 
                 if (sendResult.success) {
                     results.sent++;
+                    logMessageSent(sessionName, contact, message, 'success');
                     console.log(`Mensaje masivo ${i+1}/${contacts.length} enviado a ${contact}`);
                 } else {
                     results.failed++;
                     const errMsg = sendResult.error ? sendResult.error.message : 'Error desconocido';
                     results.errors.push(`Error en ${contact}: ${errMsg}`);
+                    logMessageSent(sessionName, contact, message, 'error');
                     
                     // Si es error de WidFactory persistente, marcar para reconexión
                     if (errMsg.includes('WidFactory')) {
@@ -1570,6 +1864,9 @@ async function startServer() {
             console.log(`Health check: http://localhost:${PORT}/health`);
             console.log(`Sesiones activas: ${Object.keys(sessions).length}`);
             
+            // Iniciar rotación de sesiones
+            startSessionRotation();
+            
             // Esperar 30 segundos después del inicio para dar tiempo a que las sesiones se conecten
             // y luego hacer la primera verificación de sesiones inactivas
             setTimeout(() => {
@@ -1594,6 +1891,17 @@ async function cleanup() {
     if (consoleClearInterval) {
         clearInterval(consoleClearInterval);
     }
+    
+    if (sessionMonitorInterval) {
+        clearInterval(sessionMonitorInterval);
+    }
+    
+    if (sessionRecoveryInterval) {
+        clearInterval(sessionRecoveryInterval);
+    }
+    
+    // Detener rotación de sesiones
+    stopSessionRotation();
 
     const cleanupPromises = Object.keys(sessions).map(async (sessionName) => {
         try {

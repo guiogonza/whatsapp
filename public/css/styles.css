@@ -1,0 +1,56 @@
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #25D366;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.sidebar { transition: transform 0.3s ease-in-out; }
+.sidebar-item { transition: all 0.2s ease; }
+.sidebar-item:hover { background-color: rgba(37, 211, 102, 0.1); }
+.sidebar-item.active {
+    background-color: rgba(37, 211, 102, 0.2);
+    border-left: 4px solid #25D366;
+}
+
+.section-content { display: none; }
+.section-content.active { display: block; }
+
+#loginScreen { background: linear-gradient(135deg, #128C7E 0%, #25D366 100%); }
+
+.session-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.active-session-badge {
+    animation: pulse 2s ease-in-out infinite;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Efecto heartbeat para sesión activa */
+.heartbeat-active {
+    animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+    25% { transform: scale(1.02); }
+    35% { transform: scale(1); }
+    45% { transform: scale(1.02); }
+    55% { transform: scale(1); box-shadow: 0 0 20px 10px rgba(139, 92, 246, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}

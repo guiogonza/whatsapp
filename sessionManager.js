@@ -9,6 +9,7 @@ const fsSync = require('fs');
 const path = require('path');
 const config = require('./config');
 const { formatPhoneNumber, sleep, getColombiaDate } = require('./utils');
+const database = require('./database');
 
 // Almacén de sesiones
 const sessions = {};
@@ -17,6 +18,39 @@ const sessions = {};
 let currentSessionIndex = 0;
 let lastRotationTime = new Date();
 let rotationInterval = null;
+
+// Buffer de mensajes recientes para el monitor
+let recentMessages = [];
+const MAX_RECENT_MESSAGES = 100;
+
+/**
+ * Registra un mensaje enviado en el buffer del monitor y en la BD
+ */
+function logMessageSent(sessionName, destination, message, status, errorMessage = null) {
+    // Guardar en buffer de memoria para el monitor
+    recentMessages.unshift({
+        timestamp: new Date().toISOString(),
+        session: sessionName,
+        destination,
+        message: message.substring(0, 100),
+        status
+    });
+    if (recentMessages.length > MAX_RECENT_MESSAGES) recentMessages.pop();
+    
+    // Guardar en base de datos para analytics
+    try {
+        database.logMessage(sessionName, destination, message, status, errorMessage);
+    } catch (err) {
+        console.error('Error guardando mensaje en BD:', err.message);
+    }
+}
+
+/**
+ * Obtiene los mensajes recientes
+ */
+function getRecentMessages(limit = 50) {
+    return recentMessages.slice(0, limit);
+}
 
 // ======================== FUNCIONES DE ROTACIÓN ========================
 
@@ -464,7 +498,12 @@ async function initializeClient(sessionName) {
                     '--disable-web-security',
                     '--single-process'
                 ],
-                timeout: config.PUPPETEER_TIMEOUT
+                timeout: config.PUPPETEER_TIMEOUT,
+                // Configurar zona horaria Colombia para evitar errores de sincronización
+                env: {
+                    ...process.env,
+                    TZ: 'America/Bogota'
+                }
             },
             webVersionCache: {
                 type: 'remote',
@@ -729,5 +768,7 @@ module.exports = {
     ensureSessionDirectory,
     loadExistingSessions,
     validateSessionName,
+    logMessageSent,
+    getRecentMessages,
     MessageMedia
 };
