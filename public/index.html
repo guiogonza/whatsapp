@@ -5,90 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WhatsApp Bot - Panel de Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #25D366;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .sidebar { transition: transform 0.3s ease-in-out; }
-        .sidebar-item { transition: all 0.2s ease; }
-        .sidebar-item:hover { background-color: rgba(37, 211, 102, 0.1); }
-        .sidebar-item.active {
-            background-color: rgba(37, 211, 102, 0.2);
-            border-left: 4px solid #25D366;
-        }
-        .section-content { display: none; }
-        .section-content.active { display: block; }
-        #loginScreen { background: linear-gradient(135deg, #128C7E 0%, #25D366 100%); }
-        .session-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .session-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-    </style>
-    <script>
-        const CREDENTIALS = { username: 'admin', password: 'guio123*' };
-        const SESSION_TIMEOUT = 5 * 60 * 1000;
-        let sessionTimer = null;
-        let timerInterval = null;
-        let timeRemaining = SESSION_TIMEOUT;
-
-        function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorEl = document.getElementById('loginError');
-            if (username === CREDENTIALS.username && password === CREDENTIALS.password) {
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('mainApp').classList.remove('hidden');
-                startSessionTimer();
-                loadSessions();
-            } else {
-                errorEl.textContent = 'Usuario o contraseña incorrectos';
-                errorEl.classList.remove('hidden');
-            }
-        }
-
-        function logout() {
-            clearTimeout(sessionTimer);
-            clearInterval(timerInterval);
-            document.getElementById('mainApp').classList.add('hidden');
-            document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-            document.getElementById('loginError').classList.add('hidden');
-        }
-
-        function startSessionTimer() {
-            timeRemaining = SESSION_TIMEOUT;
-            updateTimerDisplay();
-            timerInterval = setInterval(() => {
-                timeRemaining -= 1000;
-                updateTimerDisplay();
-                if (timeRemaining <= 0) {
-                    logout();
-                    alert('Sesión expirada por inactividad');
-                }
-            }, 1000);
-        }
-
-        function updateTimerDisplay() {
-            const minutes = Math.floor(timeRemaining / 60000);
-            const seconds = Math.floor((timeRemaining % 60000) / 1000);
-            document.getElementById('sessionTimer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-
-        function resetTimer() { timeRemaining = SESSION_TIMEOUT; }
-        document.addEventListener('click', resetTimer);
-        document.addEventListener('keypress', resetTimer);
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-gray-100 min-h-screen">
 
@@ -100,18 +18,18 @@
                 <h1 class="text-2xl font-bold text-gray-800">WhatsApp Bot</h1>
                 <p class="text-gray-500">Panel de Control</p>
             </div>
-            <div class="space-y-4">
+            <form id="loginForm" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
-                    <input type="text" id="username" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="Ingresa tu usuario" onkeypress="if(event.key==='Enter') login()">
+                    <input type="text" id="username" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="Ingresa tu usuario">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-                    <input type="password" id="password" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="Ingresa tu contraseña" onkeypress="if(event.key==='Enter') login()">
+                    <input type="password" id="password" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="Ingresa tu contraseña">
                 </div>
                 <div id="loginError" class="text-red-500 text-sm text-center hidden"></div>
-                <button onclick="login()" class="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors">Iniciar Sesión</button>
-            </div>
+                <button type="submit" class="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors">Iniciar Sesión</button>
+            </form>
         </div>
     </div>
 
@@ -136,6 +54,11 @@
                         </button>
                     </li>
                     <li>
+                        <button id="nav-monitor" onclick="showSection('monitor')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
+                            <span>📊</span><span>Monitor</span>
+                        </button>
+                    </li>
+                    <li>
                         <button id="nav-personal" onclick="showSection('personal')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
                             <span>💬</span><span>Mensaje Personal</span>
                         </button>
@@ -143,6 +66,11 @@
                     <li>
                         <button id="nav-bulk" onclick="showSection('bulk')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
                             <span>📤</span><span>Envío Masivo</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button id="nav-analytics" onclick="showSection('analytics')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
+                            <span>📈</span><span>Analytics</span>
                         </button>
                     </li>
                 </ul>
@@ -163,7 +91,22 @@
                     <h2 id="sectionTitle" class="text-xl font-bold text-gray-800">Sesiones de WhatsApp</h2>
                     <p id="sectionSubtitle" class="text-sm text-gray-500">Gestiona tus conexiones de WhatsApp</p>
                 </div>
-                <div id="activeSessionsCount" class="text-sm text-gray-600"></div>
+                <div class="text-right">
+                    <div id="activeSessionsCount" class="text-sm text-gray-600 mb-1"></div>
+                    <div class="flex items-center gap-2 justify-end">
+                        <div id="rotationInfo" class="text-xs text-purple-600 font-medium"></div>
+                        <button onclick="rotateSessionManually()" id="rotateBtn" class="bg-purple-500 text-white px-3 py-1 text-xs rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-1" title="Rotar sesión manualmente">
+                            🔄 Rotar
+                        </button>
+                        <select id="rotationIntervalSelect" onchange="updateRotationInterval()" class="text-xs border rounded px-2 py-1 bg-white" title="Intervalo de rotacion (segundos)">
+                            <option value="30">30s</option>
+                            <option value="60" selected>1 min</option>
+                            <option value="120">2 min</option>
+                            <option value="180">3 min</option>
+                            <option value="300">5 min</option>
+                        </select>
+                    </div>
+                </div>
             </header>
 
             <!-- SECTION: SESSIONS -->
@@ -230,7 +173,7 @@
                         </div>
                     </div>
 
-                    <!-- Panel Numbers (múltiples sesiones) -->
+                    <!-- Panel Numbers -->
                     <div id="panelNumbers" class="mb-4">
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Sesiones de WhatsApp (selecciona una o varias)</label>
@@ -249,7 +192,7 @@
                         <p class="text-xs text-gray-500 mt-1">Formato: código país + número. Un número por línea. Máximo 50.</p>
                     </div>
 
-                    <!-- Panel Groups (UNA sola sesión) -->
+                    <!-- Panel Groups -->
                     <div id="panelGroups" class="mb-4 hidden">
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Seleccionar Sesión de WhatsApp</label>
@@ -300,538 +243,249 @@
                     </div>
                 </div>
             </section>
+
+            <!-- SECTION: MONITOR -->
+            <section id="section-monitor" class="section-content">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg shadow-lg p-6 text-white">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">🔥 Sesión Activa</h3>
+                            <span class="text-2xl">📱</span>
+                        </div>
+                        <div id="monitorActiveSession" class="text-3xl font-bold mb-2">-</div>
+                        <p class="text-purple-200 text-sm">Enviando mensajes actualmente</p>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg shadow-lg p-6 text-white">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">✅ Mensajes Enviados</h3>
+                            <span class="text-2xl">📨</span>
+                        </div>
+                        <div id="monitorTotalMessages" class="text-3xl font-bold mb-2">0</div>
+                        <p class="text-green-200 text-sm">Total de esta sesión</p>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg shadow-lg p-6 text-white">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">🔄 Próxima Rotación</h3>
+                            <span class="text-2xl">⏱️</span>
+                        </div>
+                        <div id="monitorNextRotation" class="text-3xl font-bold mb-2">--:--</div>
+                        <p class="text-orange-200 text-sm">Tiempo restante</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">📊 Estadísticas por Sesión</h3>
+                        <button onclick="refreshMonitorStats()" class="bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg text-sm transition-colors">🔄 Actualizar</button>
+                    </div>
+                    <div id="monitorSessionStats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <p class="text-gray-500 col-span-full text-center">Cargando estadísticas...</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow mb-6">
+                    <div class="border-b border-gray-200">
+                        <nav class="flex -mb-px">
+                            <button onclick="showMonitorTab('realtime')" id="tab-realtime" class="monitor-tab active px-6 py-3 border-b-2 border-purple-500 text-purple-600 font-medium">
+                                📡 Tiempo Real
+                            </button>
+                            <button onclick="showMonitorTab('history')" id="tab-history" class="monitor-tab px-6 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium">
+                                📅 Historial
+                            </button>
+                        </nav>
+                    </div>
+                    
+                    <div id="monitorTab-realtime" class="p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">📝 Mensajes Recientes</h3>
+                            <div class="flex gap-2">
+                                <button onclick="toggleMonitorAutoRefresh()" id="monitorAutoRefreshBtn" class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-colors">▶️ Auto</button>
+                                <button onclick="clearMonitorLog()" class="bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg text-sm transition-colors">🗑️ Limpiar</button>
+                            </div>
+                        </div>
+                        <div id="monitorMessageLog" class="bg-gray-900 rounded-lg p-4 h-80 overflow-y-auto font-mono text-sm">
+                            <p class="text-gray-500">Esperando mensajes...</p>
+                        </div>
+                    </div>
+                    
+                    <div id="monitorTab-history" class="p-6 hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">📅 Historial de Mensajes</h3>
+                            <button onclick="loadHistory()" class="bg-purple-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-purple-600 transition-colors">🔄 Actualizar</button>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <h4 class="font-semibold text-gray-700 mb-3">📆 Por Fecha</h4>
+                            <div id="historyByDate" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <p class="text-gray-500 col-span-full text-center">Cargando...</p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-3">📱 Por Sesión</h4>
+                            <div id="historyBySession" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <p class="text-gray-500 col-span-full text-center">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION: ANALYTICS -->
+            <section id="section-analytics" class="section-content">
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Periodo</label>
+                            <select id="analyticsPeriod" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                                <option value="day">Día</option>
+                                <option value="week">Semana</option>
+                                <option value="month">Mes</option>
+                                <option value="custom">Personalizado</option>
+                            </select>
+                        </div>
+                        
+                        <div id="analyticsCustomDateContainer" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
+                            <input type="date" id="analyticsStartDate" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                        </div>
+                        
+                        <div id="analyticsCustomDateContainer2" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
+                            <input type="date" id="analyticsEndDate" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                        </div>
+                        
+                        <div id="analyticsRangeContainer">
+                            <label class="block text-sm font-medium text-gray-700 mb-1" id="analyticsRangeLabel">Período</label>
+                            <select id="analyticsRangeSelector" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                                <option value="today">Hoy</option>
+                                <option value="yesterday">Ayer</option>
+                                <option value="7">Últimos 7 días</option>
+                                <option value="15">Últimos 15 días</option>
+                                <option value="30">Últimos 30 días</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Top N números</label>
+                            <select id="analyticsTopN" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                                <option value="10">Top 10</option>
+                                <option value="20">Top 20</option>
+                                <option value="50">Top 50</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Acciones</label>
+                            <div class="flex gap-2">
+                                <button onclick="refreshAnalytics()" class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors">🔄</button>
+                                <button onclick="exportAnalyticsCSV()" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">📥</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                        <div class="text-sm">
+                            <span class="font-semibold">Período:</span> 
+                            <span id="analyticsCurrentPeriodInfo">Hoy</span>
+                            <span class="ml-4 text-gray-400">|</span>
+                            <span class="ml-4">Estado: <span id="analyticsStatusBadge" class="px-2 py-1 text-xs rounded-full bg-gray-200">Cargando...</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-lg shadow p-5">
+                        <div class="text-3xl font-semibold" id="analytics_kpi_total">—</div>
+                        <div class="text-sm text-gray-500">Total registros</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-5">
+                        <div class="text-3xl font-semibold text-green-600" id="analytics_kpi_enviados">—</div>
+                        <div class="text-sm text-gray-500">Enviados</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-5">
+                        <div class="text-3xl font-semibold text-red-600" id="analytics_kpi_errores">—</div>
+                        <div class="text-sm text-gray-500">Errores</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-5">
+                        <div class="text-3xl font-semibold text-yellow-600" id="analytics_kpi_cola">—</div>
+                        <div class="text-sm text-gray-500">En cola</div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Estado de Sesiones</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="text-sm text-gray-500 mb-1">Sesión Actual</div>
+                            <div class="font-mono text-lg" id="analyticsCurrentSession">—</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="text-sm text-gray-500 mb-1">Progreso de Mensajes</div>
+                            <div class="font-mono text-lg" id="analyticsSessionProgress">—</div>
+                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" id="analyticsProgressBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="text-sm text-gray-500 mb-1">Sesiones Disponibles</div>
+                            <div class="font-mono text-sm" id="analyticsAvailableSessions">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow p-6 lg:col-span-2">
+                        <h3 class="text-lg font-semibold mb-4">Evolución por periodo</h3>
+                        <div class="w-full" style="height: 350px;">
+                            <canvas id="analyticsTimelineChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4">Top N números</h3>
+                        <div class="w-full" style="height: 350px;">
+                            <canvas id="analyticsTopChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Detalle Top N</h3>
+                    <div class="overflow-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="border-b border-gray-200">
+                                <tr class="text-left">
+                                    <th class="py-2 pr-4">#</th>
+                                    <th class="py-2 pr-4">Número</th>
+                                    <th class="py-2 pr-4">Total</th>
+                                    <th class="py-2 pr-4">Enviados</th>
+                                    <th class="py-2 pr-4">Errores</th>
+                                    <th class="py-2 pr-4">En cola</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analyticsTopTableBody">
+                                <tr>
+                                    <td colspan="6" class="py-4 text-center text-gray-500">Cargando datos...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="text-xs text-gray-500 mt-6 space-y-1">
+                    <div>DB size (MB): <span id="analyticsDbSize">—</span></div>
+                    <div>Estados en DB: <span id="analyticsDbByStatus">—</span></div>
+                    <div>Última actualización: <span id="analyticsLastUpdate">—</span></div>
+                </div>
+            </section>
         </main>
     </div>
 
-    <script>
-        const API_URL = window.location.origin;
-        let sessions = [];
-        let bulkCurrentTab = 'numbers';
-
-        function showSection(sectionId) {
-            document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-            document.getElementById(`section-${sectionId}`).classList.add('active');
-            document.getElementById(`nav-${sectionId}`).classList.add('active');
-            const titles = {
-                sessions: { title: 'Sesiones de WhatsApp', subtitle: 'Gestiona tus conexiones de WhatsApp' },
-                personal: { title: 'Mensaje Personalizado', subtitle: 'Envía mensajes individuales' },
-                bulk: { title: 'Envío Masivo', subtitle: 'Envía mensajes a múltiples destinatarios' }
-            };
-            document.getElementById('sectionTitle').textContent = titles[sectionId].title;
-            document.getElementById('sectionSubtitle').textContent = titles[sectionId].subtitle;
-        }
-
-        async function loadSessions() {
-            try {
-                const response = await fetch(`${API_URL}/api/sessions`);
-                sessions = await response.json();
-                updateSessionsList();
-                populateSessionSelects();
-                updateSessionsCount();
-            } catch (error) {
-                console.error('Error cargando sesiones:', error);
-                document.getElementById('sessionsList').innerHTML = `
-                    <div class="col-span-full bg-red-50 border border-red-200 p-6 rounded-lg text-center">
-                        <p class="text-red-600">Error al cargar sesiones: ${error.message}</p>
-                        <button onclick="loadSessions()" class="mt-2 bg-red-500 text-white px-4 py-2 rounded-lg">Reintentar</button>
-                    </div>`;
-            }
-        }
-
-        function updateSessionsList() {
-            const container = document.getElementById('sessionsList');
-            if (sessions.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full text-center p-8 bg-white rounded-lg shadow">
-                        <div class="text-6xl mb-4">📱</div>
-                        <p class="text-gray-600 mb-2">No hay sesiones activas</p>
-                    </div>`;
-                return;
-            }
-            container.innerHTML = sessions.map(s => createSessionCard(s)).join('');
-            sessions.forEach(s => {
-                if (s.state === 'WAITING_FOR_QR' && s.hasQR) loadQRCode(s.name);
-            });
-        }
-
-        function createSessionCard(session) {
-            const colors = {
-                'READY': 'border-green-500 bg-green-50',
-                'WAITING_FOR_QR': 'border-yellow-500 bg-yellow-50',
-                'LOADING': 'border-blue-500 bg-blue-50',
-                'DISCONNECTED': 'border-red-500 bg-red-50',
-                'ERROR': 'border-red-500 bg-red-50'
-            };
-            const labels = {
-                'READY': '✅ Conectado',
-                'WAITING_FOR_QR': '📱 Esperando QR',
-                'LOADING': '⏳ Cargando',
-                'DISCONNECTED': '❌ Desconectado',
-                'ERROR': '⚠️ Error'
-            };
-            const colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
-            const stateLabel = labels[session.state] || session.state;
-            
-            let userInfoHtml = '';
-            if (session.userInfo && session.state === 'READY') {
-                userInfoHtml = `
-                    <div class="mt-3 p-3 bg-white rounded-lg border">
-                        <p class="text-sm"><strong>👤 Nombre:</strong> ${session.userInfo.pushname || 'N/A'}</p>
-                        <p class="text-sm"><strong>📞 Número:</strong> ${session.userInfo.wid || 'N/A'}</p>
-                        <p class="text-sm"><strong>📱 Plataforma:</strong> ${session.userInfo.platform || 'N/A'}</p>
-                    </div>`;
-            }
-            
-            let qrHtml = session.state === 'WAITING_FOR_QR' ? `<div id="qr-container-${session.name}" class="mt-3 flex justify-center"><div class="spinner"></div></div>` : '';
-            
-            return `
-                <div class="session-card bg-white rounded-lg shadow-lg overflow-hidden">
-                    <div class="border-l-4 ${colorClass} p-6">
-                        <div class="flex justify-between items-start mb-3">
-                            <div>
-                                <h3 class="text-lg font-bold">${session.name}</h3>
-                                <span class="text-sm">${stateLabel}</span>
-                            </div>
-                            <button onclick="deleteSession('${session.name}')" class="text-red-500 hover:text-red-700 p-1">🗑️</button>
-                        </div>
-                        ${userInfoHtml}
-                        ${qrHtml}
-                        <div class="mt-3 text-xs text-gray-500">
-                            <p>📊 Mensajes: ${session.messageCount || 0}</p>
-                        </div>
-                        ${session.state === 'DISCONNECTED' || session.state === 'ERROR' ? `
-                            <div class="mt-4">
-                                <button onclick="reconnectSession('${session.name}')" class="w-full bg-blue-500 text-white py-2 rounded text-sm hover:bg-blue-600">🔄 Reconectar</button>
-                            </div>` : ''}
-                    </div>
-                </div>`;
-        }
-
-        async function loadQRCode(sessionName) {
-            const container = document.getElementById(`qr-container-${sessionName}`);
-            if (!container) return;
-            try {
-                const response = await fetch(`${API_URL}/api/session/${sessionName}/qr`);
-                if (response.ok) {
-                    const qrDataUrl = await response.text();
-                    if (qrDataUrl && qrDataUrl.startsWith('data:image')) {
-                        container.innerHTML = `<img src="${qrDataUrl}" alt="QR Code" class="w-48 h-48 mx-auto">`;
-                    } else {
-                        container.innerHTML = `<p class="text-gray-500 text-sm">Esperando código QR...</p>`;
-                    }
-                }
-            } catch (error) {
-                container.innerHTML = `<p class="text-red-500 text-sm">Error al cargar QR</p>`;
-            }
-        }
-
-        async function createSession() {
-            const nameInput = document.getElementById('sessionName');
-            const sessionName = nameInput.value.trim();
-            const statusEl = document.getElementById('createSessionStatus');
-            const button = document.getElementById('createSessionBtn');
-
-            if (!sessionName) {
-                statusEl.className = 'mt-2 text-sm text-red-500';
-                statusEl.textContent = 'Por favor ingresa un nombre para la sesión';
-                return;
-            }
-
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner inline-block mr-2"></span> Creando...';
-
-            try {
-                const response = await fetch(`${API_URL}/api/sessions/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionName })
-                });
-                const result = await response.json();
-                if (result.success) {
-                    statusEl.className = 'mt-2 text-sm text-green-500';
-                    statusEl.textContent = '✅ Sesión creada. Escanea el código QR.';
-                    nameInput.value = '';
-                    setTimeout(loadSessions, 1000);
-                    setTimeout(loadSessions, 3000);
-                } else {
-                    statusEl.className = 'mt-2 text-sm text-red-500';
-                    statusEl.textContent = `❌ Error: ${result.error}`;
-                }
-            } catch (error) {
-                statusEl.className = 'mt-2 text-sm text-red-500';
-                statusEl.textContent = `❌ Error: ${error.message}`;
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Crear Sesión';
-            }
-        }
-
-        async function deleteSession(sessionName) {
-            if (!confirm(`¿Eliminar la sesión "${sessionName}"?`)) return;
-            try {
-                const response = await fetch(`${API_URL}/api/session/delete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionName })
-                });
-                const result = await response.json();
-                if (result.success) loadSessions();
-                else alert(`Error: ${result.error}`);
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
-        }
-
-        async function reconnectSession(sessionName) {
-            try {
-                const response = await fetch(`${API_URL}/api/session/${sessionName}/reconnect`, { method: 'POST' });
-                const result = await response.json();
-                if (result.success) {
-                    alert('Reconectando sesión...');
-                    setTimeout(loadSessions, 3000);
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
-        }
-
-        function updateSessionsCount() {
-            const ready = sessions.filter(s => s.state === 'READY').length;
-            document.getElementById('activeSessionsCount').textContent = `${ready} de ${sessions.length} sesiones activas`;
-        }
-
-        function populateSessionSelects() {
-            const readySessions = sessions.filter(s => s.state === 'READY');
-            
-            // Personal checkboxes
-            const personalHtml = readySessions.length > 0
-                ? readySessions.map(s => `
-                    <label class="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer">
-                        <input type="checkbox" name="personalSession" value="${s.name}" class="mr-2 rounded text-blue-500">
-                        <span class="flex-1 font-medium">${s.name}</span>
-                        <span class="text-xs text-green-600">✅ ${s.userInfo?.wid || ''}</span>
-                    </label>`).join('')
-                : '<p class="text-gray-500 text-sm">No hay sesiones activas</p>';
-            document.getElementById('personalSessionCheckboxes').innerHTML = personalHtml;
-
-            // Bulk checkboxes (for numbers)
-            const bulkHtml = readySessions.length > 0
-                ? readySessions.map(s => `
-                    <label class="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer">
-                        <input type="checkbox" name="bulkSession" value="${s.name}" class="mr-2 rounded text-purple-500">
-                        <span class="flex-1 font-medium">${s.name}</span>
-                        <span class="text-xs text-green-600">✅ ${s.userInfo?.wid || ''}</span>
-                    </label>`).join('')
-                : '<p class="text-gray-500 text-sm">No hay sesiones activas</p>';
-            document.getElementById('bulkSessionCheckboxes').innerHTML = bulkHtml;
-
-            // Groups select (single session)
-            const groupSelect = document.getElementById('groupSessionSelect');
-            groupSelect.innerHTML = '<option value="">-- Selecciona una sesión --</option>' +
-                readySessions.map(s => `<option value="${s.name}">${s.name} (${s.userInfo?.wid || ''})</option>`).join('');
-        }
-
-        function getSelectedPersonalSessions() {
-            return Array.from(document.querySelectorAll('input[name="personalSession"]:checked')).map(cb => cb.value);
-        }
-
-        function getSelectedBulkSessions() {
-            return Array.from(document.querySelectorAll('input[name="bulkSession"]:checked')).map(cb => cb.value);
-        }
-
-        function selectAllBulkSessions() {
-            document.querySelectorAll('input[name="bulkSession"]').forEach(cb => cb.checked = true);
-        }
-
-        function deselectAllBulkSessions() {
-            document.querySelectorAll('input[name="bulkSession"]').forEach(cb => cb.checked = false);
-        }
-
-        function selectAllGroups() {
-            document.querySelectorAll('input[name="bulkGroup"]').forEach(cb => cb.checked = true);
-        }
-
-        function deselectAllGroups() {
-            document.querySelectorAll('input[name="bulkGroup"]').forEach(cb => cb.checked = false);
-        }
-
-        // PERSONAL MESSAGE
-        async function sendPersonalMessage() {
-            const selectedSessions = getSelectedPersonalSessions();
-            const phoneNumber = document.getElementById('personalPhone').value.trim();
-            const message = document.getElementById('personalMessage').value.trim();
-            const fileInput = document.getElementById('personalFile');
-            const statusEl = document.getElementById('personalStatus');
-            const button = document.getElementById('sendPersonalBtn');
-
-            if (selectedSessions.length === 0) {
-                statusEl.className = 'text-sm text-red-500';
-                statusEl.textContent = 'Selecciona al menos una sesión';
-                return;
-            }
-            if (!phoneNumber) {
-                statusEl.className = 'text-sm text-red-500';
-                statusEl.textContent = 'Ingresa el número de teléfono';
-                return;
-            }
-            if (!message && !fileInput.files[0]) {
-                statusEl.className = 'text-sm text-red-500';
-                statusEl.textContent = 'Escribe un mensaje o adjunta un archivo';
-                return;
-            }
-
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner inline-block mr-2"></span> Enviando...';
-
-            let sentCount = 0, failedCount = 0;
-            const file = fileInput.files[0];
-
-            for (const sessionName of selectedSessions) {
-                statusEl.className = 'text-sm text-blue-500';
-                statusEl.textContent = `Enviando desde ${sessionName}...`;
-
-                try {
-                    let response;
-                    if (file) {
-                        const formData = new FormData();
-                        formData.append('sessionName', sessionName);
-                        formData.append('phoneNumber', phoneNumber);
-                        formData.append('caption', message || '');
-                        formData.append('file', file);
-                        response = await fetch(`${API_URL}/api/session/send-file`, { method: 'POST', body: formData });
-                    } else {
-                        response = await fetch(`${API_URL}/api/session/send-message`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sessionName, phoneNumber, message })
-                        });
-                    }
-                    const result = await response.json();
-                    if (result.success) sentCount++;
-                    else failedCount++;
-                } catch (error) {
-                    failedCount++;
-                }
-            }
-
-            if (failedCount === 0) {
-                statusEl.className = 'text-sm text-green-500';
-                statusEl.textContent = `✅ Mensaje enviado desde ${sentCount} sesión(es)`;
-                document.getElementById('personalMessage').value = '';
-                fileInput.value = '';
-            } else {
-                statusEl.className = 'text-sm text-yellow-500';
-                statusEl.textContent = `⚠️ Enviado: ${sentCount} exitosos, ${failedCount} fallidos`;
-            }
-
-            button.disabled = false;
-            button.innerHTML = '📨 Enviar Mensaje';
-        }
-
-        // BULK SEND
-        function switchBulkTab(tab) {
-            bulkCurrentTab = tab;
-            const tabNumbers = document.getElementById('tabNumbers');
-            const tabGroups = document.getElementById('tabGroups');
-            const panelNumbers = document.getElementById('panelNumbers');
-            const panelGroups = document.getElementById('panelGroups');
-
-            if (tab === 'numbers') {
-                tabNumbers.className = 'px-4 py-2 border-b-2 border-purple-500 text-purple-600 font-medium';
-                tabGroups.className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-                panelNumbers.classList.remove('hidden');
-                panelGroups.classList.add('hidden');
-            } else {
-                tabNumbers.className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-                tabGroups.className = 'px-4 py-2 border-b-2 border-purple-500 text-purple-600 font-medium';
-                panelNumbers.classList.add('hidden');
-                panelGroups.classList.remove('hidden');
-            }
-        }
-
-        async function loadGroupsFromSession() {
-            const sessionName = document.getElementById('groupSessionSelect').value;
-            const groupsList = document.getElementById('groupsList');
-
-            if (!sessionName) {
-                groupsList.innerHTML = '<p class="text-gray-500 text-sm">Selecciona una sesión para ver los grupos</p>';
-                return;
-            }
-
-            groupsList.innerHTML = '<div class="flex items-center"><div class="spinner mr-2"></div> Cargando grupos de ' + sessionName + '...</div>';
-
-            try {
-                const response = await fetch(`${API_URL}/api/session/${sessionName}/groups`);
-                const data = await response.json();
-
-                if (data.success && data.groups && data.groups.length > 0) {
-                    groupsList.innerHTML = data.groups.map(group => `
-                        <label class="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer">
-                            <input type="checkbox" name="bulkGroup" value="${group.id}" class="mr-2 rounded">
-                            <span class="flex-1">${group.name}</span>
-                            <span class="text-xs text-gray-400">${group.participants || '?'} miembros</span>
-                        </label>`).join('');
-                } else {
-                    groupsList.innerHTML = '<p class="text-gray-500 text-sm">No se encontraron grupos en ' + sessionName + '</p>';
-                }
-            } catch (error) {
-                groupsList.innerHTML = `<p class="text-red-500 text-sm">Error: ${error.message}</p>`;
-            }
-        }
-
-        async function sendBulkMessages() {
-            const message = document.getElementById('bulkMessage').value.trim();
-            const delay = parseInt(document.getElementById('bulkDelay').value) * 1000;
-            const fileInput = document.getElementById('bulkFileInput');
-            const statusEl = document.getElementById('bulkStatus');
-            const button = document.getElementById('sendBulkBtn');
-            const progressContainer = document.getElementById('bulkProgress');
-            const progressBar = document.getElementById('bulkProgressBar');
-            const progressText = document.getElementById('bulkProgressText');
-
-            let recipients = [];
-            let selectedSessions = [];
-            let isGroupSend = false;
-
-            if (bulkCurrentTab === 'numbers') {
-                selectedSessions = getSelectedBulkSessions();
-                if (selectedSessions.length === 0) {
-                    statusEl.className = 'text-sm text-red-500';
-                    statusEl.textContent = 'Selecciona al menos una sesión';
-                    return;
-                }
-                const contactsText = document.getElementById('bulkContacts').value.trim();
-                if (!contactsText) {
-                    statusEl.className = 'text-sm text-red-500';
-                    statusEl.textContent = 'Ingresa los números de teléfono';
-                    return;
-                }
-                recipients = contactsText.split('\n').map(l => l.trim()).filter(l => l && /^[0-9]+$/.test(l));
-                if (recipients.length === 0) {
-                    statusEl.className = 'text-sm text-red-500';
-                    statusEl.textContent = 'No se encontraron números válidos';
-                    return;
-                }
-                if (recipients.length > 50) {
-                    statusEl.className = 'text-sm text-red-500';
-                    statusEl.textContent = 'Máximo 50 contactos por envío';
-                    return;
-                }
-            } else {
-                // Groups - single session
-                const sessionName = document.getElementById('groupSessionSelect').value;
-                if (!sessionName) {
-                    statusEl.className = 'text-sm text-red-500';
-                    statusEl.textContent = 'Selecciona una sesión para enviar a grupos';
-                    return;
-                }
-                selectedSessions = [sessionName];
-                const checkboxes = document.querySelectorAll('input[name="bulkGroup"]:checked');
-                recipients = Array.from(checkboxes).map(cb => cb.value);
-                isGroupSend = true;
-                if (recipients.length === 0) {
-                    statusEl.className = 'text-sm text-red-500';
-                    statusEl.textContent = 'Selecciona al menos un grupo';
-                    return;
-                }
-            }
-
-            if (!message && !fileInput.files[0]) {
-                statusEl.className = 'text-sm text-red-500';
-                statusEl.textContent = 'Escribe un mensaje o adjunta un archivo';
-                return;
-            }
-
-            const recipientType = isGroupSend ? 'grupo(s)' : 'número(s)';
-            const totalMensajes = recipients.length * selectedSessions.length;
-            if (!confirm(`¿Enviar mensaje a ${recipients.length} ${recipientType} desde ${selectedSessions.length} sesión(es)?\n\nTotal: ${totalMensajes} mensajes`)) return;
-
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner inline-block mr-2"></span> Enviando...';
-            progressContainer.classList.remove('hidden');
-            progressBar.style.width = '0%';
-
-            let sentCount = 0, failedCount = 0;
-            const total = recipients.length * selectedSessions.length;
-            const file = fileInput.files[0];
-            let processed = 0;
-
-            for (const sessionName of selectedSessions) {
-                statusEl.className = 'text-sm text-blue-500';
-                statusEl.textContent = `Enviando desde ${sessionName}...`;
-
-                for (let i = 0; i < recipients.length; i++) {
-                    const recipient = recipients[i];
-                    try {
-                        let response;
-                        if (file) {
-                            const formData = new FormData();
-                            formData.append('sessionName', sessionName);
-                            formData.append('phoneNumber', recipient);
-                            formData.append('caption', message || '');
-                            formData.append('file', file);
-                            response = await fetch(`${API_URL}/api/session/send-file`, { method: 'POST', body: formData });
-                        } else {
-                            response = await fetch(`${API_URL}/api/session/send-message`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ sessionName, phoneNumber: recipient, message })
-                            });
-                        }
-                        const result = await response.json();
-                        if (result.success) sentCount++;
-                        else failedCount++;
-                    } catch (error) {
-                        failedCount++;
-                    }
-
-                    processed++;
-                    const progress = (processed / total) * 100;
-                    progressBar.style.width = `${progress}%`;
-                    progressText.textContent = `${processed}/${total} procesados`;
-
-                    if (i < recipients.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    }
-                }
-            }
-
-            if (failedCount === 0) {
-                statusEl.className = 'text-sm text-green-500';
-                statusEl.textContent = `✅ Completado: ${sentCount} mensajes enviados`;
-            } else if (sentCount > 0) {
-                statusEl.className = 'text-sm text-yellow-500';
-                statusEl.textContent = `⚠️ Parcial: ${sentCount} enviados, ${failedCount} fallidos`;
-            } else {
-                statusEl.className = 'text-sm text-red-500';
-                statusEl.textContent = `❌ Fallido: ${failedCount} mensajes no enviados`;
-            }
-
-            button.disabled = false;
-            button.innerHTML = '🚀 Enviar Masivo';
-            setTimeout(() => progressContainer.classList.add('hidden'), 3000);
-        }
-
-        function clearBulkForm() {
-            document.getElementById('bulkContacts').value = '';
-            document.getElementById('bulkMessage').value = '';
-            document.getElementById('bulkFileInput').value = '';
-            document.getElementById('bulkStatus').textContent = '';
-            document.getElementById('bulkProgress').classList.add('hidden');
-            document.querySelectorAll('input[name="bulkGroup"]').forEach(cb => cb.checked = false);
-            document.getElementById('groupSessionSelect').value = '';
-            document.getElementById('groupsList').innerHTML = '<p class="text-gray-500 text-sm">Selecciona una sesión para ver los grupos</p>';
-        }
-
-        // Auto-refresh sessions
-        setInterval(() => {
-            if (!document.getElementById('mainApp').classList.contains('hidden')) {
-                loadSessions();
-            }
-        }, 30000);
-    </script>
+    <!-- Scripts externos -->
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/analytics.js"></script>
 </body>
 </html>
