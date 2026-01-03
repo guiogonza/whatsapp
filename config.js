@@ -17,6 +17,9 @@ module.exports = {
     // Rotación de sesiones para envío de mensajes
     SESSION_ROTATION_INTERVAL: parseInt(process.env.SESSION_ROTATION_MINUTES) || 5,
     
+    // Balanceo round-robin por mensaje (rota sesión cada mensaje)
+    LOAD_BALANCING_ENABLED: process.env.LOAD_BALANCING_ENABLED !== 'false', // true por defecto
+    
     // Monitoreo
     SESSION_MONITOR_INTERVAL: 30, // minutos
     INACTIVE_CHECK_INTERVAL: 60, // minutos

@@ -142,7 +142,9 @@ function getRotationInfo() {
         activeSessions: activeSessions.map(s => s.name),
         lastRotation: lastRotationTime.toISOString(),
         rotationIntervalMinutes: config.SESSION_ROTATION_INTERVAL,
-        nextRotation: new Date(lastRotationTime.getTime() + config.SESSION_ROTATION_INTERVAL * 60 * 1000).toISOString()
+        nextRotation: new Date(lastRotationTime.getTime() + config.SESSION_ROTATION_INTERVAL * 60 * 1000).toISOString(),
+        loadBalancingEnabled: config.LOAD_BALANCING_ENABLED,
+        balancingMode: config.LOAD_BALANCING_ENABLED ? 'round-robin-per-message' : 'time-based'
     };
 }
 
@@ -263,13 +265,39 @@ async function sendMessageWithRetry(session, formattedNumber, message, maxRetrie
 }
 
 /**
+ * Obtiene la siguiente sesión usando balanceo round-robin
+ * @returns {Object|null} - Sesión para usar o null
+ */
+function getNextSessionRoundRobin() {
+    const activeSessions = getActiveSessions();
+    if (activeSessions.length === 0) return null;
+    
+    // Asegurar que el índice esté dentro del rango
+    if (currentSessionIndex >= activeSessions.length) {
+        currentSessionIndex = 0;
+    }
+    
+    const session = activeSessions[currentSessionIndex];
+    
+    // Rotar al siguiente índice para el próximo mensaje
+    currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+    lastRotationTime = new Date();
+    
+    return session;
+}
+
+/**
  * Envía mensaje usando rotación automática de sesiones
+ * Con balanceo round-robin: cada mensaje usa una sesión diferente
  * @param {string} phoneNumber - Número de teléfono
  * @param {string} message - Mensaje a enviar
  * @returns {Object} - Resultado del envío
  */
 async function sendMessageWithRotation(phoneNumber, message) {
-    const session = getCurrentSession();
+    // Usar balanceo round-robin (cada mensaje rota a la siguiente sesión)
+    const session = config.LOAD_BALANCING_ENABLED 
+        ? getNextSessionRoundRobin() 
+        : getCurrentSession();
     
     if (!session) {
         return { 
@@ -286,7 +314,8 @@ async function sendMessageWithRotation(phoneNumber, message) {
         };
     }
     
-    console.log(`📤 Enviando mensaje via sesión: ${session.name}`);
+    const activeSessions = getActiveSessions();
+    console.log(`📤 Enviando mensaje via sesión: ${session.name} (${currentSessionIndex}/${activeSessions.length} sesiones activas)`);
     
     const result = await sendMessageWithRetry(session, formattedNumber, message, 3);
     
@@ -752,6 +781,7 @@ module.exports = {
     sessions,
     getActiveSessions,
     getCurrentSession,
+    getNextSessionRoundRobin,
     rotateSession,
     startSessionRotation,
     stopSessionRotation,
