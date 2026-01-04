@@ -281,14 +281,16 @@ async function createSession() {
 async function deleteSession(sessionName) {
     if (!confirm(`¿Eliminar la sesión "${sessionName}"?`)) return;
     try {
-        const response = await fetch(`${API_URL}/api/session/delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionName })
+        const response = await fetch(`${API_URL}/api/sessions/${sessionName}?deleteData=true`, {
+            method: 'DELETE'
         });
         const result = await response.json();
-        if (result.success) loadSessions();
-        else alert(`Error: ${result.error}`);
+        if (result.success) {
+            alert('Sesión eliminada exitosamente');
+            loadSessions();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
     } catch (error) {
         alert(`Error: ${error.message}`);
     }
@@ -296,10 +298,23 @@ async function deleteSession(sessionName) {
 
 async function reconnectSession(sessionName) {
     try {
-        const response = await fetch(`${API_URL}/api/session/${sessionName}/reconnect`, { method: 'POST' });
+        // Primero cerrar la sesión
+        await fetch(`${API_URL}/api/sessions/${sessionName}`, {
+            method: 'DELETE'
+        });
+        
+        // Esperar un momento
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Crear nueva sesión con el mismo nombre
+        const response = await fetch(`${API_URL}/api/sessions/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: sessionName })
+        });
         const result = await response.json();
         if (result.success) {
-            alert('Reconectando sesión...');
+            alert('Sesión reiniciada. Por favor escanea el código QR nuevamente.');
             setTimeout(loadSessions, 3000);
         } else {
             alert(`Error: ${result.error}`);
