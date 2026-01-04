@@ -73,6 +73,11 @@
                             <span>📈</span><span>Analytics</span>
                         </button>
                     </li>
+                    <li>
+                        <button id="nav-settings" onclick="showSection('settings')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
+                            <span>⚙️</span><span>Configuración</span>
+                        </button>
+                    </li>
                 </ul>
             </nav>
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50">
@@ -471,6 +476,56 @@
                     <div>DB size (MB): <span id="analyticsDbSize">—</span></div>
                     <div>Estados en DB: <span id="analyticsDbByStatus">—</span></div>
                     <div>Última actualización: <span id="analyticsLastUpdate">—</span></div>
+                </div>
+            </section>
+
+            <!-- SETTINGS SECTION -->
+            <section id="settingsSection" class="hidden space-y-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Configuración de Envío por Lotes (Batch)</h3>
+                    <p class="text-gray-600 mb-6">
+                        Para evitar baneos, los mensajes se agrupan y se envían cada cierto tiempo.
+                        Aquí puedes configurar el intervalo de envío.
+                    </p>
+                    
+                    <div class="max-w-md">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Intervalo de envío (minutos)
+                        </label>
+                        <div class="flex items-center gap-4">
+                            <input type="range" id="batchIntervalRange" min="1" max="10" step="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span id="batchIntervalValue" class="text-2xl font-bold text-green-600 w-12 text-center">3</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>1 min (Rápido)</span>
+                            <span>10 min (Seguro)</span>
+                        </div>
+                        
+                        <button onclick="saveBatchSettings()" class="mt-6 bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors w-full">
+                            Guardar Configuración
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Estado de la Cola</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                            <div class="text-sm text-blue-600 mb-1">Mensajes en Cola</div>
+                            <div id="queueSize" class="text-2xl font-bold text-blue-800">0</div>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                            <div class="text-sm text-purple-600 mb-1">Números Pendientes</div>
+                            <div id="pendingNumbers" class="text-2xl font-bold text-purple-800">0</div>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                            <div class="text-sm text-green-600 mb-1">Intervalo Actual</div>
+                            <div id="currentInterval" class="text-2xl font-bold text-green-800">3 min</div>
+                        </div>
+                    </div>
+                    <button onclick="refreshBatchStatus()" class="mt-4 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        🔄 Actualizar estado
+                    </button>
                 </div>
             </section>
         </main>

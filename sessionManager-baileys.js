@@ -34,6 +34,11 @@ let rotationInterval = null;
 let recentMessages = [];
 const MAX_RECENT_MESSAGES = 100;
 
+// Cola de mensajes para envío por lotes
+const messageQueue = {};
+let batchIntervalMinutes = 3;
+let batchTimer = null;
+
 /**
  * Registra un mensaje enviado en el buffer del monitor y en la BD
  */
@@ -61,6 +66,117 @@ function logMessageSent(sessionName, destination, message, status, errorMessage 
  */
 function getRecentMessages(limit = 50) {
     return recentMessages.slice(0, limit);
+}
+
+// ======================== PROCESAMIENTO POR LOTES (BATCH) ========================
+
+/**
+ * Encola un mensaje para ser enviado en lote
+ */
+function queueMessage(phoneNumber, message) {
+    const formattedNumber = formatPhoneNumber(phoneNumber);
+    if (!formattedNumber) {
+        return { success: false, error: 'Número inválido' };
+    }
+
+    if (!messageQueue[formattedNumber]) {
+        messageQueue[formattedNumber] = [];
+    }
+
+    messageQueue[formattedNumber].push({
+        message,
+        timestamp: new Date()
+    });
+
+    console.log(`📥 Mensaje encolado para ${formattedNumber}. Total en cola para este número: ${messageQueue[formattedNumber].length}`);
+    
+    return { 
+        success: true, 
+        queued: true, 
+        queueSize: messageQueue[formattedNumber].length,
+        nextBatchIn: batchIntervalMinutes 
+    };
+}
+
+/**
+ * Procesa la cola de mensajes y los envía agrupados
+ */
+async function processMessageQueue() {
+    const numbers = Object.keys(messageQueue);
+    if (numbers.length === 0) return;
+
+    console.log(`\n📦 Procesando cola de mensajes (${numbers.length} números pendientes)...`);
+
+    for (const number of numbers) {
+        const messages = messageQueue[number];
+        if (!messages || messages.length === 0) continue;
+
+        // Agrupar mensajes
+        // Si hay muchos mensajes, podemos separarlos por saltos de línea dobles
+        const combinedMessage = messages.map(m => m.message).join('\n\n');
+        
+        console.log(`📤 Enviando lote de ${messages.length} mensajes a ${number}`);
+        
+        // Usar la función de envío con rotación existente
+        // Esto mantiene el balanceo de carga
+        try {
+            const result = await sendMessageWithRotation(number, combinedMessage);
+            
+            if (result.success) {
+                // Eliminar de la cola si se envió con éxito
+                delete messageQueue[number];
+            } else {
+                console.error(`❌ Error enviando lote a ${number}, se mantendrá en cola: ${result.error?.message}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error procesando lote para ${number}: ${error.message}`);
+        }
+        
+        // Pequeña pausa entre números para no saturar
+        await sleep(1000);
+    }
+}
+
+/**
+ * Configura el intervalo de procesamiento por lotes
+ */
+function setBatchInterval(minutes) {
+    const newMinutes = parseInt(minutes);
+    if (isNaN(newMinutes) || newMinutes < 1 || newMinutes > 60) {
+        return { success: false, error: 'El intervalo debe ser entre 1 y 60 minutos' };
+    }
+
+    batchIntervalMinutes = newMinutes;
+    startBatchProcessor();
+    
+    console.log(`⏱️ Intervalo de envío por lotes actualizado a ${batchIntervalMinutes} minutos`);
+    return { success: true, interval: batchIntervalMinutes };
+}
+
+/**
+ * Inicia el procesador de lotes
+ */
+function startBatchProcessor() {
+    if (batchTimer) {
+        clearInterval(batchTimer);
+    }
+
+    console.log(`🚀 Iniciando procesador de lotes (cada ${batchIntervalMinutes} minutos)`);
+    
+    batchTimer = setInterval(() => {
+        processMessageQueue();
+    }, batchIntervalMinutes * 60 * 1000);
+}
+
+/**
+ * Obtiene la configuración actual de lotes
+ */
+function getBatchSettings() {
+    return {
+        interval: batchIntervalMinutes,
+        queueSize: Object.keys(messageQueue).reduce((acc, key) => acc + messageQueue[key].length, 0),
+        pendingNumbers: Object.keys(messageQueue).length
+    };
 }
 
 // ======================== FUNCIONES DE ROTACIÓN ========================
@@ -719,5 +835,9 @@ module.exports = {
     sendMediaMessage,
     sendNotificationToAdmin,
     getRecentMessages,
-    logMessageSent
+    logMessageSent,
+    queueMessage,
+    setBatchInterval,
+    getBatchSettings,
+    startBatchProcessor
 };

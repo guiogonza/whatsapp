@@ -275,7 +275,7 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
  */
 app.post('/api/messages/send', async (req, res) => {
     try {
-        const { phoneNumber, message } = req.body;
+        const { phoneNumber, message, immediate } = req.body;
         
         if (!phoneNumber || !message) {
             return res.status(400).json({
@@ -284,19 +284,39 @@ app.post('/api/messages/send', async (req, res) => {
             });
         }
         
-        const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
-        
-        if (result.success) {
-            res.json({
-                success: true,
-                sessionUsed: result.sessionUsed,
-                message: 'Mensaje enviado exitosamente'
-            });
+        // Si immediate es true, enviar directamente. Si no, encolar.
+        if (immediate === true || immediate === 'true') {
+            const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
+            
+            if (result.success) {
+                res.json({
+                    success: true,
+                    sessionUsed: result.sessionUsed,
+                    message: 'Mensaje enviado exitosamente (inmediato)'
+                });
+            } else {
+                res.status(500).json({
+                    success: false,
+                    error: result.error?.message || 'Error enviando mensaje'
+                });
+            }
         } else {
-            res.status(500).json({
-                success: false,
-                error: result.error?.message || 'Error enviando mensaje'
-            });
+            // Encolar mensaje
+            const result = sessionManager.queueMessage(phoneNumber, message);
+            
+            if (result.success) {
+                res.json({
+                    success: true,
+                    queued: true,
+                    message: 'Mensaje encolado para envío por lotes',
+                    details: result
+                });
+            } else {
+                res.status(500).json({
+                    success: false,
+                    error: result.error
+                });
+            }
         }
     } catch (error) {
         res.status(500).json({
@@ -439,6 +459,62 @@ app.get('/api/analytics/messages', async (req, res) => {
     }
 });
 
+// ======================== RUTAS - CONFIGURACIÓN ========================
+
+/**
+ * GET /api/settings/batch - Obtiene configuración de lotes
+ */
+app.get('/api/settings/batch', (req, res) => {
+    try {
+        const settings = sessionManager.getBatchSettings();
+        res.json({
+            success: true,
+            settings
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/settings/batch - Actualiza configuración de lotes
+ */
+app.post('/api/settings/batch', (req, res) => {
+    try {
+        const { interval } = req.body;
+        
+        if (!interval) {
+            return res.status(400).json({
+                success: false,
+                error: 'interval es requerido'
+            });
+        }
+        
+        const result = sessionManager.setBatchInterval(interval);
+        
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Intervalo actualizado correctamente',
+                interval: result.interval
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // ======================== HEALTH CHECK ========================
 
 app.get('/health', (req, res) => {
@@ -531,6 +607,9 @@ async function initialize() {
         // Iniciar rotación de sesiones
         sessionManager.startSessionRotation();
         
+        // Iniciar procesador de lotes
+        sessionManager.startBatchProcessor();
+
         console.log('✅ Sistema iniciado correctamente\n');
         
     } catch (error) {

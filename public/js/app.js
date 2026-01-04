@@ -20,8 +20,29 @@ function showSection(sectionId) {
         monitor: { title: 'Monitor en Tiempo Real', subtitle: 'Visualiza la actividad de mensajes' },
         personal: { title: 'Mensaje Personalizado', subtitle: 'Envía mensajes individuales' },
         bulk: { title: 'Envío Masivo', subtitle: 'Envía mensajes a múltiples destinatarios' },
-        analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' }
+        analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' },
+        settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' }
     };
+    
+    // Ocultar todas las secciones
+    ['sessionsSection', 'monitorSection', 'personalSection', 'bulkSection', 'analyticsSection', 'settingsSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+    
+    // Mostrar la sección seleccionada
+    const sectionMap = {
+        sessions: 'sessionsSection',
+        monitor: 'monitorSection',
+        personal: 'personalSection',
+        bulk: 'bulkSection',
+        analytics: 'analyticsSection',
+        settings: 'settingsSection'
+    };
+    
+    const targetSection = document.getElementById(sectionMap[sectionId]);
+    if (targetSection) targetSection.classList.remove('hidden');
+    
     document.getElementById('sectionTitle').textContent = titles[sectionId].title;
     document.getElementById('sectionSubtitle').textContent = titles[sectionId].subtitle;
     
@@ -29,6 +50,7 @@ function showSection(sectionId) {
     else stopMonitor();
     
     if (sectionId === 'analytics') initAnalytics();
+    if (sectionId === 'settings') initSettings();
 }
 
 // ======================== SESIONES ========================
@@ -841,6 +863,72 @@ function clearBulkForm() {
     document.querySelectorAll('input[name="bulkGroup"]').forEach(cb => cb.checked = false);
     document.getElementById('groupSessionSelect').value = '';
     document.getElementById('groupsList').innerHTML = '<p class="text-gray-500 text-sm">Selecciona una sesión para ver los grupos</p>';
+}
+
+// ======================== CONFIGURACIÓN (BATCH) ========================
+
+async function initSettings() {
+    await refreshBatchStatus();
+    
+    // Configurar listener para el slider
+    const range = document.getElementById('batchIntervalRange');
+    const value = document.getElementById('batchIntervalValue');
+    
+    if (range && value) {
+        range.addEventListener('input', (e) => {
+            value.textContent = e.target.value;
+        });
+    }
+}
+
+async function refreshBatchStatus() {
+    try {
+        const response = await fetch(`${API_URL}/api/settings/batch`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const { settings } = data;
+            
+            // Actualizar UI
+            const range = document.getElementById('batchIntervalRange');
+            const value = document.getElementById('batchIntervalValue');
+            const queueSize = document.getElementById('queueSize');
+            const pendingNumbers = document.getElementById('pendingNumbers');
+            const currentInterval = document.getElementById('currentInterval');
+
+            if (range) range.value = settings.interval;
+            if (value) value.textContent = settings.interval;
+            if (queueSize) queueSize.textContent = settings.queueSize;
+            if (pendingNumbers) pendingNumbers.textContent = settings.pendingNumbers;
+            if (currentInterval) currentInterval.textContent = `${settings.interval} min`;
+        }
+    } catch (error) {
+        console.error('Error cargando configuración:', error);
+    }
+}
+
+async function saveBatchSettings() {
+    const interval = document.getElementById('batchIntervalRange').value;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/settings/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interval })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Configuración guardada exitosamente');
+            refreshBatchStatus();
+        } else {
+            alert(`❌ Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error guardando configuración:', error);
+        alert('❌ Error de conexión');
+    }
 }
 
 // Auto-refresh sessions
