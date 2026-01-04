@@ -65,6 +65,103 @@ let lastRotationTime = new Date();
 let rotationInterval = null;
 const SESSION_ROTATION_INTERVAL = parseInt(process.env.SESSION_ROTATION_INTERVAL) || 30; // minutos
 
+// ======================== PROTECCIÓN ANTI-SPAM ========================
+// Contadores de mensajes por sesión (se reinician a medianoche)
+const sessionMessageCounters = {};
+const DAILY_MESSAGE_LIMIT = parseInt(process.env.DAILY_MESSAGE_LIMIT) || 250; // Límite por sesión/día
+const MIN_DELAY_MS = parseInt(process.env.MIN_DELAY_MS) || 3000; // 3 segundos mínimo
+const MAX_DELAY_MS = parseInt(process.env.MAX_DELAY_MS) || 8000; // 8 segundos máximo
+const COOLDOWN_THRESHOLD = parseInt(process.env.COOLDOWN_THRESHOLD) || 20; // Mensajes antes de forzar rotación
+let lastMessageTime = null;
+
+/**
+ * Genera un delay aleatorio entre MIN y MAX
+ */
+function getRandomDelay() {
+    return Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1)) + MIN_DELAY_MS;
+}
+
+/**
+ * Espera un tiempo en milisegundos
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Inicializa o obtiene el contador de una sesión
+ */
+function getSessionCounter(sessionName) {
+    const today = new Date().toDateString();
+    
+    if (!sessionMessageCounters[sessionName] || sessionMessageCounters[sessionName].date !== today) {
+        sessionMessageCounters[sessionName] = {
+            date: today,
+            count: 0,
+            consecutiveCount: 0
+        };
+    }
+    
+    return sessionMessageCounters[sessionName];
+}
+
+/**
+ * Incrementa el contador de mensajes de una sesión
+ */
+function incrementSessionCounter(sessionName) {
+    const counter = getSessionCounter(sessionName);
+    counter.count++;
+    counter.consecutiveCount++;
+    return counter;
+}
+
+/**
+ * Reinicia el contador consecutivo de una sesión
+ */
+function resetConsecutiveCounter(sessionName) {
+    if (sessionMessageCounters[sessionName]) {
+        sessionMessageCounters[sessionName].consecutiveCount = 0;
+    }
+}
+
+/**
+ * Verifica si una sesión puede enviar más mensajes hoy
+ */
+function canSessionSendMore(sessionName) {
+    const counter = getSessionCounter(sessionName);
+    return counter.count < DAILY_MESSAGE_LIMIT;
+}
+
+/**
+ * Verifica si una sesión necesita cooldown (muchos mensajes consecutivos)
+ */
+function sessionNeedsCooldown(sessionName) {
+    const counter = getSessionCounter(sessionName);
+    return counter.consecutiveCount >= COOLDOWN_THRESHOLD;
+}
+
+/**
+ * Obtiene estadísticas de anti-spam
+ */
+function getAntiSpamStats() {
+    const stats = {};
+    for (const [name, counter] of Object.entries(sessionMessageCounters)) {
+        stats[name] = {
+            date: counter.date,
+            messagesSentToday: counter.count,
+            consecutiveMessages: counter.consecutiveCount,
+            remainingToday: DAILY_MESSAGE_LIMIT - counter.count,
+            canSend: counter.count < DAILY_MESSAGE_LIMIT
+        };
+    }
+    return {
+        dailyLimit: DAILY_MESSAGE_LIMIT,
+        delayRange: `${MIN_DELAY_MS}-${MAX_DELAY_MS}ms`,
+        cooldownThreshold: COOLDOWN_THRESHOLD,
+        sessions: stats
+    };
+}
+
 // Buffer de mensajes recientes para el monitor (no persiste, solo en memoria)
 let recentMessages = [];
 const MAX_RECENT_MESSAGES = 100;
@@ -126,8 +223,8 @@ function getCurrentSession() {
 }
 
 /**
- * Obtiene la siguiente sesión usando balanceo round-robin
- * Rota automáticamente después de cada llamada
+ * Obtiene la siguiente sesión usando balanceo round-robin inteligente
+ * Considera límites diarios y cooldowns para evitar spam
  */
 function getNextSessionRoundRobin() {
     const activeSessions = getActiveSessions();
@@ -137,10 +234,38 @@ function getNextSessionRoundRobin() {
         currentSessionIndex = 0;
     }
 
-    const session = activeSessions[currentSessionIndex];
+    // Buscar una sesión que pueda enviar (no exceda límites)
+    let attempts = 0;
+    while (attempts < activeSessions.length) {
+        const session = activeSessions[currentSessionIndex];
+        const sessionName = session.name;
+        
+        // Verificar si puede enviar más mensajes hoy
+        if (canSessionSendMore(sessionName)) {
+            // Si necesita cooldown, rotar pero marcar que se usará otra
+            if (sessionNeedsCooldown(sessionName) && activeSessions.length > 1) {
+                console.log(`⏸️ ${sessionName} necesita cooldown (${COOLDOWN_THRESHOLD} consecutivos), rotando...`);
+                resetConsecutiveCounter(sessionName);
+                currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+                attempts++;
+                continue;
+            }
+            
+            // Rotar al siguiente índice para el próximo mensaje
+            currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+            lastRotationTime = new Date();
+            
+            return session;
+        }
+        
+        console.log(`⚠️ ${sessionName} alcanzó límite diario (${DAILY_MESSAGE_LIMIT}), buscando otra...`);
+        currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+        attempts++;
+    }
     
-    // Rotar al siguiente índice para el próximo mensaje
-    currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+    // Todas las sesiones alcanzaron su límite
+    console.log('🚫 Todas las sesiones alcanzaron su límite diario de mensajes');
+    return null;
     lastRotationTime = new Date();
 
     return session;
@@ -1196,6 +1321,16 @@ app.get('/api/sessions', async (req, res) => {
     }
 });
 
+// Obtener estadísticas anti-spam
+app.get('/api/antispam/stats', (req, res) => {
+    try {
+        res.json(getAntiSpamStats());
+    } catch (error) {
+        console.error(`Error obteniendo stats anti-spam: ${error.message}`);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
 // Iniciar nueva sesión
 app.post('/api/sessions/start', async (req, res) => {
     const { sessionName } = req.body;
@@ -1268,7 +1403,7 @@ app.get('/api/session/:sessionName/qr', async (req, res) => {
     }
 });
 
-// Enviar mensaje individual - USA BALANCEO ROUND-ROBIN AUTOMÁTICO
+// Enviar mensaje individual - USA BALANCEO ROUND-ROBIN AUTOMÁTICO CON ANTI-SPAM
 app.post('/api/session/send-message', async (req, res) => {
     const { phoneNumber, message } = req.body;
 
@@ -1278,13 +1413,26 @@ app.post('/api/session/send-message', async (req, res) => {
         });
     }
 
+    // Aplicar delay anti-spam si hay un mensaje reciente
+    if (lastMessageTime) {
+        const timeSinceLastMessage = Date.now() - lastMessageTime;
+        const requiredDelay = getRandomDelay();
+        
+        if (timeSinceLastMessage < requiredDelay) {
+            const waitTime = requiredDelay - timeSinceLastMessage;
+            console.log(`⏳ Anti-spam: esperando ${waitTime}ms antes de enviar...`);
+            await sleep(waitTime);
+        }
+    }
+
     // Usar balanceo round-robin: obtener siguiente sesión disponible
     const session = getNextSessionRoundRobin();
     
     if (!session) {
         return res.status(503).json({ 
-            error: 'No hay sesiones activas disponibles',
-            code: 'NO_ACTIVE_SESSIONS'
+            error: 'No hay sesiones activas disponibles o todas alcanzaron su límite diario',
+            code: 'NO_ACTIVE_SESSIONS',
+            antiSpamStats: getAntiSpamStats()
         });
     }
 
@@ -1325,6 +1473,10 @@ app.post('/api/session/send-message', async (req, res) => {
             throw result.error || new Error('Error desconocido al enviar mensaje');
         }
 
+        // Actualizar contadores anti-spam
+        const counter = incrementSessionCounter(sessionName);
+        lastMessageTime = Date.now();
+
         // Registrar mensaje
         if (!session.messages) session.messages = [];
         session.messages.push({
@@ -1347,7 +1499,7 @@ app.post('/api/session/send-message', async (req, res) => {
         logMessageSent(sessionName, phoneNumber, message, 'success');
 
         const activeSessions = getActiveSessions();
-        console.log(`✅ Mensaje enviado desde ${sessionName} a ${phoneNumber} (${currentSessionIndex}/${activeSessions.length} sesiones)`);
+        console.log(`✅ Mensaje enviado desde ${sessionName} a ${phoneNumber} (${counter.count}/${DAILY_MESSAGE_LIMIT} hoy, ${activeSessions.length} sesiones)`);
 
         res.json({
             success: true,
@@ -1355,7 +1507,11 @@ app.post('/api/session/send-message', async (req, res) => {
             timestamp: new Date().toISOString(),
             messageId: result.messageResult.id.id,
             sessionUsed: sessionName,
-            activeSessions: activeSessions.length
+            activeSessions: activeSessions.length,
+            sessionStats: {
+                messagesSentToday: counter.count,
+                remainingToday: DAILY_MESSAGE_LIMIT - counter.count
+            }
         });
 
     } catch (error) {
