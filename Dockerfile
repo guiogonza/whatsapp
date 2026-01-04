@@ -1,5 +1,5 @@
-# Base: Node 18 (Debian slim)
-FROM node:18-slim
+# Base: Node 20 (Debian slim)
+FROM node:20-slim
 
 # ---- Ambiente Puppeteer/Chromium ----
 # Evita que Puppeteer descargue Chromium propio
