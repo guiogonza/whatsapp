@@ -105,6 +105,12 @@ function rotateSession() {
  * Inicia el intervalo de rotación automática de sesiones
  */
 function startSessionRotation() {
+    // Si el intervalo es 0, el balanceo es automático por mensaje
+    if (config.SESSION_ROTATION_INTERVAL === 0) {
+        console.log('🔄 Balanceo round-robin activo: cada mensaje usa una sesión diferente');
+        return;
+    }
+    
     if (rotationInterval) {
         clearInterval(rotationInterval);
     }
@@ -245,18 +251,22 @@ async function sendMessageWithRetry(session, formattedNumber, message, maxRetrie
                 errorMsg.includes('Cannot read properties of undefined') ||
                 errorMsg.includes('Evaluation failed')) {
                 
-                await sleep(5000 * attempt);
+                // Aumentar delay exponencialmente para parecer más humano
+                await sleep(8000 * attempt);
                 
-                if (session.client.pupPage && attempt < maxRetries) {
+                // Solo recargar en el último intento y solo si es crítico
+                if (session.client.pupPage && attempt === maxRetries - 1) {
                     try {
-                        await session.client.pupPage.reload({ waitUntil: 'networkidle0', timeout: 30000 });
-                        await sleep(10000);
+                        console.log(`${session.name}: Intentando recarga como último recurso...`);
+                        await session.client.pupPage.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+                        await sleep(15000);
                     } catch (refreshError) {
                         console.log(`${session.name}: Error refrescando: ${refreshError.message}`);
                     }
                 }
             } else if (attempt < maxRetries) {
-                await sleep(2000 * attempt);
+                // Delay más largo para parecer más natural
+                await sleep(5000 * attempt);
             }
         }
     }
@@ -315,7 +325,8 @@ async function sendMessageWithRotation(phoneNumber, message) {
     }
     
     const activeSessions = getActiveSessions();
-    console.log(`📤 Enviando mensaje via sesión: ${session.name} (${currentSessionIndex}/${activeSessions.length} sesiones activas)`);
+    const sessionIndex = activeSessions.findIndex(s => s.name === session.name);
+    console.log(`📤 Enviando via ${session.name} [${sessionIndex + 1}/${activeSessions.length}] | Próxima: ${activeSessions[currentSessionIndex]?.name || 'N/A'}`);
     
     const result = await sendMessageWithRetry(session, formattedNumber, message, 3);
     
@@ -523,9 +534,7 @@ async function initializeClient(sessionName) {
                     '--disable-accelerated-2d-canvas',
                     '--no-first-run',
                     '--no-zygote',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--single-process'
+                    '--disable-gpu'
                 ],
                 timeout: config.PUPPETEER_TIMEOUT,
                 // Configurar zona horaria Colombia para evitar errores de sincronización
@@ -592,6 +601,30 @@ async function initializeClient(sessionName) {
             } catch (error) {
                 console.log(`Cliente conectado: ${sessionName}`);
             }
+        });
+
+        // Detectar fallo de autenticación
+        client.on('auth_failure', async (msg) => {
+            console.log(`🚨 Fallo de autenticación: ${sessionName} - ${msg}`);
+            sessions[sessionName].state = config.SESSION_STATES.ERROR;
+            sessions[sessionName].error = `Auth failure: ${msg}`;
+            await sendNotificationToAdmin(
+                `🚨 *FALLO DE AUTENTICACIÓN*\n\nSesión: *${sessionName}*\n❌ ${msg}\n📅 ${getColombiaDate()}`
+            );
+        });
+
+        // Detectar cambios de estado
+        client.on('change_state', state => {
+            console.log(`🔄 Cambio de estado: ${sessionName} -> ${state}`);
+            if (state === 'CONFLICT' || state === 'UNPAIRED') {
+                console.log(`⚠️ Estado problemático detectado: ${state}`);
+                sessions[sessionName].state = config.SESSION_STATES.DISCONNECTED;
+            }
+        });
+
+        // Detectar sesión remota guardada (cuando se escanea QR en otro dispositivo)
+        client.on('remote_session_saved', () => {
+            console.log(`💾 Sesión remota guardada: ${sessionName}`);
         });
 
         client.on('disconnected', async (reason) => {
@@ -755,7 +788,8 @@ async function loadExistingSessions() {
                 sessions[sessionName].error = error.message;
             }
 
-            await sleep(3000);
+            // Delay más largo entre sesiones para evitar detección como bot
+            await sleep(12000);
         }
     } catch (error) {
         console.error(`Error cargando sesiones: ${error.message}`);

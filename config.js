@@ -15,14 +15,16 @@ module.exports = {
     CONSOLE_CLEAR_INTERVAL: parseInt(process.env.CONSOLE_CLEAR_INTERVAL_MINUTES) || 5,
     
     // Rotación de sesiones para envío de mensajes
-    SESSION_ROTATION_INTERVAL: parseInt(process.env.SESSION_ROTATION_MINUTES) || 5,
+    // DESHABILITADO: Usar balanceo round-robin automático en cada mensaje
+    SESSION_ROTATION_INTERVAL: parseInt(process.env.SESSION_ROTATION_MINUTES) || 0, // 0 = deshabilitado
     
     // Balanceo round-robin por mensaje (rota sesión cada mensaje)
+    // TRUE = Cada mensaje usa una sesión diferente automáticamente
     LOAD_BALANCING_ENABLED: process.env.LOAD_BALANCING_ENABLED !== 'false', // true por defecto
     
     // Monitoreo
-    SESSION_MONITOR_INTERVAL: 30, // minutos
-    INACTIVE_CHECK_INTERVAL: 60, // minutos
+    SESSION_MONITOR_INTERVAL: 45, // minutos (aumentado para menos checks)
+    INACTIVE_CHECK_INTERVAL: 90, // minutos (aumentado para menos checks)
     
     // Notificaciones
     NOTIFICATION_NUMBER: process.env.NOTIFICATION_NUMBER || '573183499539',
