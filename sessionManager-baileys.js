@@ -340,7 +340,7 @@ async function getQRCode(sessionName) {
 /**
  * Cierra una sesión
  */
-async function closeSession(sessionName) {
+async function closeSession(sessionName, shouldLogout = true) {
     const session = sessions[sessionName];
     if (!session) {
         console.log(`⚠️ Sesión ${sessionName} no existe`);
@@ -349,7 +349,13 @@ async function closeSession(sessionName) {
     
     try {
         if (session.socket) {
-            await session.socket.logout();
+            if (shouldLogout) {
+                console.log(`🔌 Cerrando sesión ${sessionName} con logout...`);
+                await session.socket.logout();
+            } else {
+                console.log(`🔌 Cerrando conexión ${sessionName} (sin logout)...`);
+                session.socket.end(undefined);
+            }
         }
         
         session.state = config.SESSION_STATES.DISCONNECTED;

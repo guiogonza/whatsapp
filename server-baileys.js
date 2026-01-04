@@ -544,7 +544,7 @@ process.on('SIGINT', async () => {
     // Cerrar todas las sesiones
     const sessions = sessionManager.getAllSessions();
     for (const name of Object.keys(sessions)) {
-        await sessionManager.closeSession(name);
+        await sessionManager.closeSession(name, false);
     }
     
     process.exit(0);
@@ -556,7 +556,7 @@ process.on('SIGTERM', async () => {
     
     const sessions = sessionManager.getAllSessions();
     for (const name of Object.keys(sessions)) {
-        await sessionManager.closeSession(name);
+        await sessionManager.closeSession(name, false);
     }
     
     process.exit(0);
