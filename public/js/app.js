@@ -35,7 +35,8 @@ function showSection(sectionId) {
 async function loadSessions() {
     try {
         const response = await fetch(`${API_URL}/api/sessions`);
-        sessions = await response.json();
+        const data = await response.json();
+        sessions = data.sessions || [];
         await updateRotationInfo();
         updateSessionsList();
         populateSessionSelects();
@@ -94,8 +95,9 @@ async function rotateSessionManually() {
 
 async function updateRotationInfo() {
     try {
-        const response = await fetch(`${API_URL}/api/rotation`);
-        const rotationData = await response.json();
+        const response = await fetch(`${API_URL}/api/sessions/rotation/info`);
+        const data = await response.json();
+        const rotationData = data.rotation;
         currentRotationSession = rotationData.currentSession;
         
         const infoEl = document.getElementById('rotationInfo');
@@ -153,7 +155,7 @@ function updateSessionsList() {
     
     container.innerHTML = sortedSessions.map(s => createSessionCard(s)).join('');
     sortedSessions.forEach(s => {
-        if (s.state === 'WAITING_FOR_QR' && s.hasQR) loadQRCode(s.name);
+        if (s.state === 'WAITING_FOR_QR' && s.qrReady) loadQRCode(s.name);
     });
 }
 
@@ -218,11 +220,11 @@ async function loadQRCode(sessionName) {
     const container = document.getElementById(`qr-container-${sessionName}`);
     if (!container) return;
     try {
-        const response = await fetch(`${API_URL}/api/session/${sessionName}/qr`);
+        const response = await fetch(`${API_URL}/api/sessions/${sessionName}/qr`);
         if (response.ok) {
-            const qrDataUrl = await response.text();
-            if (qrDataUrl && qrDataUrl.startsWith('data:image')) {
-                container.innerHTML = `<img src="${qrDataUrl}" alt="QR Code" class="w-48 h-48 mx-auto">`;
+            const data = await response.json();
+            if (data.success && data.qr) {
+                container.innerHTML = `<img src="${data.qr}" alt="QR Code" class="w-48 h-48 mx-auto">`;
             } else {
                 container.innerHTML = `<p class="text-gray-500 text-sm">Esperando código QR...</p>`;
             }
@@ -248,10 +250,10 @@ async function createSession() {
     button.innerHTML = '<span class="spinner inline-block mr-2"></span> Creando...';
 
     try {
-        const response = await fetch(`${API_URL}/api/sessions/start`, {
+        const response = await fetch(`${API_URL}/api/sessions/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionName })
+            body: JSON.stringify({ name: sessionName })
         });
         const result = await response.json();
         if (result.success) {

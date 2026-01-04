@@ -196,12 +196,28 @@ function getAnalytics(options = {}) {
     
     const topNumbers = queryToObjects(db.exec(topQuery));
     
+    // Query para envíos por sesión
+    const sessionQuery = `
+        SELECT 
+            session,
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as enviados,
+            SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errores
+        FROM messages
+        ${dateFilter}
+        GROUP BY session
+        ORDER BY total DESC
+    `;
+    
+    const sessionsStats = queryToObjects(db.exec(sessionQuery));
+    
     // Estadísticas de la BD
     const dbStats = getDbStats();
     
     return {
         timeline,
         top_numbers: topNumbers,
+        sessions_stats: sessionsStats,
         db_stats: dbStats
     };
 }
@@ -266,9 +282,12 @@ function close() {
 }
 
 module.exports = {
+    init: initDatabase,
     initDatabase,
     logMessage,
     getAnalytics,
+    getStats: getDbStats,
     getDbStats,
+    getMessages: getAnalytics,
     close
 };
