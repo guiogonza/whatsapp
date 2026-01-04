@@ -126,6 +126,27 @@ function getCurrentSession() {
 }
 
 /**
+ * Obtiene la siguiente sesión usando balanceo round-robin
+ * Rota automáticamente después de cada llamada
+ */
+function getNextSessionRoundRobin() {
+    const activeSessions = getActiveSessions();
+    if (activeSessions.length === 0) return null;
+
+    if (currentSessionIndex >= activeSessions.length) {
+        currentSessionIndex = 0;
+    }
+
+    const session = activeSessions[currentSessionIndex];
+    
+    // Rotar al siguiente índice para el próximo mensaje
+    currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+    lastRotationTime = new Date();
+
+    return session;
+}
+
+/**
  * Rota a la siguiente sesión activa
  */
 function rotateSession() {
@@ -1247,28 +1268,27 @@ app.get('/api/session/:sessionName/qr', async (req, res) => {
     }
 });
 
-// Enviar mensaje individual - OPTIMIZADO CON MANEJO DE WidFactory
+// Enviar mensaje individual - USA BALANCEO ROUND-ROBIN AUTOMÁTICO
 app.post('/api/session/send-message', async (req, res) => {
-    const { sessionName, phoneNumber, message } = req.body;
+    const { phoneNumber, message } = req.body;
 
-    if (!sessionName || !phoneNumber || !message) {
+    if (!phoneNumber || !message) {
         return res.status(400).json({
-            error: 'Se requiere sessionName, phoneNumber y message'
+            error: 'Se requiere phoneNumber y message'
         });
     }
 
-    if (!sessions[sessionName]) {
-        return res.status(404).json({ error: `Sesión ${sessionName} no encontrada` });
-    }
-
-    const session = sessions[sessionName];
-
-    if (session.state !== SESSION_STATES.READY) {
-        return res.status(400).json({
-            error: `Sesión no está lista. Estado actual: ${session.state}`,
-            currentState: session.state
+    // Usar balanceo round-robin: obtener siguiente sesión disponible
+    const session = getNextSessionRoundRobin();
+    
+    if (!session) {
+        return res.status(503).json({ 
+            error: 'No hay sesiones activas disponibles',
+            code: 'NO_ACTIVE_SESSIONS'
         });
     }
+
+    const sessionName = session.name;
 
     const formattedNumber = formatPhoneNumber(phoneNumber);
     if (!formattedNumber) {
@@ -1326,13 +1346,16 @@ app.post('/api/session/send-message', async (req, res) => {
         // Registrar en el monitor
         logMessageSent(sessionName, phoneNumber, message, 'success');
 
-        console.log(`Mensaje enviado desde ${sessionName} a ${phoneNumber}`);
+        const activeSessions = getActiveSessions();
+        console.log(`✅ Mensaje enviado desde ${sessionName} a ${phoneNumber} (${currentSessionIndex}/${activeSessions.length} sesiones)`);
 
         res.json({
             success: true,
             message: `Mensaje enviado exitosamente a ${phoneNumber}`,
             timestamp: new Date().toISOString(),
-            messageId: result.messageResult.id.id
+            messageId: result.messageResult.id.id,
+            sessionUsed: sessionName,
+            activeSessions: activeSessions.length
         });
 
     } catch (error) {
