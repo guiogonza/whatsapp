@@ -80,4 +80,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 # Arranque (usar la versión optimizada)
-CMD ["node", "server-new.js"]
+CMD ["node", "server-baileys.js"]
