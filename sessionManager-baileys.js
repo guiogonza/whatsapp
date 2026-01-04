@@ -211,44 +211,20 @@ function getCurrentSession() {
  * Rota a la siguiente sesión activa
  */
 function rotateSession() {
+    // Función mantenida por compatibilidad, pero el balanceo es automático
     const activeSessions = getActiveSessions();
-    if (activeSessions.length <= 1) {
-        console.log('📌 Solo hay una sesión activa, no se requiere rotación');
-        return;
-    }
+    if (activeSessions.length <= 1) return;
     
-    const previousIndex = currentSessionIndex;
     currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
     lastRotationTime = new Date();
-    
-    const previousSession = activeSessions[previousIndex];
-    const newSession = activeSessions[currentSessionIndex];
-    
-    console.log(`🔄 Rotación de sesión: ${previousSession?.name || 'N/A'} → ${newSession?.name || 'N/A'}`);
-    console.log(`📊 Sesiones activas: ${activeSessions.map(s => s.name).join(', ')}`);
 }
 
 /**
  * Inicia el intervalo de rotación automática de sesiones
  */
 function startSessionRotation() {
-    // Si el intervalo es 0, el balanceo es automático por mensaje
-    if (config.SESSION_ROTATION_INTERVAL === 0) {
-        console.log('🔄 Balanceo round-robin activo: cada mensaje usa una sesión diferente');
-        return;
-    }
-    
-    if (rotationInterval) {
-        clearInterval(rotationInterval);
-    }
-    
-    const intervalMs = config.SESSION_ROTATION_INTERVAL * 60 * 1000;
-    
-    rotationInterval = setInterval(() => {
-        rotateSession();
-    }, intervalMs);
-    
-    console.log(`⏱️ Rotación de sesiones activa (cada ${config.SESSION_ROTATION_INTERVAL} minutos)`);
+    console.log('🔄 Balanceo round-robin activo: cada mensaje usa una sesión diferente');
+    // Ya no usamos rotación por tiempo, solo round-robin por mensaje
 }
 
 /**
@@ -313,7 +289,13 @@ async function loadSessionsFromDisk() {
                         await createSession(file);
                         loadedCount++;
                     } catch (e) {
-                        console.log(`⚠️ Carpeta ${file} ignorada (no tiene credenciales válidas)`);
+                        console.log(`⚠️ Carpeta ${file} ignorada (no tiene credenciales válidas). Eliminando...`);
+                        try {
+                            await fs.rm(fullPath, { recursive: true, force: true });
+                            console.log(`🗑️ Carpeta inválida ${file} eliminada`);
+                        } catch (delErr) {
+                            console.error(`❌ Error eliminando carpeta inválida ${file}:`, delErr.message);
+                        }
                     }
                 }
             } catch (err) {

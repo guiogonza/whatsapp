@@ -16,7 +16,7 @@ module.exports = {
     
     // Rotación de sesiones para envío de mensajes
     // DESHABILITADO: Usar balanceo round-robin automático en cada mensaje
-    SESSION_ROTATION_INTERVAL: parseInt(process.env.SESSION_ROTATION_MINUTES) || 0, // 0 = deshabilitado
+    SESSION_ROTATION_INTERVAL: 0, // 0 = deshabilitado (siempre round-robin)
     
     // Balanceo round-robin por mensaje (rota sesión cada mensaje)
     // TRUE = Cada mensaje usa una sesión diferente automáticamente
