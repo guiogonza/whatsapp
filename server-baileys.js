@@ -514,6 +514,9 @@ async function initialize() {
         
         // Inicializar base de datos
         await database.init();
+
+        // Cargar sesiones existentes
+        await sessionManager.loadSessionsFromDisk();
         
         // Iniciar servidor HTTP
         server.listen(config.PORT, () => {

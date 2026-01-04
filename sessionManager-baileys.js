@@ -168,6 +168,52 @@ function getRotationInfo() {
 // ======================== CREACIÓN DE SESIONES ========================
 
 /**
+ * Carga todas las sesiones existentes en el disco
+ */
+async function loadSessionsFromDisk() {
+    try {
+        // Asegurar que el directorio existe
+        await fs.mkdir(config.SESSION_DATA_PATH, { recursive: true });
+        
+        const files = await fs.readdir(config.SESSION_DATA_PATH);
+        console.log(`📂 Buscando sesiones en ${config.SESSION_DATA_PATH}...`);
+        
+        let loadedCount = 0;
+        
+        for (const file of files) {
+            // Ignorar archivos ocultos o que no sean carpetas
+            if (file.startsWith('.')) continue;
+            
+            const fullPath = path.join(config.SESSION_DATA_PATH, file);
+            try {
+                const stat = await fs.stat(fullPath);
+                
+                if (stat.isDirectory()) {
+                    // Verificar si tiene creds.json (indicador de sesión válida)
+                    const credsPath = path.join(fullPath, 'creds.json');
+                    try {
+                        await fs.access(credsPath);
+                        console.log(`🔄 Cargando sesión encontrada: ${file}`);
+                        await createSession(file);
+                        loadedCount++;
+                    } catch (e) {
+                        console.log(`⚠️ Carpeta ${file} ignorada (no tiene credenciales válidas)`);
+                    }
+                }
+            } catch (err) {
+                console.error(`Error procesando ${file}:`, err.message);
+            }
+        }
+        
+        console.log(`✅ Se cargaron ${loadedCount} sesiones del disco`);
+        return loadedCount;
+    } catch (error) {
+        console.error('❌ Error cargando sesiones del disco:', error.message);
+        return 0;
+    }
+}
+
+/**
  * Crea una nueva sesión de WhatsApp con Baileys
  */
 async function createSession(sessionName) {
@@ -655,6 +701,7 @@ function getSessionsStatus() {
 
 module.exports = {
     createSession,
+    loadSessionsFromDisk,
     closeSession,
     deleteSessionData,
     getSession,
