@@ -24,25 +24,6 @@ function showSection(sectionId) {
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' }
     };
     
-    // Ocultar todas las secciones
-    ['sessionsSection', 'monitorSection', 'personalSection', 'bulkSection', 'analyticsSection', 'settingsSection'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
-    
-    // Mostrar la sección seleccionada
-    const sectionMap = {
-        sessions: 'sessionsSection',
-        monitor: 'monitorSection',
-        personal: 'personalSection',
-        bulk: 'bulkSection',
-        analytics: 'analyticsSection',
-        settings: 'settingsSection'
-    };
-    
-    const targetSection = document.getElementById(sectionMap[sectionId]);
-    if (targetSection) targetSection.classList.remove('hidden');
-    
     document.getElementById('sectionTitle').textContent = titles[sectionId].title;
     document.getElementById('sectionSubtitle').textContent = titles[sectionId].subtitle;
     
