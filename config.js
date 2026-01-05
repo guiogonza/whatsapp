@@ -28,6 +28,7 @@ module.exports = {
     
     // Notificaciones
     NOTIFICATION_NUMBER: process.env.NOTIFICATION_NUMBER || '573183499539',
+    NOTIFICATION_INTERVAL_MINUTES: parseInt(process.env.NOTIFICATION_INTERVAL_MINUTES, 10) || 30,
     
     // SMS API Hablame.co
     SMS_API_URL: 'https://www.hablame.co/api/sms/v5/send',

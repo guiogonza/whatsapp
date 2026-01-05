@@ -1,12 +1,12 @@
 /**
  * WhatsApp Bot Server con Baileys
  * 
- * Características principales:
- * - Implementación con Baileys (más seguro y difícil de detectar)
- * - Rotación automática de sesiones
- * - Código modular y organizado
+ * CaracterÃ­sticas principales:
+ * - ImplementaciÃ³n con Baileys (mÃ¡s seguro y difÃ­cil de detectar)
+ * - RotaciÃ³n automÃ¡tica de sesiones
+ * - CÃ³digo modular y organizado
  * - Monitoreo de sesiones activas
- * - Envío masivo con distribución entre sesiones
+ * - EnvÃ­o masivo con distribuciÃ³n entre sesiones
  */
 
 const express = require('express');
@@ -15,7 +15,7 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 
-// Configuración
+// ConfiguraciÃ³n
 const config = require('./config');
 
 // Gestor de sesiones con Baileys
@@ -25,7 +25,7 @@ const sessionManager = require('./sessionManager-baileys');
 const { formatPhoneNumber } = require('./utils');
 const database = require('./database');
 
-// Inicialización de Express
+// InicializaciÃ³n de Express
 const app = express();
 const server = http.createServer(app);
 const upload = multer();
@@ -36,6 +36,7 @@ let consoleLogCount = 0;
 let lastClearTime = new Date();
 let consoleClearInterval = null;
 let sessionMonitorInterval = null;
+let notificationInterval = null;
 
 // ======================== MIDDLEWARE ========================
 
@@ -50,7 +51,7 @@ app.use(express.static(config.PUBLIC_PATH));
 // ======================== FUNCIONES AUXILIARES ========================
 
 /**
- * Limpia la consola si está habilitado
+ * Limpia la consola si estÃ¡ habilitado
  */
 function clearConsole() {
     if (!config.CONSOLE_CLEAR_ENABLED) return;
@@ -59,8 +60,8 @@ function clearConsole() {
     
     if (minutesSinceLastClear >= config.CONSOLE_CLEAR_INTERVAL) {
         console.clear();
-        console.log(`🧹 Consola limpiada (${consoleLogCount} logs desde última limpieza)`);
-        console.log(`⏰ ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
+        console.log(`ð§¹ Consola limpiada (${consoleLogCount} logs desde Ãºltima limpieza)`);
+        console.log(`â° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
         
         consoleLogCount = 0;
         lastClearTime = new Date();
@@ -74,23 +75,49 @@ async function monitorSessions() {
     const sessions = sessionManager.getAllSessions();
     const activeSessions = sessionManager.getActiveSessions();
     
-    console.log('\n📊 === MONITOR DE SESIONES ===');
-    console.log(`⏰ ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
-    console.log(`📱 Total sesiones: ${Object.keys(sessions).length}`);
-    console.log(`✅ Sesiones activas: ${activeSessions.length}`);
+    console.log('\nð === MONITOR DE SESIONES ===');
+    console.log(`â° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
+    console.log(`ð± Total sesiones: ${Object.keys(sessions).length}`);
+    console.log(`â Sesiones activas: ${activeSessions.length}`);
     
     for (const [name, session] of Object.entries(sessions)) {
         const uptimeMinutes = Math.floor((Date.now() - session.startTime.getTime()) / 1000 / 60);
-        const status = session.state === config.SESSION_STATES.READY ? '✅' : '❌';
+        const status = session.state === config.SESSION_STATES.READY ? 'â' : 'â';
         
-        console.log(`${status} ${name}: ${session.state} | Teléfono: ${session.phoneNumber || 'N/A'} | Uptime: ${uptimeMinutes}m | Mensajes: ${session.messages?.length || 0}`);
+        console.log(`${status} ${name}: ${session.state} | TelÃ©fono: ${session.phoneNumber || 'N/A'} | Uptime: ${uptimeMinutes}m | Mensajes: ${session.messages?.length || 0}`);
     }
     
     const rotationInfo = sessionManager.getRotationInfo();
-    console.log(`\n🔄 Sesión actual: ${rotationInfo.currentSession || 'N/A'}`);
-    console.log(`📊 Balanceo: ${rotationInfo.balancingMode}`);
+    console.log(`\nð SesiÃ³n actual: ${rotationInfo.currentSession || 'N/A'}`);
+    console.log(`ð Balanceo: ${rotationInfo.balancingMode}`);
     console.log('==========================\n');
 }
+
+function sendSessionsStatusNotification() {
+    try {
+        const sessions = sessionManager.getSessionsStatus();
+        const total = sessions.length;
+        const active = sessions.filter(s => s.state === config.SESSION_STATES.READY);
+        const activeNames = active.map(s => s.name);
+        const inactive = sessions.filter(s => s.state !== config.SESSION_STATES.READY);
+        const inactiveSummary = inactive.map(s => `${s.name}:${s.state}`).join(', ');
+
+        let message = `Estado sesiones: activas ${active.length}/${total}.`;
+        if (activeNames.length > 0) {
+            message += ` Activas: ${activeNames.join(', ')}.`;
+        } else {
+            message += ' Sin sesiones activas.';
+        }
+        if (inactiveSummary) {
+            message += ` Inactivas: ${inactiveSummary}.`;
+        }
+
+        sessionManager.sendNotificationToAdmin(message);
+    } catch (error) {
+        console.error('Error enviando notificacion de sesiones:', error.message);
+    }
+}
+
 
 // ======================== RUTAS - SESIONES ========================
 
@@ -113,7 +140,7 @@ app.get('/api/sessions', (req, res) => {
 });
 
 /**
- * POST /api/sessions/create - Crea una nueva sesión
+ * POST /api/sessions/create - Crea una nueva sesiÃ³n
  */
 app.post('/api/sessions/create', async (req, res) => {
     try {
@@ -122,7 +149,7 @@ app.post('/api/sessions/create', async (req, res) => {
         if (!name) {
             return res.status(400).json({
                 success: false,
-                error: 'El nombre de la sesión es requerido'
+                error: 'El nombre de la sesiÃ³n es requerido'
             });
         }
         
@@ -144,7 +171,7 @@ app.post('/api/sessions/create', async (req, res) => {
 });
 
 /**
- * GET /api/sessions/:name/qr - Obtiene el código QR de una sesión
+ * GET /api/sessions/:name/qr - Obtiene el cÃ³digo QR de una sesiÃ³n
  */
 app.get('/api/sessions/:name/qr', async (req, res) => {
     try {
@@ -171,7 +198,7 @@ app.get('/api/sessions/:name/qr', async (req, res) => {
 });
 
 /**
- * GET /api/sessions/:name/status - Obtiene el estado de una sesión
+ * GET /api/sessions/:name/status - Obtiene el estado de una sesiÃ³n
  */
 app.get('/api/sessions/:name/status', (req, res) => {
     try {
@@ -181,7 +208,7 @@ app.get('/api/sessions/:name/status', (req, res) => {
         if (!session) {
             return res.status(404).json({
                 success: false,
-                error: 'Sesión no encontrada'
+                error: 'SesiÃ³n no encontrada'
             });
         }
         
@@ -206,7 +233,7 @@ app.get('/api/sessions/:name/status', (req, res) => {
 });
 
 /**
- * DELETE /api/sessions/:name - Cierra y elimina una sesión
+ * DELETE /api/sessions/:name - Cierra y elimina una sesiÃ³n
  */
 app.delete('/api/sessions/:name', async (req, res) => {
     try {
@@ -221,7 +248,7 @@ app.delete('/api/sessions/:name', async (req, res) => {
         
         res.json({
             success: true,
-            message: `Sesión ${name} cerrada exitosamente`
+            message: `SesiÃ³n ${name} cerrada exitosamente`
         });
     } catch (error) {
         res.status(500).json({
@@ -232,7 +259,7 @@ app.delete('/api/sessions/:name', async (req, res) => {
 });
 
 /**
- * GET /api/sessions/rotation/info - Información de rotación de sesiones
+ * GET /api/sessions/rotation/info - InformaciÃ³n de rotaciÃ³n de sesiones
  */
 app.get('/api/sessions/rotation/info', (req, res) => {
     try {
@@ -250,7 +277,7 @@ app.get('/api/sessions/rotation/info', (req, res) => {
 });
 
 /**
- * POST /api/sessions/rotation/rotate - Fuerza la rotación de sesión
+ * POST /api/sessions/rotation/rotate - Fuerza la rotaciÃ³n de sesiÃ³n
  */
 app.post('/api/sessions/rotation/rotate', (req, res) => {
     try {
@@ -259,7 +286,7 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
         
         res.json({
             success: true,
-            message: 'Rotación realizada exitosamente',
+            message: 'RotaciÃ³n realizada exitosamente',
             rotation: info
         });
     } catch (error) {
@@ -273,7 +300,7 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
 // ======================== RUTAS - MENSAJES ========================
 
 /**
- * POST /api/messages/send - Envía un mensaje de texto
+ * POST /api/messages/send - EnvÃ­a un mensaje de texto
  */
 app.post('/api/messages/send', async (req, res) => {
     try {
@@ -320,7 +347,7 @@ app.post('/api/messages/send', async (req, res) => {
 });
 
 /**
- * POST /api/session/send-message - Envía un mensaje desde una sesión específica
+ * POST /api/session/send-message - EnvÃ­a un mensaje desde una sesiÃ³n especÃ­fica
  */
 app.post('/api/session/send-message', async (req, res) => {
     try {
@@ -337,13 +364,13 @@ app.post('/api/session/send-message', async (req, res) => {
         if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
             return res.status(400).json({
                 success: false,
-                error: 'Sesión no disponible o no está lista'
+                error: 'SesiÃ³n no disponible o no estÃ¡ lista'
             });
         }
 
         const formattedNumber = formatPhoneNumber(phoneNumber);
         if (!formattedNumber) {
-            return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
+            return res.status(400).json({ success: false, error: 'NÃºmero de telÃ©fono invÃ¡lido' });
         }
 
         const result = await sessionManager.sendMessageWithRetry(session, formattedNumber, message, 3);
@@ -372,7 +399,7 @@ app.post('/api/session/send-message', async (req, res) => {
 });
 
 /**
- * POST /api/session/send-file - Envía un archivo (imagen/video/audio/documento) desde una sesión específica
+ * POST /api/session/send-file - EnvÃ­a un archivo (imagen/video/audio/documento) desde una sesiÃ³n especÃ­fica
  * Campos esperados (multipart/form-data): sessionName, phoneNumber, caption (opcional), file
  */
 app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
@@ -389,12 +416,12 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
 
         const session = sessionManager.getSession(sessionName);
         if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
-            return res.status(400).json({ success: false, error: 'Sesión no disponible o no está lista' });
+            return res.status(400).json({ success: false, error: 'SesiÃ³n no disponible o no estÃ¡ lista' });
         }
 
         const formattedNumber = formatPhoneNumber(phoneNumber);
         if (!formattedNumber) {
-            return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
+            return res.status(400).json({ success: false, error: 'NÃºmero de telÃ©fono invÃ¡lido' });
         }
 
         const result = await sessionManager.sendMediaMessage(
@@ -429,7 +456,7 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
 });
 
 /**
- * POST /api/messages/send-bulk - Envía mensajes masivos
+ * POST /api/messages/send-bulk - EnvÃ­a mensajes masivos
  */
 app.post('/api/messages/send-bulk', async (req, res) => {
     try {
@@ -452,7 +479,7 @@ app.post('/api/messages/send-bulk', async (req, res) => {
         if (contacts.length > config.MAX_BULK_CONTACTS) {
             return res.status(400).json({
                 success: false,
-                error: `Máximo ${config.MAX_BULK_CONTACTS} contactos por envío`
+                error: `MÃ¡ximo ${config.MAX_BULK_CONTACTS} contactos por envÃ­o`
             });
         }
         
@@ -517,7 +544,7 @@ app.get('/api/messages/recent', (req, res) => {
 // ======================== RUTAS - MONITOR (UI) ========================
 
 /**
- * GET /api/rotation - Información resumida para el monitor
+ * GET /api/rotation - InformaciÃ³n resumida para el monitor
  */
 app.get('/api/rotation', (req, res) => {
     try {
@@ -556,7 +583,7 @@ app.get('/api/monitor/messages', (req, res) => {
 });
 
 /**
- * GET /api/monitor/history - Agregados simples por fecha y por sesión
+ * GET /api/monitor/history - Agregados simples por fecha y por sesiÃ³n
  */
 app.get('/api/monitor/history', (req, res) => {
     try {
@@ -603,7 +630,7 @@ app.get('/api/monitor/history', (req, res) => {
 // ======================== RUTAS - ANALYTICS ========================
 
 /**
- * GET /api/analytics/stats - Estadísticas generales
+ * GET /api/analytics/stats - EstadÃ­sticas generales
  */
 app.get('/api/analytics/stats', async (req, res) => {
     try {
@@ -656,10 +683,10 @@ app.get('/analytics', async (req, res) => {
     }
 });
 
-// ======================== RUTAS - CONFIGURACIÓN ========================
+// ======================== RUTAS - CONFIGURACIÃN ========================
 
 /**
- * GET /api/settings/batch - Obtiene configuración de lotes
+ * GET /api/settings/batch - Obtiene configuraciÃ³n de lotes
  */
 app.get('/api/settings/batch', (req, res) => {
     try {
@@ -677,7 +704,7 @@ app.get('/api/settings/batch', (req, res) => {
 });
 
 /**
- * POST /api/settings/batch - Actualiza configuración de lotes
+ * POST /api/settings/batch - Actualiza configuraciÃ³n de lotes
  */
 app.post('/api/settings/batch', (req, res) => {
     try {
@@ -736,10 +763,10 @@ app.get('/api/queue/messages', (req, res) => {
     }
 });
 
-// ======================== BÚSQUEDA DE MENSAJES ========================
+// ======================== BÃSQUEDA DE MENSAJES ========================
 
 /**
- * GET /api/messages/phones - Obtiene números únicos
+ * GET /api/messages/phones - Obtiene nÃºmeros Ãºnicos
  */
 app.get('/api/messages/phones', (req, res) => {
     try {
@@ -831,21 +858,24 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(config.PUBLIC_PATH, 'index.html'));
 });
 
-// ======================== INICIALIZACIÓN ========================
+// ======================== INICIALIZACIÃN ========================
 
 /**
  * Inicia los intervalos de monitoreo
  */
 function startMonitoring() {
-    // Limpiar consola periódicamente
+    // Limpiar consola periÃ³dicamente
     if (config.CONSOLE_CLEAR_ENABLED) {
         consoleClearInterval = setInterval(clearConsole, 60000);
     }
     
     // Monitoreo de sesiones
     sessionMonitorInterval = setInterval(monitorSessions, config.SESSION_MONITOR_INTERVAL * 60000);
+
+    // Notificaciones de estado de sesiones
+    notificationInterval = setInterval(sendSessionsStatusNotification, config.NOTIFICATION_INTERVAL_MINUTES * 60000);
     
-    console.log('✅ Monitoreo iniciado');
+    console.log('â Monitoreo iniciado');
 }
 
 /**
@@ -854,9 +884,10 @@ function startMonitoring() {
 function stopMonitoring() {
     if (consoleClearInterval) clearInterval(consoleClearInterval);
     if (sessionMonitorInterval) clearInterval(sessionMonitorInterval);
+    if (notificationInterval) clearInterval(notificationInterval);
     sessionManager.stopSessionRotation();
     
-    console.log('⏹️ Monitoreo detenido');
+    console.log('â¹ï¸ Monitoreo detenido');
 }
 
 /**
@@ -864,7 +895,7 @@ function stopMonitoring() {
  */
 async function initialize() {
     try {
-        console.log('\n🚀 Iniciando WhatsApp Bot Server con Baileys...\n');
+        console.log('\nð Iniciando WhatsApp Bot Server con Baileys...\n');
         
         // Inicializar base de datos
         await database.init();
@@ -874,31 +905,31 @@ async function initialize() {
         
         // Iniciar servidor HTTP
         server.listen(config.PORT, () => {
-            console.log(`✅ Servidor escuchando en puerto ${config.PORT}`);
-            console.log(`🌐 http://localhost:${config.PORT}`);
-            console.log(`⏰ ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
+            console.log(`â Servidor escuchando en puerto ${config.PORT}`);
+            console.log(`ð http://localhost:${config.PORT}`);
+            console.log(`â° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
         });
         
         // Iniciar monitoreo
         startMonitoring();
         
-        // Iniciar rotación de sesiones
+        // Iniciar rotaciÃ³n de sesiones
         sessionManager.startSessionRotation();
         
         // Iniciar procesador de lotes
         sessionManager.startBatchProcessor();
 
-        console.log('✅ Sistema iniciado correctamente\n');
+        console.log('â Sistema iniciado correctamente\n');
         
     } catch (error) {
-        console.error('❌ Error iniciando servidor:', error);
+        console.error('â Error iniciando servidor:', error);
         process.exit(1);
     }
 }
 
-// Manejo de señales de cierre
+// Manejo de seÃ±ales de cierre
 process.on('SIGINT', async () => {
-    console.log('\n\n🛑 Recibida señal SIGINT, cerrando servidor...');
+    console.log('\n\nð Recibida seÃ±al SIGINT, cerrando servidor...');
     stopMonitoring();
     
     // Cerrar todas las sesiones
@@ -911,7 +942,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('SIGTERM', async () => {
-    console.log('\n\n🛑 Recibida señal SIGTERM, cerrando servidor...');
+    console.log('\n\nð Recibida seÃ±al SIGTERM, cerrando servidor...');
     stopMonitoring();
     
     const sessions = sessionManager.getAllSessions();
@@ -922,13 +953,13 @@ process.on('SIGTERM', async () => {
     process.exit(0);
 });
 
-// Iniciar aplicación
+// Iniciar aplicaciÃ³n
 initialize();
 
 module.exports = app;
 
 // ======================== ANALYTICS (compatibilidad) ========================
-// Endpoint único "/analytics" esperado por public/js/analytics.js
+// Endpoint Ãºnico "/analytics" esperado por public/js/analytics.js
 app.get('/analytics', async (req, res) => {
     try {
         const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
