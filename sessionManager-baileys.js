@@ -390,12 +390,26 @@ async function createSession(sessionName) {
                 console.log(`❌ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
                 
                 if (shouldReconnect) {
+                    // No reconectar si hay QR pendiente (primera conexión) o si ya estamos conectados
+                    if (session.qr || session.state === config.SESSION_STATES.READY) {
+                        console.log(`⏳ ${sessionName} esperando autenticación QR o reconexión automática...`);
+                        session.state = config.SESSION_STATES.RECONNECTING;
+                        return;
+                    }
+                    
                     session.state = config.SESSION_STATES.RECONNECTING;
                     session.retryCount++;
                     
                     if (session.retryCount <= 3) {
                         console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/3)...`);
+                        // Cerrar socket anterior antes de crear uno nuevo
+                        if (session.socket) {
+                            try {
+                                await session.socket.ws?.close();
+                            } catch (e) {}
+                        }
                         await sleep(5000);
+                        delete sessions[sessionName];
                         await createSession(sessionName);
                     } else {
                         session.state = config.SESSION_STATES.ERROR;
