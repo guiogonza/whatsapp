@@ -331,7 +331,8 @@ async function createSession(sessionName) {
         const { state, saveCreds } = await useMultiFileAuthState(authPath);
         
         // Obtener la versión más reciente de Baileys
-        const { version } = await fetchLatestBaileysVersion();
+        const { version, isLatest } = await fetchLatestBaileysVersion();
+        console.log(`📱 Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
         
         // Crear logger silencioso
         const logger = pino({ level: 'silent' });
@@ -341,13 +342,12 @@ async function createSession(sessionName) {
             version,
             logger,
             printQRInTerminal: false,
+            browser: ['WhatsApp Bot', 'Chrome', '10.0'],
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger)
             },
             generateHighQualityLinkPreview: true,
-            syncFullHistory: false,
-            markOnlineOnConnect: true,
             getMessage: async (key) => {
                 return { conversation: '' };
             }
