@@ -18,6 +18,7 @@ function showSection(sectionId) {
     const titles = {
         sessions: { title: 'Sesiones de WhatsApp', subtitle: 'Gestiona tus conexiones de WhatsApp' },
         monitor: { title: 'Monitor en Tiempo Real', subtitle: 'Visualiza la actividad de mensajes' },
+        search: { title: 'Búsqueda de Mensajes', subtitle: 'Busca mensajes por número y fecha' },
         personal: { title: 'Mensaje Personalizado', subtitle: 'Envía mensajes individuales' },
         bulk: { title: 'Envío Masivo', subtitle: 'Envía mensajes a múltiples destinatarios' },
         analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' },
@@ -32,6 +33,7 @@ function showSection(sectionId) {
     
     if (sectionId === 'analytics') initAnalytics();
     if (sectionId === 'settings') initSettings();
+    if (sectionId === 'search') loadPhoneNumbers();
 }
 
 // ======================== SESIONES ========================
@@ -435,6 +437,19 @@ async function refreshMonitorStats() {
         document.getElementById('monitorTotalMessages').textContent = totalMessages;
         document.getElementById('monitorSessionStats').innerHTML = statsHtml || '<p class="text-gray-500 col-span-full text-center">No hay sesiones</p>';
         
+        // Actualizar badge de cola
+        try {
+            const queueResponse = await fetch(`${API_URL}/api/queue/messages?limit=1`);
+            const queueData = await queueResponse.json();
+            const badge = document.getElementById('queueBadge');
+            if (queueData.success && queueData.stats && queueData.stats.totalQueued > 0) {
+                badge.textContent = queueData.stats.totalQueued;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        } catch (e) { /* ignore */ }
+        
     } catch (error) {
         console.error('Error actualizando monitor:', error);
     }
@@ -513,6 +528,217 @@ function showMonitorTab(tabName) {
     activeTab.classList.remove('border-transparent', 'text-gray-500');
     
     if (tabName === 'history') loadHistory();
+    if (tabName === 'queue') loadQueueMessages();
+}
+
+async function loadQueueMessages() {
+    try {
+        const response = await fetch(`${API_URL}/api/queue/messages`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            document.getElementById('queueMessageList').innerHTML = '<p class="text-red-500 text-center">Error al cargar cola</p>';
+            return;
+        }
+        
+        // Actualizar stats
+        const stats = data.stats || {};
+        document.getElementById('queueTotalNumbers').textContent = stats.uniqueNumbers || 0;
+        document.getElementById('queueTotalMessages').textContent = stats.totalQueued || 0;
+        
+        // Actualizar badge
+        const badge = document.getElementById('queueBadge');
+        if (stats.totalQueued > 0) {
+            badge.textContent = stats.totalQueued;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        
+        // Calcular tiempo más antiguo
+        const messages = data.messages || [];
+        if (messages.length > 0) {
+            const oldest = new Date(messages[messages.length - 1].enqueued_at);
+            const now = new Date();
+            const diffMs = now - oldest;
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 60) {
+                document.getElementById('queueOldest').textContent = `${diffMins}m`;
+            } else {
+                document.getElementById('queueOldest').textContent = `${Math.floor(diffMins / 60)}h`;
+            }
+        } else {
+            document.getElementById('queueOldest').textContent = '-';
+        }
+        
+        // Renderizar lista de mensajes
+        if (messages.length === 0) {
+            document.getElementById('queueMessageList').innerHTML = '<p class="text-gray-500 text-center py-8">📭 Sin mensajes en cola</p>';
+            return;
+        }
+        
+        const html = messages.map(msg => {
+            const date = new Date(msg.enqueued_at);
+            const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+            const msgPreview = msg.message ? msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : '') : '(sin texto)';
+            
+            return `
+                <div class="border-b border-gray-200 py-2 last:border-0">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="font-mono text-sm text-gray-800">📱 ${msg.phone_number}</span>
+                            <span class="text-xs text-gray-400 ml-2">${timeStr}</span>
+                        </div>
+                        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">pendiente</span>
+                    </div>
+                    <div class="text-sm text-gray-600 mt-1 truncate">${msgPreview}</div>
+                </div>
+            `;
+        }).join('');
+        
+        document.getElementById('queueMessageList').innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading queue:', error);
+        document.getElementById('queueMessageList').innerHTML = '<p class="text-red-500 text-center">Error de conexión</p>';
+    }
+}
+
+// ======================== BÚSQUEDA DE MENSAJES ========================
+
+let searchCurrentOffset = 0;
+let searchTotalMessages = 0;
+
+async function loadPhoneNumbers() {
+    try {
+        const response = await fetch(`${API_URL}/api/messages/phones`);
+        const data = await response.json();
+        
+        if (!data.success) return;
+        
+        const select = document.getElementById('searchPhone');
+        select.innerHTML = '<option value="">Todos los números</option>';
+        
+        data.phones.forEach(phone => {
+            const option = document.createElement('option');
+            option.value = phone.phone_number;
+            option.textContent = `${phone.phone_number} (${phone.message_count} msgs)`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading phone numbers:', error);
+    }
+}
+
+async function searchMessages(offset = 0) {
+    try {
+        const phone = document.getElementById('searchPhone').value;
+        const startDate = document.getElementById('searchStartDate').value;
+        const endDate = document.getElementById('searchEndDate').value;
+        const limit = document.getElementById('searchLimit').value;
+        
+        searchCurrentOffset = offset;
+        
+        const params = new URLSearchParams();
+        if (phone) params.append('phone', phone);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        params.append('limit', limit);
+        params.append('offset', offset);
+        
+        const response = await fetch(`${API_URL}/api/messages/search?${params}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-500">Error al buscar</td></tr>';
+            return;
+        }
+        
+        searchTotalMessages = data.total;
+        document.getElementById('searchResultCount').textContent = `(${data.total} mensajes encontrados)`;
+        
+        if (data.messages.length === 0) {
+            document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No se encontraron mensajes</td></tr>';
+            document.getElementById('searchPagination').innerHTML = '';
+            return;
+        }
+        
+        const html = data.messages.map(msg => {
+            const date = new Date(msg.timestamp);
+            const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+            const statusClass = msg.status === 'sent' || msg.status === 'success' ? 'bg-green-100 text-green-700' : 
+                               msg.status === 'received' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700';
+            const statusText = msg.status === 'sent' || msg.status === 'success' ? '✅ Enviado' : 
+                              msg.status === 'received' ? '📥 Recibido' : '❌ Error';
+            const preview = msg.message_preview ? msg.message_preview.substring(0, 80) + (msg.message_preview.length > 80 ? '...' : '') : '-';
+            
+            return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="text-gray-800">${dateStr}</div>
+                        <div class="text-gray-500 text-xs">${timeStr}</div>
+                    </td>
+                    <td class="px-4 py-3 text-purple-600 font-medium">${msg.session}</td>
+                    <td class="px-4 py-3 font-mono text-sm">${msg.phone_number}</td>
+                    <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${msg.message_preview || ''}">${preview}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span></td>
+                </tr>
+            `;
+        }).join('');
+        
+        document.getElementById('searchResultsTable').innerHTML = html;
+        
+        // Paginación
+        renderSearchPagination(data.total, parseInt(limit), offset);
+        
+    } catch (error) {
+        console.error('Error searching messages:', error);
+        document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-500">Error de conexión</td></tr>';
+    }
+}
+
+function renderSearchPagination(total, limit, offset) {
+    const totalPages = Math.ceil(total / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
+    
+    if (totalPages <= 1) {
+        document.getElementById('searchPagination').innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    // Botón anterior
+    if (currentPage > 1) {
+        html += `<button onclick="searchMessages(${(currentPage - 2) * limit})" class="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">←</button>`;
+    }
+    
+    // Páginas
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const active = i === currentPage ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200';
+        html += `<button onclick="searchMessages(${(i - 1) * limit})" class="px-3 py-1 rounded ${active}">${i}</button>`;
+    }
+    
+    // Botón siguiente
+    if (currentPage < totalPages) {
+        html += `<button onclick="searchMessages(${currentPage * limit})" class="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">→</button>`;
+    }
+    
+    document.getElementById('searchPagination').innerHTML = html;
+}
+
+function clearSearchFilters() {
+    document.getElementById('searchPhone').value = '';
+    document.getElementById('searchStartDate').value = '';
+    document.getElementById('searchEndDate').value = '';
+    document.getElementById('searchLimit').value = '50';
+    document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Selecciona filtros y haz clic en Buscar</td></tr>';
+    document.getElementById('searchResultCount').textContent = '';
+    document.getElementById('searchPagination').innerHTML = '';
 }
 
 async function loadHistory() {

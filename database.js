@@ -188,6 +188,20 @@ function clearQueueForNumber(phoneNumber) {
 }
 
 /**
+ * Obtener mensajes en cola con detalle (para mostrar en UI)
+ */
+function getQueuedMessages(limit = 50) {
+    if (!db) return [];
+    const res = db.exec(`
+        SELECT id, phone_number, message, enqueued_at, tries
+        FROM outgoing_queue
+        ORDER BY enqueued_at ASC
+        LIMIT ${parseInt(limit) || 50}
+    `);
+    return queryToObjects(res);
+}
+
+/**
  * Estadísticas de la cola
  */
 function getQueueStats() {
@@ -371,6 +385,67 @@ function close() {
     }
 }
 
+/**
+ * Obtener lista de números únicos a los que se han enviado mensajes
+ */
+function getUniquePhoneNumbers() {
+    if (!db) return [];
+    const res = db.exec(`
+        SELECT DISTINCT phone_number, 
+               COUNT(*) as message_count,
+               MAX(timestamp) as last_message
+        FROM messages 
+        WHERE status IN ('sent', 'success')
+        GROUP BY phone_number 
+        ORDER BY last_message DESC
+        LIMIT 500
+    `);
+    return queryToObjects(res);
+}
+
+/**
+ * Obtener mensajes filtrados por número y rango de fechas
+ */
+function getMessagesByFilter(options = {}) {
+    if (!db) return { messages: [], total: 0 };
+    
+    const { phoneNumber, startDate, endDate, limit = 50, offset = 0 } = options;
+    
+    let conditions = [];
+    
+    if (phoneNumber) {
+        conditions.push(`phone_number = '${phoneNumber}'`);
+    }
+    if (startDate) {
+        conditions.push(`date(timestamp) >= '${startDate}'`);
+    }
+    if (endDate) {
+        conditions.push(`date(timestamp) <= '${endDate}'`);
+    }
+    
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    
+    // Obtener total
+    const countRes = db.exec(`SELECT COUNT(*) as total FROM messages ${whereClause}`);
+    const total = queryToObjects(countRes)[0]?.total || 0;
+    
+    // Obtener mensajes paginados
+    const res = db.exec(`
+        SELECT id, timestamp, session, phone_number, message_preview, status, error_message
+        FROM messages 
+        ${whereClause}
+        ORDER BY timestamp DESC
+        LIMIT ${limit} OFFSET ${offset}
+    `);
+    
+    return {
+        messages: queryToObjects(res),
+        total,
+        limit,
+        offset
+    };
+}
+
 module.exports = {
     init: initDatabase,
     initDatabase,
@@ -384,5 +459,8 @@ module.exports = {
     getMessagesForNumber,
     clearQueueForNumber,
     getQueueStats,
+    getQueuedMessages,
+    getUniquePhoneNumbers,
+    getMessagesByFilter,
     close
 };

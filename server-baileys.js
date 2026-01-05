@@ -708,6 +708,77 @@ app.post('/api/settings/batch', (req, res) => {
     }
 });
 
+// ======================== COLA DE MENSAJES ========================
+
+/**
+ * GET /api/queue/messages - Obtiene mensajes en cola
+ */
+app.get('/api/queue/messages', (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const messages = database.getQueuedMessages(limit);
+        const stats = database.getQueueStats();
+        
+        res.json({
+            success: true,
+            stats,
+            messages
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ======================== BÚSQUEDA DE MENSAJES ========================
+
+/**
+ * GET /api/messages/phones - Obtiene números únicos
+ */
+app.get('/api/messages/phones', (req, res) => {
+    try {
+        const phones = database.getUniquePhoneNumbers();
+        res.json({
+            success: true,
+            phones
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/messages/search - Busca mensajes con filtros
+ */
+app.get('/api/messages/search', (req, res) => {
+    try {
+        const { phone, startDate, endDate, limit, offset } = req.query;
+        
+        const result = database.getMessagesByFilter({
+            phoneNumber: phone,
+            startDate,
+            endDate,
+            limit: parseInt(limit) || 50,
+            offset: parseInt(offset) || 0
+        });
+        
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // ======================== HEALTH CHECK ========================
 
 app.get('/health', (req, res) => {
