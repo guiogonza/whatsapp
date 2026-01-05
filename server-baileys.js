@@ -264,15 +264,20 @@ app.delete('/api/sessions/:name', async (req, res) => {
         const { name } = req.params;
         const { deleteData } = req.query;
         
-        await sessionManager.closeSession(name);
-        
+        // Intentar cerrar la sesion (puede no existir en memoria si el servidor se reinicio)
+        const sessionClosed = await sessionManager.closeSession(name);
+
+        // Siempre intentar eliminar los datos si deleteData=true
+        let dataDeleted = false;
         if (deleteData === 'true') {
-            await sessionManager.deleteSessionData(name);
+            dataDeleted = await sessionManager.deleteSessionData(name);
         }
-        
+
         res.json({
             success: true,
-            message: `SesiÃÂÃÂ³n ${name} cerrada exitosamente`
+            sessionClosed,
+            dataDeleted,
+            message: `Sesion ${name} eliminada exitosamente`
         });
     } catch (error) {
         res.status(500).json({

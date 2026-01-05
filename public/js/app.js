@@ -281,7 +281,7 @@ async function createSession() {
 async function deleteSession(sessionName) {
     if (!confirm(`¿Eliminar la sesión "${sessionName}"?`)) return;
     try {
-        const response = await fetch(`${API_URL}/api/sessions/${sessionName}?deleteData=true`, {
+        const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(sessionName)}?deleteData=true`, {
             method: 'DELETE'
         });
         const result = await response.json();

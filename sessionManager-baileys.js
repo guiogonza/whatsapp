@@ -1,4 +1,4 @@
-/**
+﻿/**
 
  * Gestor de Sesiones de WhatsApp usando Baileys
 
@@ -886,6 +886,14 @@ async function createSession(sessionName) {
 
                     // Caso 3: 401/loggedOut inmediatamente despuÃÂÃÂ©s de restartRequired, intentamos rescatar credenciales (hasta 3 reintentos rÃÂÃÂ¡pidos)
 
+                    // Si la sesion esta siendo eliminada intencionalmente, NO reconectar
+                    if (session.isBeingDeleted) {
+                        console.log(`Sesion ${sessionName} eliminada intencionalmente, no se reconectara`);
+                        session.state = config.SESSION_STATES.DISCONNECTED;
+                        delete sessions[sessionName];
+                        return;
+                    }
+
                     if (isLoggedOut && session.retryCount < 3) {
 
                         session.state = config.SESSION_STATES.RECONNECTING;
@@ -1214,6 +1222,9 @@ async function closeSession(sessionName, shouldLogout = true) {
 
     
 
+    
+    // Marcar la sesion como siendo eliminada para evitar reconexion automatica
+    session.isBeingDeleted = true;
     try {
 
         if (session.socket) {
@@ -1925,4 +1936,5 @@ module.exports = {
     startBatchProcessor
 
 };
+
 
