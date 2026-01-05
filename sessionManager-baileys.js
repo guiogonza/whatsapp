@@ -386,15 +386,20 @@ async function createSession(sessionName) {
             }
             
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
+                let shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+
+                // Si es loggedOut/401 justo después de un restart, forzamos reintento (hasta 3 veces)
+                if (isLoggedOut && session.retryCount < 3) {
+                    shouldReconnect = true;
+                }
                 
                 console.log(`❌ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
-                
+
                 if (shouldReconnect) {
                     const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
                     const isQRConnectionClose = statusCode === DisconnectReason.connectionClosed || statusCode === 428;
-                    const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
                     
                     // Caso 1: Cierre normal durante lectura de QR
                     if (session.qr && isQRConnectionClose && !isRestartRequired) {
