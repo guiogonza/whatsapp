@@ -534,26 +534,42 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                    <div class="bg-white rounded-lg shadow p-6 lg:col-span-2">
-                        <h3 class="text-lg font-semibold mb-4">Evolución por periodo</h3>
-                        <div class="w-full" style="height: 350px;">
-                            <canvas id="analyticsTimelineChart"></canvas>
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Evolución por periodo</h3>
+                    <div class="w-full" style="height: 350px;">
+                        <canvas id="analyticsTimelineChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Top N números</h3>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-600">Mostrar:</label>
+                            <select id="analyticsTopNChart" class="rounded-lg border-gray-300 shadow-sm p-2 border text-sm">
+                                <option value="5">Top 5</option>
+                                <option value="10" selected>Top 10</option>
+                                <option value="15">Top 15</option>
+                                <option value="20">Top 20</option>
+                                <option value="30">Top 30</option>
+                                <option value="50">Top 50</option>
+                            </select>
+                            <span class="text-xs text-gray-500 ml-2">💡 Haz clic en una barra para ver detalles</span>
                         </div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h3 class="text-lg font-semibold mb-4">Top N números</h3>
-                        <div class="w-full" style="height: 350px;">
-                            <canvas id="analyticsTopChart"></canvas>
-                        </div>
+                    <div class="w-full" style="height: 300px;">
+                        <canvas id="analyticsTopChart"></canvas>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold mb-4">Detalle Top N</h3>
-                    <div class="overflow-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Detalle de Mensajes <span id="analyticsDetailTitle" class="text-purple-600 font-normal"></span></h3>
+                        <button onclick="clearAnalyticsFilter()" id="analyticsClearFilterBtn" class="hidden px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg">✖ Quitar filtro</button>
+                    </div>
+                    <div class="overflow-auto max-h-96">
                         <table class="min-w-full text-sm">
-                            <thead class="border-b border-gray-200">
+                            <thead class="border-b border-gray-200 sticky top-0 bg-white">
                                 <tr class="text-left">
                                     <th class="py-2 pr-4">#</th>
                                     <th class="py-2 pr-4">Número</th>

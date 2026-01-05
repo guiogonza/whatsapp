@@ -3,6 +3,8 @@ let analyticsTimelineChart = null;
 let analyticsTopChart = null;
 let analyticsInitialized = false;
 let analyticsRefreshInterval = null;
+let analyticsTopData = []; // Guardar datos para filtrado
+let analyticsSelectedPhone = null; // Número seleccionado
 
 function initAnalytics() {
     if (analyticsInitialized) {
@@ -28,6 +30,7 @@ function initAnalytics() {
         refreshAnalytics();
     });
     document.getElementById('analyticsTopN').addEventListener('change', refreshAnalytics);
+    document.getElementById('analyticsTopNChart').addEventListener('change', refreshAnalytics);
     document.getElementById('analyticsStartDate').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
@@ -118,7 +121,7 @@ function updateAnalyticsPeriodInfo() {
 async function fetchAnalyticsData() {
     const period = document.getElementById('analyticsPeriod').value;
     const range = document.getElementById('analyticsRangeSelector').value;
-    const topN = document.getElementById('analyticsTopN').value;
+    const topN = document.getElementById('analyticsTopNChart')?.value || document.getElementById('analyticsTopN').value;
     const startDate = document.getElementById('analyticsStartDate').value;
     const endDate = document.getElementById('analyticsEndDate').value;
     const statusBadge = document.getElementById('analyticsStatusBadge');
@@ -224,24 +227,44 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
     });
 }
 
-function buildAnalyticsTopChart(ctx, labels, totals) {
+function buildAnalyticsTopChart(ctx, labels, totals, fullData) {
     if (analyticsTopChart) analyticsTopChart.destroy();
+    
+    // Guardar datos para filtrado
+    analyticsTopData = fullData;
     
     analyticsTopChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels.map(l => String(l).length > 10 ? String(l).substring(0, 10) + '...' : l),
+            labels: labels.map(l => String(l).length > 12 ? String(l).substring(0, 12) + '...' : l),
             datasets: [{
                 label: 'Total mensajes',
                 data: totals,
-                backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                borderColor: '#3b82f6',
-                borderWidth: 1
+                backgroundColor: labels.map((l, i) => 
+                    analyticsSelectedPhone === fullData[i]?.phone_number 
+                        ? 'rgba(147, 51, 234, 0.9)' 
+                        : 'rgba(59, 130, 246, 0.8)'
+                ),
+                borderColor: labels.map((l, i) => 
+                    analyticsSelectedPhone === fullData[i]?.phone_number 
+                        ? '#9333ea' 
+                        : '#3b82f6'
+                ),
+                borderWidth: 2
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (event, elements) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const phoneData = fullData[index];
+                    if (phoneData) {
+                        selectAnalyticsPhone(phoneData.phone_number, index);
+                    }
+                }
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { title: (ctx) => labels[ctx[0].dataIndex] } }
@@ -254,7 +277,46 @@ function buildAnalyticsTopChart(ctx, labels, totals) {
     });
 }
 
-function updateAnalyticsTopTable(rows) {
+function selectAnalyticsPhone(phone, index) {
+    analyticsSelectedPhone = phone;
+    
+    // Actualizar título
+    document.getElementById('analyticsDetailTitle').textContent = `- ${phone}`;
+    document.getElementById('analyticsClearFilterBtn').classList.remove('hidden');
+    
+    // Filtrar tabla a solo ese número
+    const filtered = analyticsTopData.filter(r => r.phone_number === phone);
+    updateAnalyticsTopTable(filtered, true);
+    
+    // Actualizar colores del gráfico
+    if (analyticsTopChart) {
+        analyticsTopChart.data.datasets[0].backgroundColor = analyticsTopData.map((d, i) => 
+            d.phone_number === phone ? 'rgba(147, 51, 234, 0.9)' : 'rgba(59, 130, 246, 0.8)'
+        );
+        analyticsTopChart.data.datasets[0].borderColor = analyticsTopData.map((d, i) => 
+            d.phone_number === phone ? '#9333ea' : '#3b82f6'
+        );
+        analyticsTopChart.update();
+    }
+}
+
+function clearAnalyticsFilter() {
+    analyticsSelectedPhone = null;
+    document.getElementById('analyticsDetailTitle').textContent = '';
+    document.getElementById('analyticsClearFilterBtn').classList.add('hidden');
+    
+    // Restaurar tabla completa
+    updateAnalyticsTopTable(analyticsTopData);
+    
+    // Restaurar colores del gráfico
+    if (analyticsTopChart) {
+        analyticsTopChart.data.datasets[0].backgroundColor = analyticsTopData.map(() => 'rgba(59, 130, 246, 0.8)');
+        analyticsTopChart.data.datasets[0].borderColor = analyticsTopData.map(() => '#3b82f6');
+        analyticsTopChart.update();
+    }
+}
+
+function updateAnalyticsTopTable(rows, isFiltered = false) {
     const tbody = document.getElementById('analyticsTopTableBody');
     tbody.innerHTML = '';
     
@@ -265,15 +327,21 @@ function updateAnalyticsTopTable(rows) {
     
     rows.forEach((r, i) => {
         const tr = document.createElement('tr');
-        tr.className = i % 2 ? 'bg-gray-50' : '';
+        const isSelected = analyticsSelectedPhone && r.phone_number === analyticsSelectedPhone;
+        tr.className = isSelected ? 'bg-purple-50' : (i % 2 ? 'bg-gray-50' : '');
         tr.innerHTML = `
             <td class="py-2 pr-4 font-semibold">${i + 1}</td>
-            <td class="py-2 pr-4 font-mono text-sm">${r.phone_number || '—'}</td>
+            <td class="py-2 pr-4 font-mono text-sm ${isSelected ? 'text-purple-700 font-bold' : ''}">${r.phone_number || '—'}</td>
             <td class="py-2 pr-4 font-semibold">${(r.total || 0).toLocaleString()}</td>
             <td class="py-2 pr-4 text-green-600">${(r.enviados || 0).toLocaleString()}</td>
             <td class="py-2 pr-4 text-red-600">${(r.errores || 0).toLocaleString()}</td>
             <td class="py-2 pr-4 text-yellow-600">${(r.en_cola || 0).toLocaleString()}</td>
         `;
+        
+        // Hacer fila clickeable
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', () => selectAnalyticsPhone(r.phone_number, i));
+        
         tbody.appendChild(tr);
     });
 }
@@ -306,15 +374,27 @@ async function refreshAnalytics() {
         }
 
         const topRows = data.top_numbers || [];
+        analyticsTopData = topRows; // Guardar para filtrado
         const topLabels = topRows.map(x => x.phone_number);
         const topTotals = topRows.map(x => Number(x.total || 0));
         
         const topCtx = document.getElementById('analyticsTopChart');
         if (topCtx) {
-            buildAnalyticsTopChart(topCtx.getContext('2d'), topLabels, topTotals);
+            buildAnalyticsTopChart(topCtx.getContext('2d'), topLabels, topTotals, topRows);
         }
         
-        updateAnalyticsTopTable(topRows);
+        // Si hay filtro activo, mantenerlo
+        if (analyticsSelectedPhone) {
+            const filtered = topRows.filter(r => r.phone_number === analyticsSelectedPhone);
+            if (filtered.length > 0) {
+                updateAnalyticsTopTable(filtered, true);
+            } else {
+                clearAnalyticsFilter();
+                updateAnalyticsTopTable(topRows);
+            }
+        } else {
+            updateAnalyticsTopTable(topRows);
+        }
 
     } catch (error) {
         console.error('Error refreshing analytics:', error);
