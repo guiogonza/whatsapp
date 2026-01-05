@@ -6,6 +6,15 @@ let analyticsRefreshInterval = null;
 let analyticsTopData = []; // Guardar datos para filtrado
 let analyticsSelectedPhone = null; // NÃºmero seleccionado
 
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function initAnalytics() {
     if (analyticsInitialized) {
         refreshAnalytics();
@@ -283,10 +292,12 @@ function selectAnalyticsPhone(phone, index) {
     // Actualizar tÃ­tulo
     document.getElementById('analyticsDetailTitle').textContent = `- ${phone}`;
     document.getElementById('analyticsClearFilterBtn').classList.remove('hidden');
+    loadAnalyticsMessagesForPhone(phone);
     
     // Filtrar tabla a solo ese nÃºmero
     const filtered = analyticsTopData.filter(r => r.phone_number === phone);
     updateAnalyticsTopTable(filtered, true);
+                loadAnalyticsMessagesForPhone(analyticsSelectedPhone);
     
     // Actualizar colores del grÃ¡fico
     if (analyticsTopChart) {
@@ -304,6 +315,7 @@ function clearAnalyticsFilter() {
     analyticsSelectedPhone = null;
     document.getElementById('analyticsDetailTitle').textContent = '';
     document.getElementById('analyticsClearFilterBtn').classList.add('hidden');
+    hideAnalyticsSelectedMessages();
     
     // Restaurar tabla completa
     updateAnalyticsTopTable(analyticsTopData);
@@ -346,6 +358,75 @@ function updateAnalyticsTopTable(rows, isFiltered = false) {
     });
 }
 
+function showAnalyticsSelectedMessages(phone) {
+    const section = document.getElementById('analyticsSelectedMessagesSection');
+    const title = document.getElementById('analyticsSelectedPhoneTitle');
+    if (title) title.textContent = phone ? `- ${phone}` : '';
+    if (section) section.classList.remove('hidden');
+}
+
+function hideAnalyticsSelectedMessages() {
+    const section = document.getElementById('analyticsSelectedMessagesSection');
+    const body = document.getElementById('analyticsSelectedMessagesBody');
+    if (body) {
+        body.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-500">Selecciona un número</td></tr>';
+    }
+    if (section) section.classList.add('hidden');
+}
+
+async function loadAnalyticsMessagesForPhone(phone) {
+    const body = document.getElementById('analyticsSelectedMessagesBody');
+    if (!body) return;
+    if (!phone) {
+        hideAnalyticsSelectedMessages();
+        return;
+    }
+
+    showAnalyticsSelectedMessages(phone);
+    body.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-500">Cargando mensajes...</td></tr>';
+
+    try {
+        const params = new URLSearchParams({ phone, limit: '50', offset: '0' });
+        const res = await fetch(`${API_URL}/api/messages/search?${params}`);
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.messages)) {
+            throw new Error('Respuesta inválida');
+        }
+
+        if (data.messages.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-500">No hay mensajes para este número</td></tr>';
+            return;
+        }
+
+        const rows = data.messages.map(msg => {
+            const date = new Date(msg.timestamp);
+            const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+            const statusClass = msg.status === 'sent' || msg.status === 'success' ? 'bg-green-100 text-green-700' : 
+                               msg.status === 'received' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700';
+            const statusText = msg.status === 'sent' || msg.status === 'success' ? 'Enviado' : 
+                              msg.status === 'received' ? 'Recibido' : 'Error';
+            const message = escapeHtml(msg.message_preview || '');
+
+            return `
+                <tr class="hover:bg-gray-50">
+                    <td class="py-2 pr-4 whitespace-nowrap">
+                        <div class="text-gray-800">${dateStr}</div>
+                        <div class="text-gray-500 text-xs">${timeStr}</div>
+                    </td>
+                    <td class="py-2 pr-4 text-purple-600 font-medium">${escapeHtml(msg.session || '')}</td>
+                    <td class="py-2 pr-4 text-gray-600">${message || '-'}</td>
+                    <td class="py-2 pr-4"><span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span></td>
+                </tr>
+            `;
+        }).join('');
+
+        body.innerHTML = rows;
+    } catch (error) {
+        console.error('Error cargando mensajes del número:', error);
+        body.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-red-500">Error cargando mensajes</td></tr>';
+    }
+}
 async function refreshAnalytics() {
     try {
         const [data, health] = await Promise.all([fetchAnalyticsData(), fetchAnalyticsHealth()]);
@@ -388,6 +469,7 @@ async function refreshAnalytics() {
             const filtered = topRows.filter(r => r.phone_number === analyticsSelectedPhone);
             if (filtered.length > 0) {
                 updateAnalyticsTopTable(filtered, true);
+                loadAnalyticsMessagesForPhone(analyticsSelectedPhone);
             } else {
                 clearAnalyticsFilter();
                 updateAnalyticsTopTable(topRows);
@@ -423,3 +505,8 @@ function exportAnalyticsCSV() {
         console.error('Error exporting CSV:', error);
     });
 }
+
+
+
+
+

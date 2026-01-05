@@ -123,7 +123,7 @@ function logMessage(session, phoneNumber, message, status, errorMessage = null) 
         getColombiaTimestamp(),
         session || 'unknown',
         phoneNumber || 'unknown',
-        (message || '').substring(0, 100),
+        (message || ''),
         finalStatus,
         errorMessage
     ]);

@@ -606,6 +606,28 @@ async function loadQueueMessages() {
 let searchCurrentOffset = 0;
 let searchTotalMessages = 0;
 
+function openSearchMessageModal(el) {
+    const modal = document.getElementById('searchMessageModal');
+    const body = document.getElementById('searchMessageModalBody');
+    if (!modal || !body || !el) return;
+
+    const encoded = el.getAttribute('data-message') || '';
+    const message = encoded ? decodeURIComponent(encoded) : '';
+    body.textContent = message || '-';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeSearchMessageModal() {
+    const modal = document.getElementById('searchMessageModal');
+    const body = document.getElementById('searchMessageModalBody');
+    if (body) body.textContent = '';
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
 async function loadPhoneNumbers() {
     try {
         const response = await fetch(`${API_URL}/api/messages/phones`);
@@ -668,7 +690,12 @@ async function searchMessages(offset = 0) {
                                msg.status === 'received' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700';
             const statusText = msg.status === 'sent' || msg.status === 'success' ? '✅ Enviado' : 
                               msg.status === 'received' ? '📥 Recibido' : '❌ Error';
-            const preview = msg.message_preview ? msg.message_preview.substring(0, 80) + (msg.message_preview.length > 80 ? '...' : '') : '-';
+            const fullMessage = msg.message_preview || '';
+            const preview = fullMessage ? fullMessage.substring(0, 80) + (fullMessage.length > 80 ? '...' : '') : '-';
+            const encodedMessage = fullMessage ? encodeURIComponent(fullMessage) : '';
+            const messageCell = fullMessage
+                ? `<button type="button" class="text-left text-gray-600 max-w-xs truncate hover:underline block w-full" data-message="${encodedMessage}" onclick="openSearchMessageModal(this)">${preview}</button>`
+                : `<span class="text-gray-600">-</span>`;
             
             return `
                 <tr class="hover:bg-gray-50">
@@ -678,7 +705,7 @@ async function searchMessages(offset = 0) {
                     </td>
                     <td class="px-4 py-3 text-purple-600 font-medium">${msg.session}</td>
                     <td class="px-4 py-3 font-mono text-sm">${msg.phone_number}</td>
-                    <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${msg.message_preview || ''}">${preview}</td>
+                    <td class="px-4 py-3">${messageCell}</td>
                     <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span></td>
                 </tr>
             `;
@@ -1197,3 +1224,5 @@ setInterval(() => {
         loadSessions();
     }
 }, 30000);
+
+
