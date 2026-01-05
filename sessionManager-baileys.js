@@ -390,30 +390,40 @@ async function createSession(sessionName) {
                 console.log(`❌ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
                 
                 if (shouldReconnect) {
-                    // No reconectar si hay QR pendiente (primera conexión) o si ya estamos conectados
-                    if (session.qr || session.state === config.SESSION_STATES.READY) {
-                        console.log(`⏳ ${sessionName} esperando autenticación QR o reconexión automática...`);
-                        session.state = config.SESSION_STATES.RECONNECTING;
+                    // 515 = restartRequired - Necesita reinicio inmediato
+                    const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
+                    
+                    // 428 = Connection closed during QR scan (normal behavior)
+                    const isQRConnectionClose = statusCode === 428 || statusCode === DisconnectReason.connectionClosed;
+                    
+                    // Si tiene QR y es un cierre durante escaneo, solo esperar
+                    if (session.qr && isQRConnectionClose && !isRestartRequired) {
+                        console.log(`⏳ ${sessionName} cerrado temporalmente durante autenticación QR, esperando reconexión automática...`);
+                        session.state = config.SESSION_STATES.WAITING_FOR_QR;
                         return;
                     }
                     
+                    // Si requiere reinicio o no tiene QR, reintentar
                     session.state = config.SESSION_STATES.RECONNECTING;
                     session.retryCount++;
                     
-                    if (session.retryCount <= 3) {
-                        console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/3)...`);
+                    if (session.retryCount <= 5) {
+                        const waitTime = isRestartRequired ? 2000 : 5000;
+                        console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/5) en ${waitTime/1000}s...`);
+                        
                         // Cerrar socket anterior antes de crear uno nuevo
                         if (session.socket) {
                             try {
                                 await session.socket.ws?.close();
                             } catch (e) {}
                         }
-                        await sleep(5000);
+                        
+                        await sleep(waitTime);
                         delete sessions[sessionName];
                         await createSession(sessionName);
                     } else {
                         session.state = config.SESSION_STATES.ERROR;
-                        console.log(`❌ ${sessionName} superó el límite de reintentos`);
+                        console.log(`❌ ${sessionName} superó el límite de reintentos (5)`);
                     }
                 } else {
                     session.state = config.SESSION_STATES.DISCONNECTED;
