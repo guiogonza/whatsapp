@@ -62,6 +62,28 @@ function logMessageSent(sessionName, destination, message, status, errorMessage 
 }
 
 /**
+ * Registra un mensaje entrante en el buffer del monitor y en la BD
+ */
+function logMessageReceived(sessionName, origin, message) {
+    // Guardar en buffer de memoria para el monitor
+    recentMessages.unshift({
+        timestamp: new Date().toISOString(),
+        session: sessionName,
+        origin,
+        message: (message || '').substring(0, 100),
+        status: 'received'
+    });
+    if (recentMessages.length > MAX_RECENT_MESSAGES) recentMessages.pop();
+
+    // Guardar en base de datos para analytics
+    try {
+        database.logMessage(sessionName, origin, message, 'received', null);
+    } catch (err) {
+        console.error('Error guardando mensaje entrante en BD:', err.message);
+    }
+}
+
+/**
  * Obtiene los mensajes recientes
  */
 function getRecentMessages(limit = 50) {
@@ -519,6 +541,29 @@ async function createSession(sessionName) {
             if (!message.key.fromMe && m.type === 'notify') {
                 console.log(`📨 ${sessionName} recibió mensaje de ${message.key.remoteJid}`);
                 session.lastActivity = new Date();
+
+                // Extraer texto del mensaje si existe
+                const msgObj = message.message || {};
+                const incomingText = msgObj.conversation 
+                    || msgObj.extendedTextMessage?.text 
+                    || msgObj.imageMessage?.caption 
+                    || msgObj.videoMessage?.caption 
+                    || '';
+
+                // Registrar en historial y monitor
+                logMessageReceived(sessionName, message.key.remoteJid, incomingText);
+                if (!session.messages) session.messages = [];
+                session.messages.push({
+                    timestamp: new Date(),
+                    from: message.key.remoteJid,
+                    message: incomingText || '[mensaje sin texto]',
+                    direction: 'IN',
+                    status: 'received'
+                });
+                // Mantener historial limitado
+                if (session.messages.length > config.MAX_MESSAGE_HISTORY) {
+                    session.messages = session.messages.slice(-config.MAX_MESSAGE_HISTORY);
+                }
                 
                 // Auto-respuesta si está configurada
                 if (config.AUTO_RESPONSE && message.message) {
@@ -899,6 +944,7 @@ module.exports = {
     sendNotificationToAdmin,
     getRecentMessages,
     logMessageSent,
+    logMessageReceived,
     queueMessage,
     setBatchInterval,
     getBatchSettings,
