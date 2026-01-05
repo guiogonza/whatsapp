@@ -392,6 +392,7 @@ async function createSession(sessionName) {
 
                 // Si es loggedOut/401 justo después de un restart, forzamos reintento (hasta 3 veces)
                 if (isLoggedOut && session.retryCount < 3) {
+                    console.log(`⚠️ ${sessionName} recibió estado ${statusCode} (loggedOut). Intentando rescate rápido (${session.retryCount + 1}/3)...`);
                     shouldReconnect = true;
                 }
                 
@@ -462,7 +463,7 @@ async function createSession(sessionName) {
                 } else {
                     session.state = config.SESSION_STATES.DISCONNECTED;
                     delete sessions[sessionName];
-                    console.log(`🔌 ${sessionName} cerró sesión. Eliminando datos...`);
+                    console.log(`🔌 ${sessionName} cerró sesión. Manteniendo datos de autenticación para diagnóstico.`);
                 }
             }
             
@@ -483,6 +484,8 @@ async function createSession(sessionName) {
                     };
                     
                     console.log(`✅ ${sessionName} conectado: ${session.phoneNumber}`);
+                    // Guardar credenciales por seguridad tras conexión
+                    try { await saveCreds(); } catch (e) {}
                 }
             }
         });
