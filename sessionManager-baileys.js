@@ -390,26 +390,26 @@ async function createSession(sessionName) {
                 console.log(`❌ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
                 
                 if (shouldReconnect) {
-                    // 515 = restartRequired - Necesita reinicio inmediato
-                    const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
+                    // 515 = restartRequired - Baileys maneja esto automáticamente
+                    // 428 = connectionClosed - Normal durante autenticación con QR
+                    // NO recrear sesión, solo actualizar estado y dejar que Baileys reconecte
+                    const isAutoReconnect = statusCode === DisconnectReason.restartRequired || 
+                                          statusCode === 515 || 
+                                          statusCode === DisconnectReason.connectionClosed || 
+                                          statusCode === 428;
                     
-                    // 428 = Connection closed during QR scan (normal behavior)
-                    const isQRConnectionClose = statusCode === 428 || statusCode === DisconnectReason.connectionClosed;
-                    
-                    // Si tiene QR y es un cierre durante escaneo, solo esperar
-                    if (session.qr && isQRConnectionClose && !isRestartRequired) {
-                        console.log(`⏳ ${sessionName} cerrado temporalmente durante autenticación QR, esperando reconexión automática...`);
-                        session.state = config.SESSION_STATES.WAITING_FOR_QR;
+                    if (isAutoReconnect) {
+                        console.log(`⏳ ${sessionName} se reconectará automáticamente (Baileys maneja status ${statusCode})...`);
+                        session.state = session.qr ? config.SESSION_STATES.WAITING_FOR_QR : config.SESSION_STATES.RECONNECTING;
                         return;
                     }
                     
-                    // Si requiere reinicio o no tiene QR, reintentar
+                    // Solo para otros errores que requieren reinicio manual
                     session.state = config.SESSION_STATES.RECONNECTING;
                     session.retryCount++;
                     
                     if (session.retryCount <= 5) {
-                        const waitTime = isRestartRequired ? 2000 : 5000;
-                        console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/5) en ${waitTime/1000}s...`);
+                        console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/5) en 5s...`);
                         
                         // Cerrar socket anterior antes de crear uno nuevo
                         if (session.socket) {
@@ -418,7 +418,7 @@ async function createSession(sessionName) {
                             } catch (e) {}
                         }
                         
-                        await sleep(waitTime);
+                        await sleep(5000);
                         delete sessions[sessionName];
                         await createSession(sessionName);
                     } else {
