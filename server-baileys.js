@@ -533,19 +533,23 @@ app.get('/api/rotation', (req, res) => {
 });
 
 /**
- * GET /api/monitor/messages - Mensajes recientes para el monitor
+ * GET /api/monitor/messages - Todos los mensajes para el monitor (desde la BD)
+ * Query: limit, offset
  */
 app.get('/api/monitor/messages', (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 50;
-        const messages = sessionManager.getRecentMessages(limit).map(m => ({
+        const limit = parseInt(req.query.limit) || 500;
+        const offset = parseInt(req.query.offset) || 0;
+        const result = database.getMessagesByFilter({ limit, offset });
+        // Adaptar formato para el monitor
+        const messages = (result.messages || []).map(m => ({
             timestamp: m.timestamp,
             session: m.session,
-            destination: m.destination || m.origin || '',
-            message: m.message || '',
+            destination: m.phone_number || '',
+            message: m.message_preview || '',
             status: m.status || 'unknown'
         }));
-        res.json({ success: true, messages });
+        res.json({ success: true, messages, total: result.total });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

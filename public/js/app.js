@@ -484,14 +484,11 @@ function updateMonitorLog() {
 
 async function loadRecentMessages() {
     try {
-        let response = await fetch(`${API_URL}/api/monitor/messages`);
-        if (!response.ok) {
-            response = await fetch(`${API_URL}/api/messages/recent`);
-        }
+        let response = await fetch(`${API_URL}/api/monitor/messages?limit=500`);
         const data = await response.json();
         
         if (data.messages && data.messages.length > 0) {
-            monitorMessages = data.messages.slice(0, MAX_MONITOR_MESSAGES).map(msg => {
+            monitorMessages = data.messages.map(msg => {
                 const date = new Date(msg.timestamp);
                 const text = (msg.message || '').substring(0, 50);
                 return {
