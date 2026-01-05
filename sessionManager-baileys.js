@@ -392,34 +392,46 @@ async function createSession(sessionName) {
                 console.log(`❌ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
                 
                 if (shouldReconnect) {
-                    // 515 = restartRequired - Baileys maneja esto automáticamente
-                    // 428 = connectionClosed - Normal durante autenticación con QR
-                    // NO recrear sesión, solo actualizar estado y dejar que Baileys reconecte
-                    const isAutoReconnect = statusCode === DisconnectReason.restartRequired || 
-                                          statusCode === 515 || 
-                                          statusCode === DisconnectReason.connectionClosed || 
-                                          statusCode === 428;
+                    const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
+                    const isQRConnectionClose = statusCode === DisconnectReason.connectionClosed || statusCode === 428;
                     
-                    if (isAutoReconnect) {
-                        console.log(`⏳ ${sessionName} se reconectará automáticamente (Baileys maneja status ${statusCode})...`);
-                        session.state = session.qr ? config.SESSION_STATES.WAITING_FOR_QR : config.SESSION_STATES.RECONNECTING;
+                    // Caso 1: Cierre normal durante lectura de QR
+                    if (session.qr && isQRConnectionClose && !isRestartRequired) {
+                        console.log(`⏳ ${sessionName} cierre temporal durante QR, esperando reconexión automática...`);
+                        session.state = config.SESSION_STATES.WAITING_FOR_QR;
                         return;
                     }
                     
-                    // Solo para otros errores que requieren reinicio manual
+                    // Caso 2: restartRequired después de hacer pairing: recrear socket conservando credenciales
+                    if (isRestartRequired) {
+                        session.state = config.SESSION_STATES.RECONNECTING;
+                        session.retryCount++;
+                        if (session.retryCount <= 5) {
+                            console.log(`🔄 ${sessionName} necesita restart (515). Reintentando en 2s (${session.retryCount}/5)...`);
+                            // Cerramos socket previo pero NO borramos carpeta de auth
+                            if (session.socket) {
+                                try { await session.socket.ws?.close(); } catch (e) {}
+                            }
+                            await sleep(2000);
+                            // Reemplazar la entrada para permitir nueva instancia
+                            delete sessions[sessionName];
+                            await createSession(sessionName);
+                        } else {
+                            session.state = config.SESSION_STATES.ERROR;
+                            console.log(`❌ ${sessionName} superó el límite de reintentos (5) tras restartRequired`);
+                        }
+                        return;
+                    }
+                    
+                    // Otros errores: reconectar manual con backoff
                     session.state = config.SESSION_STATES.RECONNECTING;
                     session.retryCount++;
                     
                     if (session.retryCount <= 5) {
                         console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/5) en 5s...`);
-                        
-                        // Cerrar socket anterior antes de crear uno nuevo
                         if (session.socket) {
-                            try {
-                                await session.socket.ws?.close();
-                            } catch (e) {}
+                            try { await session.socket.ws?.close(); } catch (e) {}
                         }
-                        
                         await sleep(5000);
                         delete sessions[sessionName];
                         await createSession(sessionName);
