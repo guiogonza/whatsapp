@@ -334,8 +334,8 @@ async function createSession(sessionName) {
         const { version, isLatest } = await fetchLatestBaileysVersion();
         console.log(`📱 Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
         
-        // Crear logger silencioso
-        const logger = pino({ level: 'silent' });
+        // Crear logger con nivel debug para diagnosticar
+        const logger = pino({ level: 'debug' });
         
         // Crear socket de WhatsApp
         const socket = makeWASocket({
@@ -374,7 +374,9 @@ async function createSession(sessionName) {
         
         // Manejar eventos de conexión
         socket.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+            const { connection, lastDisconnect, qr, isNewLogin } = update;
+            
+            console.log(`🔄 ${sessionName} connection.update:`, JSON.stringify({ connection, qr: !!qr, isNewLogin, statusCode: lastDisconnect?.error?.output?.statusCode }));
             
             if (qr) {
                 session.qr = qr;
