@@ -360,6 +360,8 @@ function populateSessionSelects() {
 // ======================== MONITOR ========================
 function startMonitor() {
     refreshMonitorStats();
+    loadHistory(); // Cargar historial al iniciar
+    loadQueueMessages(); // Cargar cola al iniciar
     if (monitorAutoRefresh && !monitorRefreshInterval) {
         monitorRefreshInterval = setInterval(refreshMonitorStats, 5000);
     }
@@ -512,18 +514,9 @@ function clearMonitorLog() {
     updateMonitorLog();
 }
 
+// Función simplificada ya que no hay pestañas
 function showMonitorTab(tabName) {
-    document.querySelectorAll('[id^="monitorTab-"]').forEach(tab => tab.classList.add('hidden'));
-    document.querySelectorAll('.monitor-tab').forEach(tab => {
-        tab.classList.remove('active', 'border-purple-500', 'text-purple-600');
-        tab.classList.add('border-transparent', 'text-gray-500');
-    });
-    
-    document.getElementById(`monitorTab-${tabName}`).classList.remove('hidden');
-    const activeTab = document.getElementById(`tab-${tabName}`);
-    activeTab.classList.add('active', 'border-purple-500', 'text-purple-600');
-    activeTab.classList.remove('border-transparent', 'text-gray-500');
-    
+    // Esta función ya no es necesaria pero se mantiene para compatibilidad
     if (tabName === 'history') loadHistory();
     if (tabName === 'queue') loadQueueMessages();
 }
@@ -1156,6 +1149,7 @@ function clearBulkForm() {
 
 async function initSettings() {
     await refreshBatchStatus();
+    await loadNotificationSettings();
     
     // Configurar listener para el slider
     const range = document.getElementById('batchIntervalRange');
@@ -1215,6 +1209,59 @@ async function saveBatchSettings() {
     } catch (error) {
         console.error('Error guardando configuración:', error);
         alert('❌ Error de conexión');
+    }
+}
+
+let selectedNotificationInterval = 30;
+
+function setNotificationInterval(minutes) {
+    selectedNotificationInterval = minutes;
+    
+    // Actualizar estilos de botones
+    document.querySelectorAll('.notification-interval-btn').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'bg-blue-50');
+        btn.classList.add('border-gray-300');
+    });
+    
+    const selectedBtn = document.getElementById(`notif-${minutes}`);
+    if (selectedBtn) {
+        selectedBtn.classList.remove('border-gray-300');
+        selectedBtn.classList.add('border-blue-500', 'bg-blue-50');
+    }
+}
+
+async function saveNotificationSettings() {
+    try {
+        const response = await fetch(`${API_URL}/api/settings/notification-interval`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interval: selectedNotificationInterval })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Notificaciones configuradas cada ${selectedNotificationInterval} minutos`);
+        } else {
+            alert(`❌ Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error guardando configuración:', error);
+        alert('❌ Error de conexión');
+    }
+}
+
+async function loadNotificationSettings() {
+    try {
+        const response = await fetch(`${API_URL}/api/settings/notification-interval`);
+        const data = await response.json();
+        
+        if (data.success && data.interval) {
+            selectedNotificationInterval = data.interval;
+            setNotificationInterval(data.interval);
+        }
+    } catch (error) {
+        console.error('Error cargando configuración:', error);
     }
 }
 

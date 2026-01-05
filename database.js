@@ -414,13 +414,23 @@ function getMessagesByFilter(options = {}) {
     let conditions = [];
     
     if (phoneNumber) {
-        conditions.push(`phone_number = '${phoneNumber}'`);
+        // Escapar comillas simples para evitar SQL injection
+        const escapedPhone = String(phoneNumber).replace(/'/g, "''");
+        conditions.push(`phone_number = '${escapedPhone}'`);
     }
     if (startDate) {
-        conditions.push(`date(timestamp) >= '${startDate}'`);
+        // Convertir fecha a timestamp en milisegundos
+        const startTs = new Date(startDate).getTime();
+        if (!isNaN(startTs)) {
+            conditions.push(`timestamp >= ${startTs}`);
+        }
     }
     if (endDate) {
-        conditions.push(`date(timestamp) <= '${endDate}'`);
+        // Convertir fecha a timestamp en milisegundos (fin del día)
+        const endTs = new Date(endDate).getTime() + (24 * 60 * 60 * 1000 - 1);
+        if (!isNaN(endTs)) {
+            conditions.push(`timestamp <= ${endTs}`);
+        }
     }
     
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

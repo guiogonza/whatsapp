@@ -21,9 +21,15 @@ const config = require('./config');
 // Gestor de sesiones con Baileys
 const sessionManager = require('./sessionManager-baileys');
 
-// Utilidades
-const { formatPhoneNumber } = require('./utils');
 const database = require('./database');
+
+// Utilidad simple para formatear números de teléfono
+const formatPhoneNumber = (phone) => {
+    if (!phone) return null;
+    let cleaned = phone.replace(/\D/g, '');
+    if (!cleaned.startsWith('57')) cleaned = '57' + cleaned;
+    return cleaned + '@s.whatsapp.net';
+};
 
 // InicializaciÃÂÃÂ³n de Express
 const app = express();
@@ -103,35 +109,27 @@ function sendSessionsStatusNotification() {
         const inactive = sessionsStatus.filter(s => s.state !== config.SESSION_STATES.READY);
 
         const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
-        let msg = "\u{1F4CA} *REPORTE DE SESIONES*\n\n" +
-                  `\u23F0 ${nowStr}\n\n` +
-                  `\u{1F4C8} Total: ${total} | \u2705 Activas: ${active.length} | \u26A0\uFE0F Inactivas: ${inactive.length}\n\n`;
+        let msg = "📊 *REPORTE DE SESIONES*\n\n" +
+                  `⏰ ${nowStr}\n\n` +
+                  `📈 Total: ${total} | ✅ Activas: ${active.length} | ⚠️ Inactivas: ${inactive.length}\n\n`;
 
-        msg += `Sesion actual: ${rotationInfo.currentSession || 'N/A'}\n`;
-        if (rotationInfo.nextRotation) {
-            const next = new Date(rotationInfo.nextRotation).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Bogota' });
-            msg += `Proxima rotacion: ${next}\n\n`;
+        if (active.length === 0) {
+            msg += "*Sesiones Activas:*\n- Sin sesiones activas\n";
         } else {
-            msg += "Proxima rotacion: N/A\n\n";
-        }
-
-        msg += "*Sesiones Activas:*\n";
-        if (active.length == 0) {
-            msg += "- Sin sesiones activas\n";
-        } else {
+            msg += "*Sesiones Activas:*\n";
             active.forEach((s, i) => {
                 const info = sessionsObj[s.name]?.info || {};
                 const label = info.pushname ? ` (${info.pushname})` : '';
-                msg += `${i + 1}. \u2705 *${s.name}*${label}\n`;
+                msg += `${i + 1}. ✅ *${s.name}*${label}\n`;
             });
         }
 
-        msg += "\n*Requieren atencion:*\n";
-        if (inactive.length == 0) {
-            msg += "- Sin sesiones inactivas\n";
+        if (inactive.length === 0) {
+            msg += "\n*Requieren atención:*\n- Sin sesiones inactivas\n";
         } else {
+            msg += "\n*Requieren atención:*\n";
             inactive.forEach((s, i) => {
-                const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? '\u{1F4F1}' : (s.state == config.SESSION_STATES.RECONNECTING ? '\u{1F504}' : '\u26A0\uFE0F');
+                const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? '📱' : (s.state == config.SESSION_STATES.RECONNECTING ? '🔄' : '⚠️');
                 msg += `${i + 1}. ${icon} *${s.name}* - ${s.state}\n`;
             });
         }
@@ -757,6 +755,61 @@ app.post('/api/settings/batch', (req, res) => {
                 error: result.error
             });
         }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/settings/notification-interval - Obtiene intervalo de notificaciones
+ */
+app.get('/api/settings/notification-interval', (req, res) => {
+    try {
+        res.json({
+            success: true,
+            interval: Math.floor(config.NOTIFICATION_INTERVAL_MINUTES)
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/settings/notification-interval - Actualiza intervalo de notificaciones
+ */
+app.post('/api/settings/notification-interval', (req, res) => {
+    try {
+        const { interval } = req.body;
+        
+        if (!interval || ![1, 5, 30, 60].includes(interval)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Intervalo debe ser 1, 5, 30 o 60 minutos'
+            });
+        }
+        
+        // Actualizar configuración
+        config.NOTIFICATION_INTERVAL_MINUTES = interval;
+        
+        // Reiniciar intervalo de notificaciones
+        if (notificationInterval) {
+            clearInterval(notificationInterval);
+        }
+        notificationInterval = setInterval(sendSessionsStatusNotification, interval * 60000);
+        
+        console.log(`✅ Intervalo de notificaciones actualizado a ${interval} minutos`);
+        
+        res.json({
+            success: true,
+            message: `Notificaciones configuradas cada ${interval} minutos`,
+            interval
+        });
     } catch (error) {
         res.status(500).json({
             success: false,

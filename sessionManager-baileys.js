@@ -40,9 +40,21 @@ const qrcode = require('qrcode');
 
 const config = require('./config');
 
-const { formatPhoneNumber, sleep, getColombiaDate } = require('./utils');
-
 const database = require('./database');
+
+// Utilidades simples
+const formatPhoneNumber = (phone) => {
+    if (!phone) return null;
+    let cleaned = phone.replace(/\D/g, '');
+    if (!cleaned.startsWith('57')) cleaned = '57' + cleaned;
+    return cleaned + '@s.whatsapp.net';
+};
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const getColombiaDate = () => {
+    return new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+};
 
 
 
@@ -1622,10 +1634,39 @@ function notifySessionDisconnect(sessionName, statusCode) {
     if (now - lastAt < DISCONNECT_NOTIFY_COOLDOWN_MS) return;
     lastDisconnectNotify.set(sessionName, now);
 
-    const active = getActiveSessions().map(s => s.name);
-    const activeText = active.length > 0 ? active.join(', ') : 'ninguna';
+    const sessionsObj = getAllSessions();
+    const sessionsStatus = getSessionsStatus();
+    const active = getActiveSessions();
+    const inactive = sessionsStatus.filter(s => s.state !== config.SESSION_STATES.READY);
+    
+    const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
     const codeText = statusCode !== undefined && statusCode !== null ? statusCode : 'N/A';
-    const message = `Alerta: sesion ${sessionName} desconectada. Status: ${codeText}. Activas: ${activeText}`;
+    
+    let message = `🚨 *ALERTA: SESIÓN DESCONECTADA*\n\n` +
+                  `⏰ ${nowStr}\n\n` +
+                  `❌ Sesión: *${sessionName}*\n` +
+                  `📊 Status Code: ${codeText}\n\n` +
+                  `📈 Total: ${sessionsStatus.length} | ✅ Activas: ${active.length} | ⚠️ Inactivas: ${inactive.length}\n\n`;
+    
+    if (active.length > 0) {
+        message += "*Sesiones Activas:*\n";
+        active.forEach((s, i) => {
+            const info = sessionsObj[s.name]?.info || {};
+            const label = info.pushname ? ` (${info.pushname})` : '';
+            message += `${i + 1}. ✅ *${s.name}*${label}\n`;
+        });
+    } else {
+        message += "*Sesiones Activas:*\n- Sin sesiones activas\n";
+    }
+    
+    if (inactive.length > 0) {
+        message += "\n*Requieren atención:*\n";
+        inactive.forEach((s, i) => {
+            const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? '📱' : (s.state == config.SESSION_STATES.RECONNECTING ? '🔄' : '⚠️');
+            message += `${i + 1}. ${icon} *${s.name}* - ${s.state}\n`;
+        });
+    }
+    
     sendNotificationToAdmin(message);
 }
 
