@@ -444,6 +444,26 @@ async function createSession(sessionName) {
                         return;
                     }
 
+                    // Caso 3b: Si ya intentamos rescatar 3 veces y continúa 401, limpiamos credenciales y pedimos nuevo QR
+                    if (isLoggedOut && session.retryCount >= 3) {
+                        session.state = config.SESSION_STATES.RECONNECTING;
+                        console.log(`🧹 ${sessionName} continúa con 401 tras ${session.retryCount} intentos. Limpiando datos y solicitando nuevo QR...`);
+                        try {
+                            // Cerrar socket previo
+                            if (session.socket) {
+                                try { await session.socket.ws?.close(); } catch (e) {}
+                            }
+                            // Eliminar datos de autenticación
+                            await deleteSessionData(sessionName);
+                        } catch (cleanErr) {
+                            console.error(`❌ Error limpiando datos de ${sessionName}: ${cleanErr.message}`);
+                        }
+                        // Reiniciar sesión desde cero
+                        delete sessions[sessionName];
+                        await createSession(sessionName);
+                        return;
+                    }
+
                     // Otros errores: reconectar manual con backoff
                     session.state = config.SESSION_STATES.RECONNECTING;
                     session.retryCount++;
