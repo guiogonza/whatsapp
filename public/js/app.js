@@ -766,7 +766,11 @@ async function loadHistory() {
         
         document.getElementById('historyByDate').innerHTML = dateHtml;
         
-        const sessionHtml = data.bySession.length > 0 ? data.bySession.map(item => {
+        const bySession = Array.isArray(data.bySession) ? data.bySession : [];
+        const queueItems = bySession.filter(item => String(item.session || '').toLowerCase() === 'queue');
+        const sessionItems = bySession.filter(item => String(item.session || '').toLowerCase() !== 'queue');
+
+        const sessionHtml = sessionItems.length > 0 ? sessionItems.map(item => {
             const successRate = item.total > 0 ? Math.round((item.success / item.total) * 100) : 0;
             const sessionInfo = data.sessions.find(s => s.name === item.session);
             const isActive = sessionInfo && sessionInfo.isActive;
@@ -790,10 +794,36 @@ async function loadHistory() {
         }).join('') : '<p class="text-gray-500 col-span-full text-center">No hay datos de sesiones</p>';
         
         document.getElementById('historyBySession').innerHTML = sessionHtml;
+
+        const queueEl = document.getElementById('historyQueue');
+        if (queueEl) {
+            const queueHtml = queueItems.length > 0 ? queueItems.map(item => {
+                const successRate = item.total > 0 ? Math.round((item.success / item.total) * 100) : 0;
+                return `
+                    <div class="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4">
+                        <div class="font-semibold text-gray-800">Cola</div>
+                        <div class="text-2xl font-bold text-orange-600">${item.total}</div>
+                        <div class="text-xs text-gray-500">mensajes en cola</div>
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="text-green-600 text-sm">OK ${item.success}</span>
+                            <span class="text-red-600 text-sm">ERR ${item.error}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div class="bg-orange-500 h-2 rounded-full" style="width: ${successRate}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('') : '<p class="text-gray-500 col-span-full text-center">No hay datos de cola</p>';
+            queueEl.innerHTML = queueHtml;
+        }
         
     } catch (error) {
         console.error('Error cargando historial:', error);
         document.getElementById('historyByDate').innerHTML = '<p class="text-red-500 col-span-full text-center">Error cargando historial</p>';
+        const queueEl = document.getElementById('historyQueue');
+        if (queueEl) {
+            queueEl.innerHTML = '<p class="text-red-500 col-span-full text-center">Error cargando historial</p>';
+        }
     }
 }
 

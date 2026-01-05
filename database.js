@@ -397,7 +397,7 @@ function getUniquePhoneNumbers() {
         FROM messages 
         WHERE status IN ('sent', 'success')
         GROUP BY phone_number 
-        ORDER BY last_message DESC
+        ORDER BY message_count DESC, last_message DESC
         LIMIT 500
     `);
     return queryToObjects(res);
