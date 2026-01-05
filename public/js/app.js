@@ -182,12 +182,10 @@ function createSessionCard(session) {
     const isActiveSession = session.name === currentRotationSession && session.state === 'READY';
     
     let userInfoHtml = '';
-    if (session.userInfo && session.state === 'READY') {
+    if (session.phoneNumber && session.state === 'READY') {
         userInfoHtml = `
             <div class="mt-3 p-3 bg-white rounded-lg border">
-                <p class="text-sm"><strong>👤 Nombre:</strong> ${session.userInfo.pushname || 'N/A'}</p>
-                <p class="text-sm"><strong>📞 Número:</strong> ${session.userInfo.wid || 'N/A'}</p>
-                <p class="text-sm"><strong>📱 Plataforma:</strong> ${session.userInfo.platform || 'N/A'}</p>
+                <p class="text-sm"><strong>📞 Número:</strong> ${session.phoneNumber}</p>
             </div>`;
     }
     
@@ -209,7 +207,7 @@ function createSessionCard(session) {
                 ${userInfoHtml}
                 ${qrHtml}
                 <div class="mt-3 text-xs text-gray-500">
-                    <p>📊 Mensajes: ${session.messageCount || 0}</p>
+                    <p>📊 Mensajes: ${session.messagesCount || 0}</p>
                 </div>
                 ${session.state === 'DISCONNECTED' || session.state === 'ERROR' ? `
                     <div class="mt-4">
@@ -414,8 +412,8 @@ async function refreshMonitorStats() {
         const sessionsData = await sessionsResponse.json();
         
         let totalMessages = 0;
-        const statsHtml = sessionsData.map(session => {
-            const msgCount = session.messageCount || 0;
+        const statsHtml = (sessionsData.sessions || []).map(session => {
+            const msgCount = session.messagesCount || 0;
             totalMessages += msgCount;
             const isActive = session.name === rotationData.currentSession;
             const statusColor = session.state === 'READY' ? 'bg-green-100 border-green-300' : 'bg-gray-100 border-gray-300';
@@ -451,8 +449,9 @@ function updateMonitorLog() {
     }
     
     const logHtml = monitorMessages.map(entry => {
-        const statusColor = entry.status === 'success' ? 'text-green-400' : 'text-red-400';
-        const statusIcon = entry.status === 'success' ? '✅' : '❌';
+        const isSuccess = entry.status === 'success' || entry.status === 'sent' || entry.status === 'received';
+        const statusColor = isSuccess ? 'text-green-400' : 'text-red-400';
+        const statusIcon = isSuccess ? '✅' : '❌';
         
         return `
             <div class="border-b border-gray-700 py-2">
@@ -470,18 +469,22 @@ function updateMonitorLog() {
 
 async function loadRecentMessages() {
     try {
-        const response = await fetch(`${API_URL}/api/monitor/messages`);
+        let response = await fetch(`${API_URL}/api/monitor/messages`);
+        if (!response.ok) {
+            response = await fetch(`${API_URL}/api/messages/recent`);
+        }
         const data = await response.json();
         
         if (data.messages && data.messages.length > 0) {
             monitorMessages = data.messages.slice(0, MAX_MONITOR_MESSAGES).map(msg => {
                 const date = new Date(msg.timestamp);
+                const text = (msg.message || '').substring(0, 50);
                 return {
                     time: date.toLocaleTimeString('es-CO'),
                     type: 'whatsapp',
                     session: msg.session,
-                    destination: msg.destination,
-                    message: msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : ''),
+                    destination: msg.destination || msg.origin || '',
+                    message: text + ((msg.message || '').length > 50 ? '...' : ''),
                     status: msg.status
                 };
             });
@@ -574,6 +577,14 @@ async function loadHistory() {
 // ======================== MENSAJES ========================
 function getSelectedPersonalSessions() {
     return Array.from(document.querySelectorAll('input[name="personalSession"]:checked')).map(cb => cb.value);
+}
+
+function selectAllPersonalSessions() {
+    document.querySelectorAll('input[name="personalSession"]').forEach(cb => cb.checked = true);
+}
+
+function deselectAllPersonalSessions() {
+    document.querySelectorAll('input[name="personalSession"]').forEach(cb => cb.checked = false);
 }
 
 function getSelectedBulkSessions() {

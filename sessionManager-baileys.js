@@ -34,8 +34,7 @@ let rotationInterval = null;
 let recentMessages = [];
 const MAX_RECENT_MESSAGES = 100;
 
-// Cola de mensajes para envío por lotes
-const messageQueue = {};
+// Cola persistente manejada vía BD
 let batchIntervalMinutes = 3;
 let batchTimer = null;
 
@@ -100,61 +99,41 @@ function queueMessage(phoneNumber, message) {
     if (!formattedNumber) {
         return { success: false, error: 'Número inválido' };
     }
-
-    if (!messageQueue[formattedNumber]) {
-        messageQueue[formattedNumber] = [];
-    }
-
-    messageQueue[formattedNumber].push({
-        message,
-        timestamp: new Date()
-    });
-
-    console.log(`📥 Mensaje encolado para ${formattedNumber}. Total en cola para este número: ${messageQueue[formattedNumber].length}`);
-    
-    return { 
-        success: true, 
-        queued: true, 
-        queueSize: messageQueue[formattedNumber].length,
-        nextBatchIn: batchIntervalMinutes 
-    };
+    // Registrar en monitor inmediatamente como 'queued'
+    logMessageSent('queue', formattedNumber, message, 'queued');
+    // Persistir en BD
+    const result = database.enqueueMessage(formattedNumber, message);
+    console.log(`📥 Mensaje encolado (BD) para ${formattedNumber}. Total pendientes: ${result.total}`);
+    return { success: true, queued: true, total: result.total, pendingNumbers: result.pendingNumbers, nextBatchIn: batchIntervalMinutes };
 }
 
 /**
  * Procesa la cola de mensajes y los envía agrupados
  */
 async function processMessageQueue() {
-    const numbers = Object.keys(messageQueue);
-    if (numbers.length === 0) return;
+    const numbers = database.getQueuedNumbers();
+    if (!numbers || numbers.length === 0) return;
 
-    console.log(`\n📦 Procesando cola de mensajes (${numbers.length} números pendientes)...`);
+    console.log(`\n📦 Procesando cola persistente (${numbers.length} números pendientes)...`);
 
     for (const number of numbers) {
-        const messages = messageQueue[number];
-        if (!messages || messages.length === 0) continue;
+        const rows = database.getMessagesForNumber(number);
+        if (!rows || rows.length === 0) continue;
 
-        // Agrupar mensajes
-        // Si hay muchos mensajes, podemos separarlos por saltos de línea dobles
-        const combinedMessage = messages.map(m => m.message).join('\n\n');
-        
-        console.log(`📤 Enviando lote de ${messages.length} mensajes a ${number}`);
-        
-        // Usar la función de envío con rotación existente
-        // Esto mantiene el balanceo de carga
+        const combinedMessage = rows.map(r => r.message).join('\n\n');
+        console.log(`📤 Enviando lote de ${rows.length} mensajes a ${number}`);
+
         try {
             const result = await sendMessageWithRotation(number, combinedMessage);
-            
             if (result.success) {
-                // Eliminar de la cola si se envió con éxito
-                delete messageQueue[number];
+                database.clearQueueForNumber(number);
             } else {
-                console.error(`❌ Error enviando lote a ${number}, se mantendrá en cola: ${result.error?.message}`);
+                console.error(`❌ Error enviando lote a ${number}, se mantiene en cola: ${result.error?.message}`);
             }
         } catch (error) {
             console.error(`❌ Error procesando lote para ${number}: ${error.message}`);
         }
-        
-        // Pequeña pausa entre números para no saturar
+
         await sleep(1000);
     }
 }
@@ -194,10 +173,11 @@ function startBatchProcessor() {
  * Obtiene la configuración actual de lotes
  */
 function getBatchSettings() {
+    const stats = database.getQueueStats();
     return {
         interval: batchIntervalMinutes,
-        queueSize: Object.keys(messageQueue).reduce((acc, key) => acc + messageQueue[key].length, 0),
-        pendingNumbers: Object.keys(messageQueue).length
+        queueSize: stats.total,
+        pendingNumbers: stats.pendingNumbers
     };
 }
 
@@ -208,9 +188,11 @@ function getBatchSettings() {
  * @returns {Array} - Array de sesiones activas
  */
 function getActiveSessions() {
-    return Object.values(sessions).filter(s => 
-        s.state === config.SESSION_STATES.READY && s.socket
-    );
+    // Orden estable por nombre para balanceo predecible
+    return Object.keys(sessions)
+        .sort((a, b) => a.localeCompare(b))
+        .map(name => sessions[name])
+        .filter(s => s.state === config.SESSION_STATES.READY && s.socket);
 }
 
 /**
@@ -772,34 +754,36 @@ function getNextSessionRoundRobin() {
 async function sendMessageWithRotation(phoneNumber, message) {
     // Usar balanceo round-robin (cada mensaje rota a la siguiente sesión)
     const activeSessions = getActiveSessions();
-    
+
     if (activeSessions.length === 0) {
-        return { 
-            success: false, 
-            error: new Error('No hay sesiones activas disponibles') 
+        return {
+            success: false,
+            error: new Error('No hay sesiones activas disponibles')
         };
     }
 
-    // Balanceo Round Robin: Seleccionar la siguiente sesión
-    currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+    // Seleccionar sesión actual y luego avanzar el índice
+    if (currentSessionIndex >= activeSessions.length) currentSessionIndex = 0;
     const session = activeSessions[currentSessionIndex];
-    
-    console.log(`📤 Enviando via ${session.name} [${currentSessionIndex + 1}/${activeSessions.length}] (Round Robin)`);
-    
+    currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
+    lastRotationTime = new Date();
+
+    console.log(`📤 Enviando via ${session.name} (idx ${currentSessionIndex}/${activeSessions.length})`);
+
     const formattedNumber = formatPhoneNumber(phoneNumber);
     if (!formattedNumber) {
-        return { 
-            success: false, 
-            error: new Error('Número de teléfono inválido') 
+        return {
+            success: false,
+            error: new Error('Número de teléfono inválido')
         };
     }
-    
+
     const result = await sendMessageWithRetry(session, formattedNumber, message, 3);
-    
+
     if (result.success) {
         // Registrar mensaje
         logMessageSent(session.name, formattedNumber, message, 'sent');
-        
+
         if (!session.messages) session.messages = [];
         session.messages.push({
             timestamp: new Date(),
@@ -808,9 +792,9 @@ async function sendMessageWithRotation(phoneNumber, message) {
             direction: 'OUT',
             status: 'sent'
         });
-        
+
         session.lastActivity = new Date();
-        
+
         // Mantener historial limitado
         if (session.messages.length > config.MAX_MESSAGE_HISTORY) {
             session.messages = session.messages.slice(-config.MAX_MESSAGE_HISTORY);
@@ -818,7 +802,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
     } else {
         logMessageSent(session.name, formattedNumber, message, 'failed', result.error?.message);
     }
-    
+
     return { ...result, sessionUsed: session.name };
 }
 

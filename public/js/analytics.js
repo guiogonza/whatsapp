@@ -134,7 +134,7 @@ async function fetchAnalyticsData() {
         statusBadge.textContent = 'Cargando…';
         statusBadge.className = 'px-2 py-1 text-xs rounded-full bg-yellow-200 text-yellow-800';
         
-        const res = await fetch(`${API_URL}/analytics?${params}`);
+        const res = await fetch(`${API_URL}/api/analytics/messages?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         
         statusBadge.textContent = 'OK';

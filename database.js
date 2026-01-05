@@ -62,6 +62,18 @@ async function initDatabase() {
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `);
+
+    // Cola persistente de mensajes salientes
+    db.run(`
+        CREATE TABLE IF NOT EXISTS outgoing_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone_number TEXT NOT NULL,
+            message TEXT NOT NULL,
+            enqueued_at TEXT NOT NULL,
+            tries INTEGER DEFAULT 0,
+            last_error TEXT
+        )
+    `);
     
     // Crear índices
     db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
@@ -97,22 +109,94 @@ function logMessage(session, phoneNumber, message, status, errorMessage = null) 
         console.error('Base de datos no inicializada');
         return;
     }
-    
-    const normalizedStatus = status === 'success' ? 'sent' : (status === 'error' ? 'error' : 'queued');
-    
+
+    // Aceptar estados conocidos tal cual; mapear 'success' a 'sent'
+    let finalStatus = (status || '').toLowerCase();
+    const allowed = new Set(['sent', 'error', 'queued', 'received']);
+    if (finalStatus === 'success') finalStatus = 'sent';
+    if (!allowed.has(finalStatus)) finalStatus = 'queued';
+
     db.run(`
         INSERT INTO messages (timestamp, session, phone_number, message_preview, status, error_message)
         VALUES (?, ?, ?, ?, ?, ?)
     `, [
-        getColombiaTimestamp(), // Usar hora Colombia GMT-5
+        getColombiaTimestamp(),
         session || 'unknown',
         phoneNumber || 'unknown',
         (message || '').substring(0, 100),
-        normalizedStatus,
+        finalStatus,
         errorMessage
     ]);
-    
+
     saveDatabase();
+}
+
+/**
+ * Encolar mensaje en la cola persistente
+ */
+function enqueueMessage(phoneNumber, message) {
+    if (!db) return { success: false, error: 'DB no inicializada' };
+    const num = (phoneNumber || '').trim();
+    const msg = (message || '').trim();
+    if (!num || !msg) return { success: false, error: 'Datos inválidos' };
+    db.run(`
+        INSERT INTO outgoing_queue (phone_number, message, enqueued_at)
+        VALUES (?, ?, ?)
+    `, [num, msg, getColombiaTimestamp()]);
+    saveDatabase();
+    // Resumen rápido
+    const stats = getQueueStats();
+    return { success: true, queued: true, total: stats.total, pendingNumbers: stats.pendingNumbers };
+}
+
+/**
+ * Obtener números pendientes en cola (distintos)
+ */
+function getQueuedNumbers() {
+    if (!db) return [];
+    const res = db.exec(`
+        SELECT phone_number, MIN(enqueued_at) as first_at
+        FROM outgoing_queue
+        GROUP BY phone_number
+        ORDER BY first_at ASC
+    `);
+    return queryToObjects(res).map(r => r.phone_number);
+}
+
+/**
+ * Obtener mensajes encolados para un número
+ */
+function getMessagesForNumber(phoneNumber) {
+    if (!db) return [];
+    const res = db.exec(`
+        SELECT id, message
+        FROM outgoing_queue
+        WHERE phone_number = '${phoneNumber.replace(/'/g, "''")}'
+        ORDER BY enqueued_at ASC
+    `);
+    return queryToObjects(res);
+}
+
+/**
+ * Limpiar cola para un número (tras envío exitoso)
+ */
+function clearQueueForNumber(phoneNumber) {
+    if (!db) return false;
+    db.run(`DELETE FROM outgoing_queue WHERE phone_number = ?`, [phoneNumber]);
+    saveDatabase();
+    return true;
+}
+
+/**
+ * Estadísticas de la cola
+ */
+function getQueueStats() {
+    if (!db) return { total: 0, pendingNumbers: 0 };
+    const totalRes = db.exec(`SELECT COUNT(*) as total FROM outgoing_queue`);
+    const numbersRes = db.exec(`SELECT COUNT(DISTINCT phone_number) as cnt FROM outgoing_queue`);
+    const total = queryToObjects(totalRes)[0]?.total || 0;
+    const pendingNumbers = queryToObjects(numbersRes)[0]?.cnt || 0;
+    return { total, pendingNumbers };
 }
 
 /**
@@ -295,5 +379,10 @@ module.exports = {
     getStats: getDbStats,
     getDbStats,
     getMessages: getAnalytics,
+    enqueueMessage,
+    getQueuedNumbers,
+    getMessagesForNumber,
+    clearQueueForNumber,
+    getQueueStats,
     close
 };

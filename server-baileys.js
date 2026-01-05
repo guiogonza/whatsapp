@@ -13,6 +13,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const path = require('path');
+const multer = require('multer');
 
 // Configuración
 const config = require('./config');
@@ -27,6 +28,7 @@ const database = require('./database');
 // Inicialización de Express
 const app = express();
 const server = http.createServer(app);
+const upload = multer();
 
 // ======================== ESTADO GLOBAL ========================
 
@@ -301,21 +303,12 @@ app.post('/api/messages/send', async (req, res) => {
                 });
             }
         } else {
-            // Encolar mensaje
+            // Encolar persistente y registrar en monitor
             const result = sessionManager.queueMessage(phoneNumber, message);
-            
             if (result.success) {
-                res.json({
-                    success: true,
-                    queued: true,
-                    message: 'Mensaje encolado para envío por lotes',
-                    details: result
-                });
+                res.json({ success: true, queued: true, message: 'Mensaje encolado (persistente)', details: result });
             } else {
-                res.status(500).json({
-                    success: false,
-                    error: result.error
-                });
+                res.status(500).json({ success: false, error: result.error });
             }
         }
     } catch (error) {
@@ -323,6 +316,115 @@ app.post('/api/messages/send', async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+/**
+ * POST /api/session/send-message - Envía un mensaje desde una sesión específica
+ */
+app.post('/api/session/send-message', async (req, res) => {
+    try {
+        const { sessionName, phoneNumber, message } = req.body;
+
+        if (!sessionName || !phoneNumber || !message) {
+            return res.status(400).json({
+                success: false,
+                error: 'sessionName, phoneNumber y message son requeridos'
+            });
+        }
+
+        const session = sessionManager.getSession(sessionName);
+        if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
+            return res.status(400).json({
+                success: false,
+                error: 'Sesión no disponible o no está lista'
+            });
+        }
+
+        const formattedNumber = formatPhoneNumber(phoneNumber);
+        if (!formattedNumber) {
+            return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
+        }
+
+        const result = await sessionManager.sendMessageWithRetry(session, formattedNumber, message, 3);
+
+        if (result.success) {
+            sessionManager.logMessageSent(session.name, formattedNumber, message, 'sent');
+            if (!session.messages) session.messages = [];
+            session.messages.push({
+                timestamp: new Date(),
+                to: formattedNumber,
+                message,
+                direction: 'OUT',
+                status: 'sent'
+            });
+            session.lastActivity = new Date();
+            if (session.messages.length > config.MAX_MESSAGE_HISTORY) {
+                session.messages = session.messages.slice(-config.MAX_MESSAGE_HISTORY);
+            }
+            return res.json({ success: true, message: 'Mensaje enviado exitosamente', sessionUsed: session.name });
+        }
+
+        return res.status(500).json({ success: false, error: result.error?.message || 'Error enviando mensaje' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/session/send-file - Envía un archivo (imagen/video/audio/documento) desde una sesión específica
+ * Campos esperados (multipart/form-data): sessionName, phoneNumber, caption (opcional), file
+ */
+app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
+    try {
+        const { sessionName, phoneNumber, caption } = req.body || {};
+        const file = req.file;
+
+        if (!sessionName || !phoneNumber || !file) {
+            return res.status(400).json({
+                success: false,
+                error: 'sessionName, phoneNumber y file son requeridos'
+            });
+        }
+
+        const session = sessionManager.getSession(sessionName);
+        if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
+            return res.status(400).json({ success: false, error: 'Sesión no disponible o no está lista' });
+        }
+
+        const formattedNumber = formatPhoneNumber(phoneNumber);
+        if (!formattedNumber) {
+            return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
+        }
+
+        const result = await sessionManager.sendMediaMessage(
+            session,
+            formattedNumber,
+            file.buffer,
+            file.mimetype || 'application/octet-stream',
+            caption || ''
+        );
+
+        if (result.success) {
+            sessionManager.logMessageSent(session.name, formattedNumber, caption || '[media]', 'sent');
+            if (!session.messages) session.messages = [];
+            session.messages.push({
+                timestamp: new Date(),
+                to: formattedNumber,
+                message: caption || '[media]',
+                direction: 'OUT',
+                status: 'sent'
+            });
+            session.lastActivity = new Date();
+            if (session.messages.length > config.MAX_MESSAGE_HISTORY) {
+                session.messages = session.messages.slice(-config.MAX_MESSAGE_HISTORY);
+            }
+            return res.json({ success: true, message: 'Archivo enviado exitosamente', sessionUsed: session.name });
+        }
+
+        return res.status(500).json({ success: false, error: result.error?.message || 'Error enviando archivo' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -412,6 +514,88 @@ app.get('/api/messages/recent', (req, res) => {
     }
 });
 
+// ======================== RUTAS - MONITOR (UI) ========================
+
+/**
+ * GET /api/rotation - Información resumida para el monitor
+ */
+app.get('/api/rotation', (req, res) => {
+    try {
+        const info = sessionManager.getRotationInfo();
+        res.json({
+            currentSession: info.currentSession,
+            nextRotation: info.nextRotation,
+            totalActiveSessions: info.totalActiveSessions
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/monitor/messages - Mensajes recientes para el monitor
+ */
+app.get('/api/monitor/messages', (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const messages = sessionManager.getRecentMessages(limit).map(m => ({
+            timestamp: m.timestamp,
+            session: m.session,
+            destination: m.destination || m.origin || '',
+            message: m.message || '',
+            status: m.status || 'unknown'
+        }));
+        res.json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/monitor/history - Agregados simples por fecha y por sesión
+ */
+app.get('/api/monitor/history', (req, res) => {
+    try {
+        // Leer agregados persistentes desde la BD para no depender del buffer en memoria
+        const period = req.query.period || 'day';
+        const range = req.query.range || 'today';
+        const data = database.getAnalytics({ period, range, top: 10 });
+
+        const byDate = (data.timeline || []).map(t => {
+            const total = Number(t.total || 0);
+            const errores = Number(t.errores || 0);
+            const enCola = Number(t.en_cola || 0);
+            // Considerar 'success' como total - errores - en_cola (incluye enviados y recibidos)
+            const success = Math.max(total - errores - enCola, 0);
+            return {
+                date: t.periodo,
+                total,
+                success,
+                error: errores
+            };
+        }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const bySession = (data.sessions_stats || []).map(s => ({
+            session: s.session,
+            total: Number(s.total || 0),
+            success: Number(s.enviados || 0),
+            error: Number(s.errores || 0)
+        })).sort((a, b) => b.total - a.total);
+
+        const sessionsObj = sessionManager.getAllSessions();
+        const rotation = sessionManager.getRotationInfo();
+        const sessions = Object.entries(sessionsObj).map(([name, s]) => ({
+            name,
+            state: s.state,
+            isActive: rotation.currentSession === name
+        }));
+
+        res.json({ success: true, byDate, bySession, sessions });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ======================== RUTAS - ANALYTICS ========================
 
 /**
@@ -437,25 +621,34 @@ app.get('/api/analytics/stats', async (req, res) => {
  */
 app.get('/api/analytics/messages', async (req, res) => {
     try {
-        const { limit = 100, session, status, startDate, endDate } = req.query;
-        
-        const messages = await database.getMessages({
-            limit: parseInt(limit),
-            session,
-            status,
-            startDate,
-            endDate
-        });
-        
-        res.json({
-            success: true,
-            messages
-        });
+        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
+        const options = { period, range, top: parseInt(top) };
+        if (period === 'custom' && start_date && end_date) {
+            options.startDate = start_date;
+            options.endDate = end_date;
+        }
+        const data = await database.getAnalytics(options);
+        res.json({ success: true, ...data });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /analytics - Endpoint compatible con frontend (analytics.js)
+ */
+app.get('/analytics', async (req, res) => {
+    try {
+        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
+        const options = { period, range, top: parseInt(top) };
+        if (period === 'custom' && start_date && end_date) {
+            options.startDate = start_date;
+            options.endDate = end_date;
+        }
+        const data = await database.getAnalytics(options);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -534,6 +727,14 @@ app.get('/health', (req, res) => {
         : activeSessions.length >= 2 ? 'HEALTHY' 
         : 'WARNING';
     
+    // Campos adicionales para compatibilidad con frontend analytics.js
+    const availableSessions = sessionList.filter(s => s.state === config.SESSION_STATES.READY).map(s => s.name);
+    const rotationInfoCompat = {
+        current_session: rotationInfo.currentSession,
+        messages_sent_current: 0,
+        max_per_session: 100
+    };
+
     res.json({
         status: 'ok',
         system: systemStatus,
@@ -544,6 +745,8 @@ app.get('/health', (req, res) => {
             list: sessionList
         },
         rotation: rotationInfo,
+        rotation_info: rotationInfoCompat,
+        available_sessions: availableSessions,
         uptime: process.uptime()
     });
 });
@@ -648,3 +851,20 @@ process.on('SIGTERM', async () => {
 initialize();
 
 module.exports = app;
+
+// ======================== ANALYTICS (compatibilidad) ========================
+// Endpoint único "/analytics" esperado por public/js/analytics.js
+app.get('/analytics', async (req, res) => {
+    try {
+        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
+        const options = { period, range, top: parseInt(top) };
+        if (period === 'custom' && start_date && end_date) {
+            options.startDate = start_date;
+            options.endDate = end_date;
+        }
+        const data = await database.getAnalytics(options);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
