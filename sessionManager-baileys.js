@@ -394,6 +394,7 @@ async function createSession(sessionName) {
                 if (shouldReconnect) {
                     const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
                     const isQRConnectionClose = statusCode === DisconnectReason.connectionClosed || statusCode === 428;
+                    const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
                     
                     // Caso 1: Cierre normal durante lectura de QR
                     if (session.qr && isQRConnectionClose && !isRestartRequired) {
@@ -423,10 +424,24 @@ async function createSession(sessionName) {
                         return;
                     }
                     
+                    // Caso 3: 401/loggedOut inmediatamente después de restartRequired, intentamos rescatar credenciales (hasta 3 reintentos rápidos)
+                    if (isLoggedOut && session.retryCount < 3) {
+                        session.state = config.SESSION_STATES.RECONNECTING;
+                        session.retryCount++;
+                        console.log(`⚠️ ${sessionName} recibió 401 tras restartRequired. Intento de rescate ${session.retryCount}/3 en 3s...`);
+                        if (session.socket) {
+                            try { await session.socket.ws?.close(); } catch (e) {}
+                        }
+                        await sleep(3000);
+                        delete sessions[sessionName];
+                        await createSession(sessionName);
+                        return;
+                    }
+
                     // Otros errores: reconectar manual con backoff
                     session.state = config.SESSION_STATES.RECONNECTING;
                     session.retryCount++;
-                    
+
                     if (session.retryCount <= 5) {
                         console.log(`🔄 Reintentando conexión ${sessionName} (${session.retryCount}/5) en 5s...`);
                         if (session.socket) {
