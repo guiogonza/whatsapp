@@ -618,15 +618,15 @@
             <!-- SETTINGS SECTION -->
             <section id="section-settings" class="section-content space-y-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold mb-4">Configuración de Envío por Lotes (Batch)</h3>
+                    <h3 class="text-lg font-semibold mb-4">⏱️ Configuración de Consolidación de Mensajes</h3>
                     <p class="text-gray-600 mb-6">
-                        Para evitar baneos, los mensajes se agrupan y se envían cada cierto tiempo.
-                        Aquí puedes configurar el intervalo de envío.
+                        Los mensajes del mismo número se agrupan y se envían juntos después del tiempo configurado.
+                        Esto evita baneos y reduce la cantidad de mensajes enviados.
                     </p>
                     
                     <div class="max-w-md">
                         <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Intervalo de envío (minutos)
+                            Tiempo de espera para consolidar (minutos)
                         </label>
                         <div class="flex items-center gap-4">
                             <input type="range" id="batchIntervalRange" min="1" max="10" step="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">

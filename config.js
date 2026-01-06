@@ -43,6 +43,11 @@ module.exports = {
     MAX_BULK_CONTACTS: 50,
     MAX_FILE_SIZE: 16 * 1024 * 1024, // 16MB
     
+    // Consolidación de mensajes
+    // El tiempo de consolidación usa el mismo intervalo de "Envío por Lotes" (1-10 min)
+    // Icono que aparece al inicio de cada mensaje consolidado
+    MESSAGE_CONSOLIDATION_ICON: '📍',
+    
     // Auto respuesta
     AUTO_RESPONSE: process.env.AUTO_RESPONSE || '',
     

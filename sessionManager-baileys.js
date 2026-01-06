@@ -2,7 +2,7 @@
 
  * Gestor de Sesiones de WhatsApp usando Baileys
 
- * Maneja la creaciÃÂÃÂ³n, rotaciÃÂÃÂ³n y monitoreo de sesiones
+ * Maneja la creaciï¿½?ï¿½?ï¿½?Â³n, rotaciï¿½?ï¿½?ï¿½?Â³n y monitoreo de sesiones
 
  */
 
@@ -58,13 +58,13 @@ const getColombiaDate = () => {
 
 
 
-// AlmacÃÂÃÂ©n de sesiones
+// Almacï¿½?ï¿½?ï¿½?Â©n de sesiones
 
 const sessions = {};
 
 
 
-// ÃÂÃÂndice de sesiÃÂÃÂ³n activa para rotaciÃÂÃÂ³n
+// ï¿½?ï¿½?ï¿½?Ândice de sesiï¿½?ï¿½?ï¿½?Â³n activa para rotaciï¿½?ï¿½?ï¿½?Â³n
 
 let currentSessionIndex = 0;
 
@@ -82,7 +82,7 @@ const MAX_RECENT_MESSAGES = 100;
 
 
 
-// Cola persistente manejada vÃÂÃÂ­a BD
+// Cola persistente manejada vï¿½?ï¿½?ï¿½?Â­a BD
 
 let batchIntervalMinutes = 3;
 let batchTimer = null;
@@ -98,6 +98,9 @@ const lastDisconnectNotify = new Map();
 
 function logMessageSent(sessionName, destination, message, status, errorMessage = null) {
 
+    // Calcular cantidad de caracteres
+    const charCount = (message || '').length;
+
     // Guardar en buffer de memoria para el monitor
 
     recentMessages.unshift({
@@ -109,6 +112,8 @@ function logMessageSent(sessionName, destination, message, status, errorMessage 
         destination,
 
         message: message.substring(0, 100),
+
+        charCount: charCount,
 
         status
 
@@ -142,6 +147,9 @@ function logMessageSent(sessionName, destination, message, status, errorMessage 
 
 function logMessageReceived(sessionName, origin, message) {
 
+    // Calcular cantidad de caracteres
+    const charCount = (message || '').length;
+
     // Guardar en buffer de memoria para el monitor
 
     recentMessages.unshift({
@@ -153,6 +161,8 @@ function logMessageReceived(sessionName, origin, message) {
         origin,
 
         message: (message || '').substring(0, 100),
+
+        charCount: charCount,
 
         status: 'received'
 
@@ -192,6 +202,163 @@ function getRecentMessages(limit = 50) {
 
 
 
+
+// ======================== CONSOLIDACION DE MENSAJES CON BD (PERSISTENTE) ========================
+
+/**
+ * Obtiene la fecha/hora actual en formato Colombia
+ */
+function getColombiaDateTime() {
+    return new Date().toLocaleString('es-CO', { 
+        timeZone: 'America/Bogota',
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+// Timer para el procesador de consolidación
+let consolidationTimer = null;
+
+/**
+ * Agrega un mensaje a la cola de consolidacion (BD persistente)
+ * Los mensajes se guardan con arrived_at y se procesan cada X minutos
+ */
+function addToConsolidation(phoneNumber, message) {
+    const formattedNumber = formatPhoneNumber(phoneNumber);
+    if (!formattedNumber) {
+        return { success: false, error: 'Numero invalido' };
+    }
+
+    // Guardar en BD con hora de llegada
+    const result = database.enqueueMessage(formattedNumber, message);
+    
+    if (result.success) {
+        console.log(`[CONSOLIDACION] Mensaje guardado en BD para ${formattedNumber} (${result.charCount} chars, total pendientes: ${result.total})`);
+        
+        // Registrar en monitor como 'queued'
+        logMessageSent('consolidation', formattedNumber, message, 'queued');
+        
+        return { 
+            success: true, 
+            consolidated: true, 
+            arrivedAt: result.arrivedAt,
+            charCount: result.charCount,
+            pendingCount: result.total,
+            pendingNumbers: result.pendingNumbers,
+            sendInMinutes: batchIntervalMinutes 
+        };
+    }
+    
+    return { success: false, error: result.error };
+}
+
+/**
+ * Procesa todos los mensajes pendientes en BD
+ * Agrupa por numero y envia con balanceo round-robin
+ */
+async function processConsolidationQueue() {
+    const numbersData = database.getQueuedNumbers();
+    
+    if (!numbersData || numbersData.length === 0) {
+        return;
+    }
+
+    console.log(`\n[CONSOLIDACION] Procesando ${numbersData.length} numeros pendientes...`);
+    
+    const icon = config.MESSAGE_CONSOLIDATION_ICON || '📍';
+
+    for (const numData of numbersData) {
+        const phoneNumber = numData.phone_number;
+        const messages = database.getMessagesForNumber(phoneNumber);
+        
+        if (!messages || messages.length === 0) continue;
+
+        // Formatear cada mensaje con icono y hora de llegada
+        const formattedMessages = messages.map(msg => {
+            return `${icon} [${msg.arrived_at}]\n${msg.message}`;
+        });
+        
+        // Unir todos los mensajes
+        const combinedMessage = formattedMessages.join('\n\n');
+        const msgCount = messages.length;
+        const messageIds = messages.map(m => m.id);
+
+        console.log(`[CONSOLIDACION] Enviando ${msgCount} mensajes a ${phoneNumber}`);
+
+        try {
+            // Enviar con balanceo round-robin (cada numero usa sesion diferente)
+            const result = await sendMessageWithRotation(phoneNumber, combinedMessage);
+            
+            if (result.success) {
+                // Marcar como enviados en BD
+                database.markMessagesSent(messageIds);
+                console.log(`[CONSOLIDACION] OK - ${msgCount} msgs enviados a ${phoneNumber} via ${result.sessionUsed}`);
+                
+                // Registrar en monitor como enviado
+                logMessageSent(result.sessionUsed, phoneNumber, `[${msgCount} mensajes consolidados]`, 'sent');
+            } else {
+                console.error(`[CONSOLIDACION] ERROR enviando a ${phoneNumber}: ${result.error?.message}`);
+            }
+        } catch (error) {
+            console.error(`[CONSOLIDACION] ERROR para ${phoneNumber}: ${error.message}`);
+        }
+
+        // Pequeña pausa entre numeros para no saturar
+        await sleep(500);
+    }
+    
+    console.log(`[CONSOLIDACION] Procesamiento completado\n`);
+}
+
+/**
+ * Inicia el procesador de consolidacion
+ */
+function startConsolidationProcessor() {
+    if (consolidationTimer) {
+        clearInterval(consolidationTimer);
+    }
+
+    const intervalMs = batchIntervalMinutes * 60 * 1000;
+    console.log(`[CONSOLIDACION] Procesador iniciado (cada ${batchIntervalMinutes} minutos)`);
+    
+    // Procesar inmediatamente si hay pendientes al iniciar
+    setTimeout(() => processConsolidationQueue(), 5000);
+    
+    // Luego cada X minutos
+    consolidationTimer = setInterval(() => {
+        processConsolidationQueue();
+    }, intervalMs);
+}
+
+/**
+ * Obtiene el estado actual de la consolidacion desde BD
+ */
+function getConsolidationStatus() {
+    const numbersData = database.getQueuedNumbers();
+    const stats = database.getQueueStats();
+    const delayMinutes = batchIntervalMinutes || 3;
+    
+    const status = numbersData.map(num => ({
+        phoneNumber: num.phone_number,
+        messageCount: num.msg_count,
+        firstMessage: num.first_at,
+        maxWaitMinutes: delayMinutes
+    }));
+    
+    return {
+        pending: status,
+        totalMessages: stats.total,
+        totalNumbers: stats.pendingNumbers,
+        totalChars: stats.totalChars,
+        intervalMinutes: delayMinutes
+    };
+}
+
 // ======================== PROCESAMIENTO POR LOTES (BATCH) ========================
 
 
@@ -208,7 +375,7 @@ function queueMessage(phoneNumber, message) {
 
     if (!formattedNumber) {
 
-        return { success: false, error: 'NÃÂÃÂºmero invÃÂÃÂ¡lido' };
+        return { success: false, error: 'Nï¿½?ï¿½?ï¿½?Âºmero invï¿½?ï¿½?ï¿½?Â¡lido' };
 
     }
 
@@ -220,7 +387,7 @@ function queueMessage(phoneNumber, message) {
 
     const result = database.enqueueMessage(formattedNumber, message);
 
-    console.log(`ÃÂ°ÃÂÃÂÃÂ¥ Mensaje encolado (BD) para ${formattedNumber}. Total pendientes: ${result.total}`);
+    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¥ Mensaje encolado (BD) para ${formattedNumber}. Total pendientes: ${result.total}`);
 
     return { success: true, queued: true, total: result.total, pendingNumbers: result.pendingNumbers, nextBatchIn: batchIntervalMinutes };
 
@@ -230,7 +397,7 @@ function queueMessage(phoneNumber, message) {
 
 /**
 
- * Procesa la cola de mensajes y los envÃÂÃÂ­a agrupados
+ * Procesa la cola de mensajes y los envï¿½?ï¿½?ï¿½?Â­a agrupados
 
  */
 
@@ -242,7 +409,7 @@ async function processMessageQueue() {
 
 
 
-    console.log(`\nÃÂ°ÃÂÃÂÃÂ¦ Procesando cola persistente (${numbers.length} nÃÂÃÂºmeros pendientes)...`);
+    console.log(`\nï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¦ Procesando cola persistente (${numbers.length} nï¿½?ï¿½?ï¿½?Âºmeros pendientes)...`);
 
 
 
@@ -256,7 +423,7 @@ async function processMessageQueue() {
 
         const combinedMessage = rows.map(r => r.message).join('\n\n');
 
-        console.log(`ÃÂ°ÃÂÃÂÃÂ¤ Enviando lote de ${rows.length} mensajes a ${number}`);
+        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¤ Enviando lote de ${rows.length} mensajes a ${number}`);
 
 
 
@@ -270,13 +437,13 @@ async function processMessageQueue() {
 
             } else {
 
-                console.error(`ÃÂ¢ÃÂÃÂ Error enviando lote a ${number}, se mantiene en cola: ${result.error?.message}`);
+                console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error enviando lote a ${number}, se mantiene en cola: ${result.error?.message}`);
 
             }
 
         } catch (error) {
 
-            console.error(`ÃÂ¢ÃÂÃÂ Error procesando lote para ${number}: ${error.message}`);
+            console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error procesando lote para ${number}: ${error.message}`);
 
         }
 
@@ -314,7 +481,7 @@ function setBatchInterval(minutes) {
 
     
 
-    console.log(`ÃÂ¢ÃÂÃÂ±ÃÂ¯ÃÂ¸ÃÂ Intervalo de envÃÂÃÂ­o por lotes actualizado a ${batchIntervalMinutes} minutos`);
+    console.log(`ï¿½?Â¢ï¿½?Âï¿½?Â±ï¿½?Â¯ï¿½?Â¸ï¿½?Â Intervalo de envï¿½?ï¿½?ï¿½?Â­o por lotes actualizado a ${batchIntervalMinutes} minutos`);
 
     return { success: true, interval: batchIntervalMinutes };
 
@@ -338,7 +505,7 @@ function startBatchProcessor() {
 
 
 
-    console.log(`ÃÂ°ÃÂÃÂÃÂ Iniciando procesador de lotes (cada ${batchIntervalMinutes} minutos)`);
+    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Iniciando procesador de lotes (cada ${batchIntervalMinutes} minutos)`);
 
     
 
@@ -354,7 +521,7 @@ function startBatchProcessor() {
 
 /**
 
- * Obtiene la configuraciÃÂÃÂ³n actual de lotes
+ * Obtiene la configuraciï¿½?ï¿½?ï¿½?Â³n actual de lotes
 
  */
 
@@ -376,13 +543,13 @@ function getBatchSettings() {
 
 
 
-// ======================== FUNCIONES DE ROTACIÃÂÃÂN ========================
+// ======================== FUNCIONES DE ROTACIï¿½?ï¿½?ï¿½?ï¿½?N ========================
 
 
 
 /**
 
- * Obtiene todas las sesiones que estÃÂÃÂ¡n activas (READY)
+ * Obtiene todas las sesiones que estï¿½?ï¿½?ï¿½?Â¡n activas (READY)
 
  * @returns {Array} - Array de sesiones activas
 
@@ -406,9 +573,9 @@ function getActiveSessions() {
 
 /**
 
- * Obtiene la sesiÃÂÃÂ³n activa actual para envÃÂÃÂ­o de mensajes
+ * Obtiene la sesiï¿½?ï¿½?ï¿½?Â³n activa actual para envï¿½?ï¿½?ï¿½?Â­o de mensajes
 
- * @returns {Object|null} - SesiÃÂÃÂ³n activa o null
+ * @returns {Object|null} - Sesiï¿½?ï¿½?ï¿½?Â³n activa o null
 
  */
 
@@ -420,7 +587,7 @@ function getCurrentSession() {
 
     
 
-    // Asegurar que el ÃÂÃÂ­ndice estÃÂÃÂ© dentro del rango
+    // Asegurar que el ï¿½?ï¿½?ï¿½?Â­ndice estï¿½?ï¿½?ï¿½?Â© dentro del rango
 
     if (currentSessionIndex >= activeSessions.length) {
 
@@ -438,13 +605,13 @@ function getCurrentSession() {
 
 /**
 
- * Rota a la siguiente sesiÃÂÃÂ³n activa
+ * Rota a la siguiente sesiï¿½?ï¿½?ï¿½?Â³n activa
 
  */
 
 function rotateSession() {
 
-    // FunciÃÂÃÂ³n mantenida por compatibilidad, pero el balanceo es automÃÂÃÂ¡tico
+    // Funciï¿½?ï¿½?ï¿½?Â³n mantenida por compatibilidad, pero el balanceo es automï¿½?ï¿½?ï¿½?Â¡tico
 
     const activeSessions = getActiveSessions();
 
@@ -462,15 +629,15 @@ function rotateSession() {
 
 /**
 
- * Inicia el intervalo de rotaciÃÂÃÂ³n automÃÂÃÂ¡tica de sesiones
+ * Inicia el intervalo de rotaciï¿½?ï¿½?ï¿½?Â³n automï¿½?ï¿½?ï¿½?Â¡tica de sesiones
 
  */
 
 function startSessionRotation() {
 
-    console.log('ÃÂ°ÃÂÃÂÃÂ Balanceo round-robin activo: cada mensaje usa una sesiÃÂÃÂ³n diferente');
+    console.log('ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Balanceo round-robin activo: cada mensaje usa una sesiï¿½?ï¿½?ï¿½?Â³n diferente');
 
-    // Ya no usamos rotaciÃÂÃÂ³n por tiempo, solo round-robin por mensaje
+    // Ya no usamos rotaciï¿½?ï¿½?ï¿½?Â³n por tiempo, solo round-robin por mensaje
 
 }
 
@@ -478,7 +645,7 @@ function startSessionRotation() {
 
 /**
 
- * Detiene el intervalo de rotaciÃÂÃÂ³n
+ * Detiene el intervalo de rotaciï¿½?ï¿½?ï¿½?Â³n
 
  */
 
@@ -498,7 +665,7 @@ function stopSessionRotation() {
 
 /**
 
- * Obtiene informaciÃÂÃÂ³n sobre la rotaciÃÂÃÂ³n actual
+ * Obtiene informaciï¿½?ï¿½?ï¿½?Â³n sobre la rotaciï¿½?ï¿½?ï¿½?Â³n actual
 
  */
 
@@ -536,7 +703,7 @@ function getRotationInfo() {
 
 
 
-// ======================== CREACIÃÂÃÂN DE SESIONES ========================
+// ======================== CREACIï¿½?ï¿½?ï¿½?ï¿½?N DE SESIONES ========================
 
 
 
@@ -558,7 +725,7 @@ async function loadSessionsFromDisk() {
 
         const files = await fs.readdir(config.SESSION_DATA_PATH);
 
-        console.log(`ÃÂ°ÃÂÃÂÃÂ Buscando sesiones en ${config.SESSION_DATA_PATH}...`);
+        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Buscando sesiones en ${config.SESSION_DATA_PATH}...`);
 
         
 
@@ -584,7 +751,7 @@ async function loadSessionsFromDisk() {
 
                 if (stat.isDirectory()) {
 
-                    // Verificar si tiene creds.json (indicador de sesiÃÂÃÂ³n vÃÂÃÂ¡lida)
+                    // Verificar si tiene creds.json (indicador de sesiï¿½?ï¿½?ï¿½?Â³n vï¿½?ï¿½?ï¿½?Â¡lida)
 
                     const credsPath = path.join(fullPath, 'creds.json');
 
@@ -592,7 +759,7 @@ async function loadSessionsFromDisk() {
 
                         await fs.access(credsPath);
 
-                        console.log(`ÃÂ°ÃÂÃÂÃÂ Cargando sesiÃÂÃÂ³n encontrada: ${file}`);
+                        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Cargando sesiï¿½?ï¿½?ï¿½?Â³n encontrada: ${file}`);
 
                         await createSession(file);
 
@@ -600,17 +767,17 @@ async function loadSessionsFromDisk() {
 
                     } catch (e) {
 
-                        console.log(`ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ Carpeta ${file} ignorada (no tiene credenciales vÃÂÃÂ¡lidas). Eliminando...`);
+                        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Carpeta ${file} ignorada (no tiene credenciales vï¿½?ï¿½?ï¿½?Â¡lidas). Eliminando...`);
 
                         try {
 
                             await fs.rm(fullPath, { recursive: true, force: true });
 
-                            console.log(`ÃÂ°ÃÂÃÂÃÂÃÂ¯ÃÂ¸ÃÂ Carpeta invÃÂÃÂ¡lida ${file} eliminada`);
+                            console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¯ï¿½?Â¸ï¿½?Â Carpeta invï¿½?ï¿½?ï¿½?Â¡lida ${file} eliminada`);
 
                         } catch (delErr) {
 
-                            console.error(`ÃÂ¢ÃÂÃÂ Error eliminando carpeta invÃÂÃÂ¡lida ${file}:`, delErr.message);
+                            console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error eliminando carpeta invï¿½?ï¿½?ï¿½?Â¡lida ${file}:`, delErr.message);
 
                         }
 
@@ -628,13 +795,13 @@ async function loadSessionsFromDisk() {
 
         
 
-        console.log(`ÃÂ¢ÃÂÃÂ Se cargaron ${loadedCount} sesiones del disco`);
+        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? Se cargaron ${loadedCount} sesiones del disco`);
 
         return loadedCount;
 
     } catch (error) {
 
-        console.error('ÃÂ¢ÃÂÃÂ Error cargando sesiones del disco:', error.message);
+        console.error('ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error cargando sesiones del disco:', error.message);
 
         return 0;
 
@@ -646,19 +813,19 @@ async function loadSessionsFromDisk() {
 
 /**
 
- * Crea una nueva sesiÃÂÃÂ³n de WhatsApp con Baileys
+ * Crea una nueva sesiï¿½?ï¿½?ï¿½?Â³n de WhatsApp con Baileys
 
  */
 
 async function createSession(sessionName) {
 
-    console.log(`\nÃÂ°ÃÂÃÂÃÂ Iniciando sesiÃÂÃÂ³n ${sessionName} con Baileys...`);
+    console.log(`\nï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Iniciando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} con Baileys...`);
 
     
 
     if (sessions[sessionName]) {
 
-        console.log(`ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ La sesiÃÂÃÂ³n ${sessionName} ya existe`);
+        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â La sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} ya existe`);
 
         return sessions[sessionName];
 
@@ -668,7 +835,7 @@ async function createSession(sessionName) {
 
     try {
 
-        // Crear directorio de autenticaciÃÂÃÂ³n
+        // Crear directorio de autenticaciï¿½?ï¿½?ï¿½?Â³n
 
         const authPath = path.join(config.SESSION_DATA_PATH, sessionName);
 
@@ -676,17 +843,17 @@ async function createSession(sessionName) {
 
         
 
-        // Crear estado de autenticaciÃÂÃÂ³n
+        // Crear estado de autenticaciï¿½?ï¿½?ï¿½?Â³n
 
         const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
         
 
-        // Obtener la versiÃÂÃÂ³n mÃÂÃÂ¡s reciente de Baileys
+        // Obtener la versiï¿½?ï¿½?ï¿½?Â³n mï¿½?ï¿½?ï¿½?Â¡s reciente de Baileys
 
         const { version, isLatest } = await fetchLatestBaileysVersion();
 
-        console.log(`ÃÂ°ÃÂÃÂÃÂ± Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
+        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â± Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
 
         
 
@@ -728,7 +895,7 @@ async function createSession(sessionName) {
 
         
 
-        // Crear sesiÃÂÃÂ³n
+        // Crear sesiï¿½?ï¿½?ï¿½?Â³n
 
         const session = {
 
@@ -766,7 +933,7 @@ async function createSession(sessionName) {
 
         
 
-        // Manejar eventos de conexiÃÂÃÂ³n
+        // Manejar eventos de conexiï¿½?ï¿½?ï¿½?Â³n
 
         socket.ev.on('connection.update', async (update) => {
 
@@ -774,7 +941,7 @@ async function createSession(sessionName) {
 
             
 
-            console.log(`ÃÂ°ÃÂÃÂÃÂ ${sessionName} connection.update:`, JSON.stringify({ connection, qr: !!qr, isNewLogin, statusCode: lastDisconnect?.error?.output?.statusCode }));
+            console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} connection.update:`, JSON.stringify({ connection, qr: !!qr, isNewLogin, statusCode: lastDisconnect?.error?.output?.statusCode }));
 
             
 
@@ -786,7 +953,7 @@ async function createSession(sessionName) {
 
                 session.state = config.SESSION_STATES.WAITING_FOR_QR;
 
-                console.log(`ÃÂ°ÃÂÃÂÃÂ± QR generado para ${sessionName} (${session.qrCount})`);
+                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â± QR generado para ${sessionName} (${session.qrCount})`);
 
             }
 
@@ -802,11 +969,11 @@ async function createSession(sessionName) {
 
 
 
-                // Si es loggedOut/401 justo despuÃÂÃÂ©s de un restart, forzamos reintento (hasta 3 veces)
+                // Si es loggedOut/401 justo despuï¿½?ï¿½?ï¿½?Â©s de un restart, forzamos reintento (hasta 3 veces)
 
                 if (isLoggedOut && session.retryCount < 3) {
 
-                    console.log(`ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ ${sessionName} recibiÃÂÃÂ³ estado ${statusCode} (loggedOut). Intentando rescate rÃÂÃÂ¡pido (${session.retryCount + 1}/3)...`);
+                    console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ estado ${statusCode} (loggedOut). Intentando rescate rï¿½?ï¿½?ï¿½?Â¡pido (${session.retryCount + 1}/3)...`);
 
                     shouldReconnect = true;
 
@@ -814,7 +981,7 @@ async function createSession(sessionName) {
 
                 
 
-                console.log(`ÃÂ¢ÃÂÃÂ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
+                console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
 
                 notifySessionDisconnect(sessionName, statusCode);
 
@@ -832,7 +999,7 @@ async function createSession(sessionName) {
 
                     if (session.qr && isQRConnectionClose && !isRestartRequired) {
 
-                        console.log(`ÃÂ¢ÃÂÃÂ³ ${sessionName} cierre temporal durante QR, esperando reconexiÃÂÃÂ³n automÃÂÃÂ¡tica...`);
+                        console.log(`ï¿½?Â¢ï¿½?Âï¿½?Â³ ${sessionName} cierre temporal durante QR, esperando reconexiï¿½?ï¿½?ï¿½?Â³n automï¿½?ï¿½?ï¿½?Â¡tica...`);
 
                         session.state = config.SESSION_STATES.WAITING_FOR_QR;
 
@@ -842,7 +1009,7 @@ async function createSession(sessionName) {
 
                     
 
-                    // Caso 2: restartRequired despuÃÂÃÂ©s de hacer pairing: recrear socket conservando credenciales
+                    // Caso 2: restartRequired despuï¿½?ï¿½?ï¿½?Â©s de hacer pairing: recrear socket conservando credenciales
 
                     if (isRestartRequired) {
 
@@ -852,7 +1019,7 @@ async function createSession(sessionName) {
 
                         if (session.retryCount <= 5) {
 
-                            console.log(`ÃÂ°ÃÂÃÂÃÂ ${sessionName} necesita restart (515). Reintentando en 2s (${session.retryCount}/5)...`);
+                            console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} necesita restart (515). Reintentando en 2s (${session.retryCount}/5)...`);
 
                             // Cerramos socket previo pero NO borramos carpeta de auth
 
@@ -874,7 +1041,7 @@ async function createSession(sessionName) {
 
                             session.state = config.SESSION_STATES.ERROR;
 
-                            console.log(`ÃÂ¢ÃÂÃÂ ${sessionName} superÃÂÃÂ³ el lÃÂÃÂ­mite de reintentos (5) tras restartRequired`);
+                            console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${sessionName} superï¿½?ï¿½?ï¿½?Â³ el lï¿½?ï¿½?ï¿½?Â­mite de reintentos (5) tras restartRequired`);
 
                         }
 
@@ -884,7 +1051,7 @@ async function createSession(sessionName) {
 
                     
 
-                    // Caso 3: 401/loggedOut inmediatamente despuÃÂÃÂ©s de restartRequired, intentamos rescatar credenciales (hasta 3 reintentos rÃÂÃÂ¡pidos)
+                    // Caso 3: 401/loggedOut inmediatamente despuï¿½?ï¿½?ï¿½?Â©s de restartRequired, intentamos rescatar credenciales (hasta 3 reintentos rï¿½?ï¿½?ï¿½?Â¡pidos)
 
                     // Si la sesion esta siendo eliminada intencionalmente, NO reconectar
                     if (session.isBeingDeleted) {
@@ -900,7 +1067,7 @@ async function createSession(sessionName) {
 
                         session.retryCount++;
 
-                        console.log(`ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ ${sessionName} recibiÃÂÃÂ³ 401 tras restartRequired. Intento de rescate ${session.retryCount}/3 en 3s...`);
+                        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ 401 tras restartRequired. Intento de rescate ${session.retryCount}/3 en 3s...`);
 
                         if (session.socket) {
 
@@ -920,13 +1087,13 @@ async function createSession(sessionName) {
 
 
 
-                    // Caso 3b: Si ya intentamos rescatar 3 veces y continÃÂÃÂºa 401, limpiamos credenciales y pedimos nuevo QR
+                    // Caso 3b: Si ya intentamos rescatar 3 veces y continï¿½?ï¿½?ï¿½?Âºa 401, limpiamos credenciales y pedimos nuevo QR
 
                     if (isLoggedOut && session.retryCount >= 3) {
 
                         session.state = config.SESSION_STATES.RECONNECTING;
 
-                        console.log(`ÃÂ°ÃÂÃÂ§ÃÂ¹ ${sessionName} continÃÂÃÂºa con 401 tras ${session.retryCount} intentos. Limpiando datos y solicitando nuevo QR...`);
+                        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?Â§ï¿½?Â¹ ${sessionName} continï¿½?ï¿½?ï¿½?Âºa con 401 tras ${session.retryCount} intentos. Limpiando datos y solicitando nuevo QR...`);
 
                         try {
 
@@ -938,17 +1105,17 @@ async function createSession(sessionName) {
 
                             }
 
-                            // Eliminar datos de autenticaciÃÂÃÂ³n
+                            // Eliminar datos de autenticaciï¿½?ï¿½?ï¿½?Â³n
 
                             await deleteSessionData(sessionName);
 
                         } catch (cleanErr) {
 
-                            console.error(`ÃÂ¢ÃÂÃÂ Error limpiando datos de ${sessionName}: ${cleanErr.message}`);
+                            console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error limpiando datos de ${sessionName}: ${cleanErr.message}`);
 
                         }
 
-                        // Reiniciar sesiÃÂÃÂ³n desde cero
+                        // Reiniciar sesiï¿½?ï¿½?ï¿½?Â³n desde cero
 
                         delete sessions[sessionName];
 
@@ -970,7 +1137,7 @@ async function createSession(sessionName) {
 
                     if (session.retryCount <= 5) {
 
-                        console.log(`ÃÂ°ÃÂÃÂÃÂ Reintentando conexiÃÂÃÂ³n ${sessionName} (${session.retryCount}/5) en 5s...`);
+                        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Reintentando conexiï¿½?ï¿½?ï¿½?Â³n ${sessionName} (${session.retryCount}/5) en 5s...`);
 
                         if (session.socket) {
 
@@ -988,7 +1155,7 @@ async function createSession(sessionName) {
 
                         session.state = config.SESSION_STATES.ERROR;
 
-                        console.log(`ÃÂ¢ÃÂÃÂ ${sessionName} superÃÂÃÂ³ el lÃÂÃÂ­mite de reintentos (5)`);
+                        console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${sessionName} superï¿½?ï¿½?ï¿½?Â³ el lï¿½?ï¿½?ï¿½?Â­mite de reintentos (5)`);
 
                     }
 
@@ -998,7 +1165,7 @@ async function createSession(sessionName) {
 
                     delete sessions[sessionName];
 
-                    console.log(`ÃÂ°ÃÂÃÂÃÂ ${sessionName} cerrÃÂÃÂ³ sesiÃÂÃÂ³n. Manteniendo datos de autenticaciÃÂÃÂ³n para diagnÃÂÃÂ³stico.`);
+                    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} cerrï¿½?ï¿½?ï¿½?Â³ sesiï¿½?ï¿½?ï¿½?Â³n. Manteniendo datos de autenticaciï¿½?ï¿½?ï¿½?Â³n para diagnï¿½?ï¿½?ï¿½?Â³stico.`);
 
                 }
 
@@ -1018,7 +1185,7 @@ async function createSession(sessionName) {
 
                 
 
-                // Obtener informaciÃÂÃÂ³n del usuario
+                // Obtener informaciï¿½?ï¿½?ï¿½?Â³n del usuario
 
                 const user = socket.user;
 
@@ -1038,9 +1205,9 @@ async function createSession(sessionName) {
 
                     
 
-                    console.log(`ÃÂ¢ÃÂÃÂ ${sessionName} conectado: ${session.phoneNumber}`);
+                    console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} conectado: ${session.phoneNumber}`);
 
-                    // Guardar credenciales por seguridad tras conexiÃÂÃÂ³n
+                    // Guardar credenciales por seguridad tras conexiï¿½?ï¿½?ï¿½?Â³n
 
                     try { await saveCreds(); } catch (e) {}
 
@@ -1066,7 +1233,7 @@ async function createSession(sessionName) {
 
             if (!message.key.fromMe && m.type === 'notify') {
 
-                console.log(`ÃÂ°ÃÂÃÂÃÂ¨ ${sessionName} recibiÃÂÃÂ³ mensaje de ${message.key.remoteJid}`);
+                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¨ ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ mensaje de ${message.key.remoteJid}`);
 
                 session.lastActivity = new Date();
 
@@ -1118,7 +1285,7 @@ async function createSession(sessionName) {
 
                 
 
-                // Auto-respuesta si estÃÂÃÂ¡ configurada
+                // Auto-respuesta si estï¿½?ï¿½?ï¿½?Â¡ configurada
 
                 if (config.AUTO_RESPONSE && message.message) {
 
@@ -1150,7 +1317,7 @@ async function createSession(sessionName) {
 
     } catch (error) {
 
-        console.error(`ÃÂ¢ÃÂÃÂ Error creando sesiÃÂÃÂ³n ${sessionName}:`, error.message);
+        console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error creando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName}:`, error.message);
 
         if (sessions[sessionName]) {
 
@@ -1168,7 +1335,7 @@ async function createSession(sessionName) {
 
 /**
 
- * Obtiene el cÃÂÃÂ³digo QR en formato base64
+ * Obtiene el cï¿½?ï¿½?ï¿½?Â³digo QR en formato base64
 
  */
 
@@ -1204,7 +1371,7 @@ async function getQRCode(sessionName) {
 
 /**
 
- * Cierra una sesiÃÂÃÂ³n
+ * Cierra una sesiï¿½?ï¿½?ï¿½?Â³n
 
  */
 
@@ -1214,7 +1381,7 @@ async function closeSession(sessionName, shouldLogout = true) {
 
     if (!session) {
 
-        console.log(`ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ SesiÃÂÃÂ³n ${sessionName} no existe`);
+        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} no existe`);
 
         return false;
 
@@ -1231,13 +1398,13 @@ async function closeSession(sessionName, shouldLogout = true) {
 
             if (shouldLogout) {
 
-                console.log(`ÃÂ°ÃÂÃÂÃÂ Cerrando sesiÃÂÃÂ³n ${sessionName} con logout...`);
+                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Cerrando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} con logout...`);
 
                 await session.socket.logout();
 
             } else {
 
-                console.log(`ÃÂ°ÃÂÃÂÃÂ Cerrando conexiÃÂÃÂ³n ${sessionName} (sin logout)...`);
+                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Cerrando conexiï¿½?ï¿½?ï¿½?Â³n ${sessionName} (sin logout)...`);
 
                 session.socket.end(undefined);
 
@@ -1253,13 +1420,13 @@ async function closeSession(sessionName, shouldLogout = true) {
 
         
 
-        console.log(`ÃÂ°ÃÂÃÂÃÂ SesiÃÂÃÂ³n ${sessionName} cerrada exitosamente`);
+        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} cerrada exitosamente`);
 
         return true;
 
     } catch (error) {
 
-        console.error(`Error cerrando sesiÃÂÃÂ³n ${sessionName}:`, error.message);
+        console.error(`Error cerrando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName}:`, error.message);
 
         return false;
 
@@ -1271,7 +1438,7 @@ async function closeSession(sessionName, shouldLogout = true) {
 
 /**
 
- * Elimina los datos de autenticaciÃÂÃÂ³n de una sesiÃÂÃÂ³n
+ * Elimina los datos de autenticaciï¿½?ï¿½?ï¿½?Â³n de una sesiï¿½?ï¿½?ï¿½?Â³n
 
  */
 
@@ -1285,7 +1452,7 @@ async function deleteSessionData(sessionName) {
 
         await fs.rm(authPath, { recursive: true, force: true });
 
-        console.log(`ÃÂ°ÃÂÃÂÃÂÃÂ¯ÃÂ¸ÃÂ Datos de ${sessionName} eliminados`);
+        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¯ï¿½?Â¸ï¿½?Â Datos de ${sessionName} eliminados`);
 
         return true;
 
@@ -1301,13 +1468,13 @@ async function deleteSessionData(sessionName) {
 
 
 
-// ======================== ENVÃÂÃÂO DE MENSAJES ========================
+// ======================== ENVï¿½?ï¿½?ï¿½?ÂO DE MENSAJES ========================
 
 
 
 /**
 
- * EnvÃÂÃÂ­a mensaje con reintentos y manejo de errores
+ * Envï¿½?ï¿½?ï¿½?Â­a mensaje con reintentos y manejo de errores
 
  */
 
@@ -1323,13 +1490,13 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
             if (session.state !== config.SESSION_STATES.READY || !session.socket) {
 
-                throw new Error('SesiÃÂÃÂ³n no estÃÂÃÂ¡ lista');
+                throw new Error('Sesiï¿½?ï¿½?ï¿½?Â³n no estï¿½?ï¿½?ï¿½?Â¡ lista');
 
             }
 
             
 
-            // Formatear nÃÂÃÂºmero para Baileys (debe incluir @s.whatsapp.net)
+            // Formatear nï¿½?ï¿½?ï¿½?Âºmero para Baileys (debe incluir @s.whatsapp.net)
 
             const formattedJid = phoneNumber.includes('@') 
 
@@ -1349,7 +1516,7 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
             
 
-            console.log(`ÃÂ¢ÃÂÃÂ ${session.name}: Mensaje enviado a ${phoneNumber}`);
+            console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? ${session.name}: Mensaje enviado a ${phoneNumber}`);
 
             return { success: true, messageResult: result };
 
@@ -1369,7 +1536,7 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
             if (attempt < maxRetries) {
 
-                // Delay progresivo mÃÂÃÂ¡s natural
+                // Delay progresivo mï¿½?ï¿½?ï¿½?Â¡s natural
 
                 await sleep(3000 * attempt);
 
@@ -1389,7 +1556,7 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
 /**
 
- * EnvÃÂÃÂ­a mensaje con media (imagen, video, audio, documento)
+ * Envï¿½?ï¿½?ï¿½?Â­a mensaje con media (imagen, video, audio, documento)
 
  */
 
@@ -1399,7 +1566,7 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
         if (session.state !== config.SESSION_STATES.READY || !session.socket) {
 
-            throw new Error('SesiÃÂÃÂ³n no estÃÂÃÂ¡ lista');
+            throw new Error('Sesiï¿½?ï¿½?ï¿½?Â³n no estï¿½?ï¿½?ï¿½?Â¡ lista');
 
         }
 
@@ -1453,7 +1620,7 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
         
 
-        console.log(`ÃÂ¢ÃÂÃÂ ${session.name}: Media enviado a ${phoneNumber}`);
+        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? ${session.name}: Media enviado a ${phoneNumber}`);
 
         return { success: true, messageResult: result };
 
@@ -1461,7 +1628,7 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
     } catch (error) {
 
-        console.error(`ÃÂ¢ÃÂÃÂ ${session.name}: Error enviando media:`, error.message);
+        console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${session.name}: Error enviando media:`, error.message);
 
         return { success: false, error };
 
@@ -1473,9 +1640,9 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
 /**
 
- * Obtiene la siguiente sesiÃÂÃÂ³n usando balanceo round-robin
+ * Obtiene la siguiente sesiï¿½?ï¿½?ï¿½?Â³n usando balanceo round-robin
 
- * @returns {Object|null} - SesiÃÂÃÂ³n para usar o null
+ * @returns {Object|null} - Sesiï¿½?ï¿½?ï¿½?Â³n para usar o null
 
  */
 
@@ -1487,7 +1654,7 @@ function getNextSessionRoundRobin() {
 
     
 
-    // Asegurar que el ÃÂÃÂ­ndice estÃÂÃÂ© dentro del rango
+    // Asegurar que el ï¿½?ï¿½?ï¿½?Â­ndice estï¿½?ï¿½?ï¿½?Â© dentro del rango
 
     if (currentSessionIndex >= activeSessions.length) {
 
@@ -1501,7 +1668,7 @@ function getNextSessionRoundRobin() {
 
     
 
-    // Rotar al siguiente ÃÂÃÂ­ndice para el prÃÂÃÂ³ximo mensaje
+    // Rotar al siguiente ï¿½?ï¿½?ï¿½?Â­ndice para el prï¿½?ï¿½?ï¿½?Â³ximo mensaje
 
     currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
 
@@ -1517,21 +1684,21 @@ function getNextSessionRoundRobin() {
 
 /**
 
- * EnvÃÂÃÂ­a mensaje usando rotaciÃÂÃÂ³n automÃÂÃÂ¡tica de sesiones
+ * Envï¿½?ï¿½?ï¿½?Â­a mensaje usando rotaciï¿½?ï¿½?ï¿½?Â³n automï¿½?ï¿½?ï¿½?Â¡tica de sesiones
 
- * Con balanceo round-robin: cada mensaje usa una sesiÃÂÃÂ³n diferente
+ * Con balanceo round-robin: cada mensaje usa una sesiï¿½?ï¿½?ï¿½?Â³n diferente
 
- * @param {string} phoneNumber - NÃÂÃÂºmero de telÃÂÃÂ©fono
+ * @param {string} phoneNumber - Nï¿½?ï¿½?ï¿½?Âºmero de telï¿½?ï¿½?ï¿½?Â©fono
 
  * @param {string} message - Mensaje a enviar
 
- * @returns {Object} - Resultado del envÃÂÃÂ­o
+ * @returns {Object} - Resultado del envï¿½?ï¿½?ï¿½?Â­o
 
  */
 
 async function sendMessageWithRotation(phoneNumber, message) {
 
-    // Usar balanceo round-robin (cada mensaje rota a la siguiente sesiÃÂÃÂ³n)
+    // Usar balanceo round-robin (cada mensaje rota a la siguiente sesiï¿½?ï¿½?ï¿½?Â³n)
 
     const activeSessions = getActiveSessions();
 
@@ -1551,7 +1718,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
 
 
-    // Seleccionar sesiÃÂÃÂ³n actual y luego avanzar el ÃÂÃÂ­ndice
+    // Seleccionar sesiï¿½?ï¿½?ï¿½?Â³n actual y luego avanzar el ï¿½?ï¿½?ï¿½?Â­ndice
 
     if (currentSessionIndex >= activeSessions.length) currentSessionIndex = 0;
 
@@ -1563,7 +1730,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
 
 
-    console.log(`ÃÂ°ÃÂÃÂÃÂ¤ Enviando via ${session.name} (idx ${currentSessionIndex}/${activeSessions.length})`);
+    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¤ Enviando via ${session.name} (idx ${currentSessionIndex}/${activeSessions.length})`);
 
 
 
@@ -1575,7 +1742,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
             success: false,
 
-            error: new Error('NÃÂÃÂºmero de telÃÂÃÂ©fono invÃÂÃÂ¡lido')
+            error: new Error('Nï¿½?ï¿½?ï¿½?Âºmero de telï¿½?ï¿½?ï¿½?Â©fono invï¿½?ï¿½?ï¿½?Â¡lido')
 
         };
 
@@ -1653,27 +1820,27 @@ function notifySessionDisconnect(sessionName, statusCode) {
     const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
     const codeText = statusCode !== undefined && statusCode !== null ? statusCode : 'N/A';
     
-    let message = `🚨 *ALERTA: SESIÓN DESCONECTADA*\n\n` +
-                  `⏰ ${nowStr}\n\n` +
-                  `❌ Sesión: *${sessionName}*\n` +
-                  `📊 Status Code: ${codeText}\n\n` +
-                  `📈 Total: ${sessionsStatus.length} | ✅ Activas: ${active.length} | ⚠️ Inactivas: ${inactive.length}\n\n`;
+    let message = `?? *ALERTA: SESIï¿½N DESCONECTADA*\n\n` +
+                  `? ${nowStr}\n\n` +
+                  `? Sesiï¿½n: *${sessionName}*\n` +
+                  `?? Status Code: ${codeText}\n\n` +
+                  `?? Total: ${sessionsStatus.length} | ? Activas: ${active.length} | ?? Inactivas: ${inactive.length}\n\n`;
     
     if (active.length > 0) {
         message += "*Sesiones Activas:*\n";
         active.forEach((s, i) => {
             const info = sessionsObj[s.name]?.info || {};
             const label = info.pushname ? ` (${info.pushname})` : '';
-            message += `${i + 1}. ✅ *${s.name}*${label}\n`;
+            message += `${i + 1}. ? *${s.name}*${label}\n`;
         });
     } else {
         message += "*Sesiones Activas:*\n- Sin sesiones activas\n";
     }
     
     if (inactive.length > 0) {
-        message += "\n*Requieren atención:*\n";
+        message += "\n*Requieren atenciï¿½n:*\n";
         inactive.forEach((s, i) => {
-            const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? '📱' : (s.state == config.SESSION_STATES.RECONNECTING ? '🔄' : '⚠️');
+            const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? '??' : (s.state == config.SESSION_STATES.RECONNECTING ? '??' : '??');
             message += `${i + 1}. ${icon} *${s.name}* - ${s.state}\n`;
         });
     }
@@ -1687,7 +1854,7 @@ function notifySessionDisconnect(sessionName, statusCode) {
 
 /**
 
- * EnvÃÂÃÂ­a SMS usando API de Hablame.co
+ * Envï¿½?ï¿½?ï¿½?Â­a SMS usando API de Hablame.co
 
  */
 
@@ -1695,7 +1862,7 @@ async function sendSMSNotification(message) {
 
     if (!config.SMS_API_KEY) {
 
-        console.log('ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ API Key de Hablame.co no configurada');
+        console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â API Key de Hablame.co no configurada');
 
         return false;
 
@@ -1737,7 +1904,7 @@ async function sendSMSNotification(message) {
 
         if (response.status === 200 && response.data.statusCode === 200) {
 
-            console.log('ÃÂ¢ÃÂÃÂ SMS enviado exitosamente');
+            console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? SMS enviado exitosamente');
 
             return true;
 
@@ -1747,7 +1914,7 @@ async function sendSMSNotification(message) {
 
     } catch (error) {
 
-        console.log(`ÃÂ¢ÃÂÃÂ Error enviando SMS: ${error.message}`);
+        console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error enviando SMS: ${error.message}`);
 
         return false;
 
@@ -1759,7 +1926,7 @@ async function sendSMSNotification(message) {
 
 /**
 
- * EnvÃÂÃÂ­a notificaciÃÂÃÂ³n al administrador
+ * Envï¿½?ï¿½?ï¿½?Â­a notificaciï¿½?ï¿½?ï¿½?Â³n al administrador
 
  */
 
@@ -1769,7 +1936,7 @@ async function sendNotificationToAdmin(message) {
 
     if (!formattedNumber) {
 
-        console.log('ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ NÃÂÃÂºmero de notificaciÃÂÃÂ³n no configurado');
+        console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Nï¿½?ï¿½?ï¿½?Âºmero de notificaciï¿½?ï¿½?ï¿½?Â³n no configurado');
 
         return false;
 
@@ -1777,13 +1944,13 @@ async function sendNotificationToAdmin(message) {
 
     
 
-    // Intentar con la primera sesiÃÂÃÂ³n disponible
+    // Intentar con la primera sesiï¿½?ï¿½?ï¿½?Â³n disponible
 
     const session = getCurrentSession();
 
     if (!session) {
 
-        console.log('ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ No hay sesiones disponibles para enviar notificaciÃÂÃÂ³n');
+        console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â No hay sesiones disponibles para enviar notificaciï¿½?ï¿½?ï¿½?Â³n');
 
         return await sendSMSNotification(message);
 
@@ -1805,7 +1972,7 @@ async function sendNotificationToAdmin(message) {
 
     } catch (error) {
 
-        console.log(`ÃÂ¢ÃÂÃÂ ÃÂ¯ÃÂ¸ÃÂ Error enviando notificaciÃÂÃÂ³n: ${error.message}`);
+        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Error enviando notificaciï¿½?ï¿½?ï¿½?Â³n: ${error.message}`);
 
         return await sendSMSNotification(message);
 
@@ -1815,7 +1982,7 @@ async function sendNotificationToAdmin(message) {
 
 
 
-// ======================== INFORMACIÃÂÃÂN Y ESTADO ========================
+// ======================== INFORMACIï¿½?ï¿½?ï¿½?ï¿½?N Y ESTADO ========================
 
 
 
@@ -1835,7 +2002,7 @@ function getAllSessions() {
 
 /**
 
- * Obtiene una sesiÃÂÃÂ³n por nombre
+ * Obtiene una sesiï¿½?ï¿½?ï¿½?Â³n por nombre
 
  */
 
@@ -1879,7 +2046,7 @@ function getSessionsStatus() {
 
 
 
-// ======================== EXPORTACIÃÂÃÂN ========================
+// ======================== EXPORTACIï¿½?ï¿½?ï¿½?ï¿½?N ========================
 
 
 
@@ -1933,7 +2100,13 @@ module.exports = {
 
     getBatchSettings,
 
-    startBatchProcessor
+    startBatchProcessor,
+
+    // Consolidacion de mensajes (persistente en BD)
+    addToConsolidation,
+    processConsolidationQueue,
+    startConsolidationProcessor,
+    getConsolidationStatus
 
 };
 

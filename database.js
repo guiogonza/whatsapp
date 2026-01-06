@@ -57,23 +57,58 @@ async function initDatabase() {
             session TEXT NOT NULL,
             phone_number TEXT NOT NULL,
             message_preview TEXT,
+            char_count INTEGER DEFAULT 0,
             status TEXT NOT NULL,
             error_message TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `);
+    
+    // Agregar columna char_count si no existe (para BD existentes)
+    try {
+        db.run(`ALTER TABLE messages ADD COLUMN char_count INTEGER DEFAULT 0`);
+        console.log('📊 Columna char_count agregada a messages');
+    } catch (e) {
+        // Columna ya existe, ignorar
+    }
+    
+    // Actualizar registros existentes que no tienen char_count calculado
+    db.run(`
+        UPDATE messages 
+        SET char_count = LENGTH(COALESCE(message_preview, '')) 
+        WHERE char_count = 0 OR char_count IS NULL
+    `);
 
-    // Cola persistente de mensajes salientes
+    // Cola persistente de mensajes salientes para consolidación
     db.run(`
         CREATE TABLE IF NOT EXISTS outgoing_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             phone_number TEXT NOT NULL,
             message TEXT NOT NULL,
-            enqueued_at TEXT NOT NULL,
+            char_count INTEGER DEFAULT 0,
+            arrived_at TEXT NOT NULL,
+            sent_at TEXT,
             tries INTEGER DEFAULT 0,
             last_error TEXT
         )
     `);
+    
+    // Agregar columnas nuevas si no existen (para BD existentes)
+    try {
+        db.run(`ALTER TABLE outgoing_queue ADD COLUMN arrived_at TEXT`);
+    } catch (e) { /* ya existe */ }
+    try {
+        db.run(`ALTER TABLE outgoing_queue ADD COLUMN sent_at TEXT`);
+    } catch (e) { /* ya existe */ }
+    try {
+        db.run(`ALTER TABLE outgoing_queue ADD COLUMN char_count INTEGER DEFAULT 0`);
+    } catch (e) { /* ya existe */ }
+    
+    // Migrar datos antiguos: si arrived_at está vacío, usar enqueued_at
+    db.run(`UPDATE outgoing_queue SET arrived_at = enqueued_at WHERE arrived_at IS NULL OR arrived_at = ''`);
+    
+    // Índice para búsqueda de pendientes
+    db.run(`CREATE INDEX IF NOT EXISTS idx_queue_pending ON outgoing_queue(sent_at, phone_number)`);
     
     // Crear índices
     db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
@@ -116,14 +151,19 @@ function logMessage(session, phoneNumber, message, status, errorMessage = null) 
     if (finalStatus === 'success') finalStatus = 'sent';
     if (!allowed.has(finalStatus)) finalStatus = 'queued';
 
+    // Calcular cantidad de caracteres incluyendo espacios
+    const messageText = message || '';
+    const charCount = messageText.length;
+
     db.run(`
-        INSERT INTO messages (timestamp, session, phone_number, message_preview, status, error_message)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (timestamp, session, phone_number, message_preview, char_count, status, error_message)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
         getColombiaTimestamp(),
         session || 'unknown',
         phoneNumber || 'unknown',
-        (message || ''),
+        messageText,
+        charCount,
         finalStatus,
         errorMessage
     ]);
@@ -132,49 +172,68 @@ function logMessage(session, phoneNumber, message, status, errorMessage = null) 
 }
 
 /**
- * Encolar mensaje en la cola persistente
+ * Encolar mensaje en la cola persistente para consolidación
+ * Guarda la hora de llegada (arrived_at) y deja sent_at vacío hasta que se envíe
  */
 function enqueueMessage(phoneNumber, message) {
     if (!db) return { success: false, error: 'DB no inicializada' };
     const num = (phoneNumber || '').trim();
     const msg = (message || '').trim();
     if (!num || !msg) return { success: false, error: 'Datos inválidos' };
+    
+    const charCount = msg.length;
+    const arrivedAt = getColombiaTimestamp();
+    
     db.run(`
-        INSERT INTO outgoing_queue (phone_number, message, enqueued_at)
-        VALUES (?, ?, ?)
-    `, [num, msg, getColombiaTimestamp()]);
+        INSERT INTO outgoing_queue (phone_number, message, char_count, arrived_at, enqueued_at, sent_at)
+        VALUES (?, ?, ?, ?, ?, NULL)
+    `, [num, msg, charCount, arrivedAt, arrivedAt]);
     saveDatabase();
+    
     // Resumen rápido
     const stats = getQueueStats();
-    return { success: true, queued: true, total: stats.total, pendingNumbers: stats.pendingNumbers };
+    return { success: true, queued: true, arrivedAt, charCount, total: stats.total, pendingNumbers: stats.pendingNumbers };
 }
 
 /**
- * Obtener números pendientes en cola (distintos)
+ * Obtener números pendientes en cola (que no han sido enviados)
  */
 function getQueuedNumbers() {
     if (!db) return [];
     const res = db.exec(`
-        SELECT phone_number, MIN(enqueued_at) as first_at
+        SELECT phone_number, MIN(arrived_at) as first_at, COUNT(*) as msg_count
         FROM outgoing_queue
+        WHERE sent_at IS NULL
         GROUP BY phone_number
         ORDER BY first_at ASC
     `);
-    return queryToObjects(res).map(r => r.phone_number);
+    return queryToObjects(res);
 }
 
 /**
- * Obtener mensajes encolados para un número
+ * Obtener mensajes pendientes para un número (no enviados)
  */
 function getMessagesForNumber(phoneNumber) {
     if (!db) return [];
     const res = db.exec(`
-        SELECT id, message
+        SELECT id, message, char_count, arrived_at
         FROM outgoing_queue
-        WHERE phone_number = '${phoneNumber.replace(/'/g, "''")}'
-        ORDER BY enqueued_at ASC
+        WHERE phone_number = '${phoneNumber.replace(/'/g, "''")}' AND sent_at IS NULL
+        ORDER BY arrived_at ASC
     `);
     return queryToObjects(res);
+}
+
+/**
+ * Marcar mensajes como enviados (actualiza sent_at)
+ */
+function markMessagesSent(messageIds) {
+    if (!db || !messageIds || messageIds.length === 0) return false;
+    const ids = messageIds.join(',');
+    const sentAt = getColombiaTimestamp();
+    db.run(`UPDATE outgoing_queue SET sent_at = ? WHERE id IN (${ids})`, [sentAt]);
+    saveDatabase();
+    return true;
 }
 
 /**
@@ -202,15 +261,16 @@ function getQueuedMessages(limit = 50) {
 }
 
 /**
- * Estadísticas de la cola
+ * Estadísticas de la cola (solo mensajes pendientes - sin enviar)
  */
 function getQueueStats() {
-    if (!db) return { total: 0, pendingNumbers: 0 };
-    const totalRes = db.exec(`SELECT COUNT(*) as total FROM outgoing_queue`);
-    const numbersRes = db.exec(`SELECT COUNT(DISTINCT phone_number) as cnt FROM outgoing_queue`);
+    if (!db) return { total: 0, pendingNumbers: 0, totalChars: 0 };
+    const totalRes = db.exec(`SELECT COUNT(*) as total, SUM(char_count) as chars FROM outgoing_queue WHERE sent_at IS NULL`);
+    const numbersRes = db.exec(`SELECT COUNT(DISTINCT phone_number) as cnt FROM outgoing_queue WHERE sent_at IS NULL`);
     const total = queryToObjects(totalRes)[0]?.total || 0;
+    const totalChars = queryToObjects(totalRes)[0]?.chars || 0;
     const pendingNumbers = queryToObjects(numbersRes)[0]?.cnt || 0;
-    return { total, pendingNumbers };
+    return { total, pendingNumbers, totalChars };
 }
 
 /**
@@ -441,7 +501,7 @@ function getMessagesByFilter(options = {}) {
     
     // Obtener mensajes paginados
     const res = db.exec(`
-        SELECT id, timestamp, session, phone_number, message_preview, status, error_message
+        SELECT id, timestamp, session, phone_number, message_preview, char_count, status, error_message
         FROM messages 
         ${whereClause}
         ORDER BY timestamp DESC
@@ -467,6 +527,7 @@ module.exports = {
     enqueueMessage,
     getQueuedNumbers,
     getMessagesForNumber,
+    markMessagesSent,
     clearQueueForNumber,
     getQueueStats,
     getQueuedMessages,
