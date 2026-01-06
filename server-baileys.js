@@ -169,8 +169,18 @@ async function getPublicIP() {
     }
     try {
         const https = require('https');
+        const PROXY_URL = process.env.ALL_PROXY || process.env.SOCKS_PROXY || null;
+        let agent = null;
+        
+        // Usar proxy si está configurado
+        if (PROXY_URL) {
+            const { SocksProxyAgent } = require('socks-proxy-agent');
+            agent = new SocksProxyAgent(PROXY_URL);
+        }
+        
         const ip = await new Promise((resolve, reject) => {
-            https.get('https://api.ipify.org', (res) => {
+            const options = { agent };
+            https.get('https://api.ipify.org', options, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => resolve(data.trim()));
