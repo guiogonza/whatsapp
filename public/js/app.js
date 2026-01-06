@@ -9,6 +9,41 @@ let monitorRefreshInterval = null;
 let monitorMessages = [];
 const MAX_MONITOR_MESSAGES = 50;
 
+// ======================== UTILIDADES ========================
+function showToast(message, type = 'info') {
+    // Crear toast container si no existe
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
+        document.body.appendChild(container);
+    }
+    
+    // Colores según tipo
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    
+    // Crear toast
+    const toast = document.createElement('div');
+    toast.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    
+    // Animar entrada
+    setTimeout(() => toast.classList.remove('translate-x-full'), 10);
+    
+    // Auto eliminar después de 3 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // ======================== NAVEGACIÓN ========================
 function showSection(sectionId) {
     document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
@@ -571,17 +606,23 @@ async function loadQueueMessages() {
         const data = await response.json();
         
         if (!data.success) {
-            document.getElementById('queueMessageList').innerHTML = '<p class="text-red-500 text-center">Error al cargar cola</p>';
+            const msgList = document.getElementById('queueMessageList');
+            if (msgList) msgList.innerHTML = '<p class="text-red-500 text-center">Error al cargar cola</p>';
             return;
         }
         
-        // Actualizar stats
+        // Actualizar stats (con verificación de null)
         const stats = data.stats || {};
-        document.getElementById('queueTotalNumbers').textContent = stats.pendingNumbers || 0;
-        document.getElementById('queueTotalMessages').textContent = stats.total || 0;
-        document.getElementById('queueSentToday').textContent = stats.sentToday || 0;
-        document.getElementById('pendingCount').textContent = stats.total || 0;
-        document.getElementById('sentTodayCount').textContent = stats.sentToday || 0;
+        const setTextSafe = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        };
+        
+        setTextSafe('queueTotalNumbers', stats.pendingNumbers || 0);
+        setTextSafe('queueTotalMessages', stats.total || 0);
+        setTextSafe('queueSentToday', stats.sentToday || 0);
+        setTextSafe('pendingCount', stats.total || 0);
+        setTextSafe('sentTodayCount', stats.sentToday || 0);
         
         // Actualizar badge
         const badge = document.getElementById('queueBadge');
