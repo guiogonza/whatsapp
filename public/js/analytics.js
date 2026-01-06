@@ -670,7 +670,7 @@ function updateAnalyticsTopTable(rows, isFiltered = false) {
 
     if (!rows || rows.length === 0) {
 
-        tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">No hay datos disponibles</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-gray-500">No hay datos disponibles</td></tr>';
 
         return;
 

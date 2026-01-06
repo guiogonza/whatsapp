@@ -354,6 +354,7 @@ function getAnalytics(options = {}) {
         SELECT 
             phone_number,
             COUNT(*) as total,
+            SUM(COALESCE(char_count, 0)) as total_chars,
             SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as enviados,
             SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errores,
             SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) as en_cola
