@@ -397,13 +397,11 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
 
 /**
  * POST /api/messages/send - Envia un mensaje de texto
- * Por defecto consolida mensajes del mismo numero antes de enviar
- * Opciones:
- *   - immediate: true = envia sin esperar consolidacion (bypass)
+ * SIEMPRE consolida mensajes del mismo numero antes de enviar segun tiempo configurado
  */
 app.post('/api/messages/send', async (req, res) => {
     try {
-        const { phoneNumber, message, immediate } = req.body;
+        const { phoneNumber, message } = req.body;
         
         if (!phoneNumber || !message) {
             return res.status(400).json({
@@ -412,36 +410,18 @@ app.post('/api/messages/send', async (req, res) => {
             });
         }
         
-        // Modo 1: Envio inmediato sin consolidacion (bypass)
-        if (immediate === true || immediate === 'true') {
-            const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
-            
-            if (result.success) {
-                res.json({
-                    success: true,
-                    sessionUsed: result.sessionUsed,
-                    message: 'Mensaje enviado exitosamente (inmediato sin consolidacion)'
-                });
-            } else {
-                res.status(500).json({
-                    success: false,
-                    error: result.error?.message || 'Error enviando mensaje'
-                });
-            }
-        } 
-        // Modo 2 (DEFAULT): Consolidar mensajes del mismo numero antes de enviar
-        else {
-            const result = sessionManager.addToConsolidation(phoneNumber, message);
-            if (result.success) {
-                res.json({ 
-                    success: true, 
-                    consolidated: true, 
-                    message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
-                    details: result 
-                });
-            } else {
-                res.status(500).json({ success: false, error: result.error });
-            }
+        // SIEMPRE consolidar mensajes del mismo numero antes de enviar
+        const result = sessionManager.addToConsolidation(phoneNumber, message);
+        if (result.success) {
+            const batchSettings = sessionManager.getBatchSettings();
+            res.json({ 
+                success: true, 
+                consolidated: true, 
+                message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${batchSettings.interval} min)`,
+                details: result 
+            });
+        } else {
+            res.status(500).json({ success: false, error: result.error });
         }
     } catch (error) {
         res.status(500).json({
@@ -453,51 +433,38 @@ app.post('/api/messages/send', async (req, res) => {
 
 /**
  * POST /api/session/send-message - Envía un mensaje desde una sesión específica
+ * NOTA: Los mensajes siempre pasan por consolidación según el tiempo configurado
  */
 app.post('/api/session/send-message', async (req, res) => {
     try {
         const { sessionName, phoneNumber, message } = req.body;
 
-        if (!sessionName || !phoneNumber || !message) {
+        if (!phoneNumber || !message) {
             return res.status(400).json({
                 success: false,
-                error: 'sessionName, phoneNumber y message son requeridos'
-            });
-        }
-
-        const session = sessionManager.getSession(sessionName);
-        if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
-            return res.status(400).json({
-                success: false,
-                error: 'Sesion no disponible o no está lista'
+                error: 'phoneNumber y message son requeridos'
             });
         }
 
         const formattedNumber = formatPhoneNumber(phoneNumber);
         if (!formattedNumber) {
-            return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
+            return res.status(400).json({ success: false, error: 'Numero de telefono invalido' });
         }
 
-        const result = await sessionManager.sendMessageWithRetry(session, formattedNumber, message, 3);
-
+        // SIEMPRE usar consolidación
+        const result = sessionManager.addToConsolidation(phoneNumber, message);
+        
         if (result.success) {
-            sessionManager.logMessageSent(session.name, formattedNumber, message, 'sent');
-            if (!session.messages) session.messages = [];
-            session.messages.push({
-                timestamp: new Date(),
-                to: formattedNumber,
-                message,
-                direction: 'OUT',
-                status: 'sent'
+            const batchSettings = sessionManager.getBatchSettings();
+            res.json({ 
+                success: true, 
+                consolidated: true, 
+                message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${batchSettings.interval} min)`,
+                details: result 
             });
-            session.lastActivity = new Date();
-            if (session.messages.length > config.MAX_MESSAGE_HISTORY) {
-                session.messages = session.messages.slice(-config.MAX_MESSAGE_HISTORY);
-            }
-            return res.json({ success: true, message: 'Mensaje enviado exitosamente', sessionUsed: session.name });
+        } else {
+            res.status(500).json({ success: false, error: result.error });
         }
-
-        return res.status(500).json({ success: false, error: result.error?.message || 'Error enviando mensaje' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -561,7 +528,8 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
 });
 
 /**
- * POST /api/messages/send-bulk - Envía mensajes masivos
+ * POST /api/messages/send-bulk - Envía mensajes masivos (con consolidación)
+ * NOTA: Los mensajes siempre pasan por consolidación según el tiempo configurado
  */
 app.post('/api/messages/send-bulk', async (req, res) => {
     try {
@@ -584,7 +552,7 @@ app.post('/api/messages/send-bulk', async (req, res) => {
         if (contacts.length > config.MAX_BULK_CONTACTS) {
             return res.status(400).json({
                 success: false,
-                error: `Máximo ${config.MAX_BULK_CONTACTS} contactos por envío`
+                error: `Maximo ${config.MAX_BULK_CONTACTS} contactos por envio`
             });
         }
         
@@ -595,27 +563,29 @@ app.post('/api/messages/send-bulk', async (req, res) => {
             
             if (!phoneNumber) continue;
             
-            // Delay aleatorio entre mensajes (3-8 segundos)
-            const delay = 3000 + Math.random() * 5000;
-            await new Promise(resolve => setTimeout(resolve, delay));
-            
-            const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
+            // SIEMPRE usar consolidación
+            const result = sessionManager.addToConsolidation(phoneNumber, message);
             
             results.push({
                 phoneNumber,
                 success: result.success,
-                sessionUsed: result.sessionUsed,
-                error: result.error?.message
+                consolidated: true,
+                pendingCount: result.pendingCount,
+                error: result.error
             });
         }
         
         const successCount = results.filter(r => r.success).length;
+        const batchSettings = sessionManager.getBatchSettings();
         
         res.json({
             success: true,
+            consolidated: true,
             total: contacts.length,
-            sent: successCount,
+            queued: successCount,
             failed: contacts.length - successCount,
+            sendInMinutes: batchSettings.interval,
+            message: `${successCount} mensajes agregados a consolidacion (envio en ${batchSettings.interval} min)`,
             results
         });
     } catch (error) {

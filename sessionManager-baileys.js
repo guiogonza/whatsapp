@@ -2,7 +2,7 @@
 
  * Gestor de Sesiones de WhatsApp usando Baileys
 
- * Maneja la creaciï¿½?ï¿½?ï¿½?Â³n, rotaciï¿½?ï¿½?ï¿½?Â³n y monitoreo de sesiones
+ * Maneja la creaci\xc3\xb3n, rotaci\xc3\xb3n y monitoreo de sesiones
 
  */
 
@@ -67,13 +67,13 @@ const getColombiaDate = () => {
 
 
 
-// Almacï¿½?ï¿½?ï¿½?Â©n de sesiones
+// Almac\xc3\xa9n de sesiones
 
 const sessions = {};
 
 
 
-// ï¿½?ï¿½?ï¿½?Ândice de sesiï¿½?ï¿½?ï¿½?Â³n activa para rotaciï¿½?ï¿½?ï¿½?Â³n
+// \xc3\x8dndice de sesi\xc3\xb3n activa para rotaci\xc3\xb3n
 
 let currentSessionIndex = 0;
 
@@ -91,7 +91,7 @@ const MAX_RECENT_MESSAGES = 100;
 
 
 
-// Cola persistente manejada vï¿½?ï¿½?ï¿½?Â­a BD
+// Cola persistente manejada v\xc3\xada BD
 
 let batchIntervalMinutes = 3;
 let batchTimer = null;
@@ -384,7 +384,7 @@ function queueMessage(phoneNumber, message) {
 
     if (!formattedNumber) {
 
-        return { success: false, error: 'Nï¿½?ï¿½?ï¿½?Âºmero invï¿½?ï¿½?ï¿½?Â¡lido' };
+        return { success: false, error: 'N\xc3\xbamero inv\xc3\xa1lido' };
 
     }
 
@@ -396,7 +396,7 @@ function queueMessage(phoneNumber, message) {
 
     const result = database.enqueueMessage(formattedNumber, message);
 
-    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¥ Mensaje encolado (BD) para ${formattedNumber}. Total pendientes: ${result.total}`);
+    console.log(` Mensaje encolado (BD) para ${formattedNumber}. Total pendientes: ${result.total}`);
 
     return { success: true, queued: true, total: result.total, pendingNumbers: result.pendingNumbers, nextBatchIn: batchIntervalMinutes };
 
@@ -406,7 +406,7 @@ function queueMessage(phoneNumber, message) {
 
 /**
 
- * Procesa la cola de mensajes y los envï¿½?ï¿½?ï¿½?Â­a agrupados
+ * Procesa la cola de mensajes y los env\xc3\xada agrupados
 
  */
 
@@ -418,7 +418,7 @@ async function processMessageQueue() {
 
 
 
-    console.log(`\nï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¦ Procesando cola persistente (${numbers.length} nï¿½?ï¿½?ï¿½?Âºmeros pendientes)...`);
+    console.log(`\n Procesando cola persistente (${numbers.length} n\xc3\xbameros pendientes)...`);
 
 
 
@@ -432,7 +432,7 @@ async function processMessageQueue() {
 
         const combinedMessage = rows.map(r => r.message).join('\n\n');
 
-        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¤ Enviando lote de ${rows.length} mensajes a ${number}`);
+        console.log(` Enviando lote de ${rows.length} mensajes a ${number}`);
 
 
 
@@ -446,13 +446,13 @@ async function processMessageQueue() {
 
             } else {
 
-                console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error enviando lote a ${number}, se mantiene en cola: ${result.error?.message}`);
+                console.error(`Â¢ Error enviando lote a ${number}, se mantiene en cola: ${result.error?.message}`);
 
             }
 
         } catch (error) {
 
-            console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error procesando lote para ${number}: ${error.message}`);
+            console.error(`Â¢ Error procesando lote para ${number}: ${error.message}`);
 
         }
 
@@ -490,7 +490,7 @@ function setBatchInterval(minutes) {
 
     
 
-    console.log(`ï¿½?Â¢ï¿½?Âï¿½?Â±ï¿½?Â¯ï¿½?Â¸ï¿½?Â Intervalo de envï¿½?ï¿½?ï¿½?Â­o por lotes actualizado a ${batchIntervalMinutes} minutos`);
+    console.log(`Â¢\xc3\xb1Â¯Â¸ Intervalo de env\xc3\xado por lotes actualizado a ${batchIntervalMinutes} minutos`);
 
     return { success: true, interval: batchIntervalMinutes };
 
@@ -514,7 +514,7 @@ function startBatchProcessor() {
 
 
 
-    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Iniciando procesador de lotes (cada ${batchIntervalMinutes} minutos)`);
+    console.log(` Iniciando procesador de lotes (cada ${batchIntervalMinutes} minutos)`);
 
     
 
@@ -530,7 +530,7 @@ function startBatchProcessor() {
 
 /**
 
- * Obtiene la configuraciï¿½?ï¿½?ï¿½?Â³n actual de lotes
+ * Obtiene la configuraci\xc3\xb3n actual de lotes
 
  */
 
@@ -552,13 +552,13 @@ function getBatchSettings() {
 
 
 
-// ======================== FUNCIONES DE ROTACIï¿½?ï¿½?ï¿½?ï¿½?N ========================
+// ======================== FUNCIONES DE ROTACIN ========================
 
 
 
 /**
 
- * Obtiene todas las sesiones que estï¿½?ï¿½?ï¿½?Â¡n activas (READY)
+ * Obtiene todas las sesiones que est\xc3\xa1n activas (READY)
 
  * @returns {Array} - Array de sesiones activas
 
@@ -582,9 +582,9 @@ function getActiveSessions() {
 
 /**
 
- * Obtiene la sesiï¿½?ï¿½?ï¿½?Â³n activa actual para envï¿½?ï¿½?ï¿½?Â­o de mensajes
+ * Obtiene la sesi\xc3\xb3n activa actual para env\xc3\xado de mensajes
 
- * @returns {Object|null} - Sesiï¿½?ï¿½?ï¿½?Â³n activa o null
+ * @returns {Object|null} - Sesi\xc3\xb3n activa o null
 
  */
 
@@ -596,7 +596,7 @@ function getCurrentSession() {
 
     
 
-    // Asegurar que el ï¿½?ï¿½?ï¿½?Â­ndice estï¿½?ï¿½?ï¿½?Â© dentro del rango
+    // Asegurar que el \xc3\xadndice est\xc3\xa9 dentro del rango
 
     if (currentSessionIndex >= activeSessions.length) {
 
@@ -614,13 +614,13 @@ function getCurrentSession() {
 
 /**
 
- * Rota a la siguiente sesiï¿½?ï¿½?ï¿½?Â³n activa
+ * Rota a la siguiente sesi\xc3\xb3n activa
 
  */
 
 function rotateSession() {
 
-    // Funciï¿½?ï¿½?ï¿½?Â³n mantenida por compatibilidad, pero el balanceo es automï¿½?ï¿½?ï¿½?Â¡tico
+    // Funci\xc3\xb3n mantenida por compatibilidad, pero el balanceo es autom\xc3\xa1tico
 
     const activeSessions = getActiveSessions();
 
@@ -638,15 +638,15 @@ function rotateSession() {
 
 /**
 
- * Inicia el intervalo de rotaciï¿½?ï¿½?ï¿½?Â³n automï¿½?ï¿½?ï¿½?Â¡tica de sesiones
+ * Inicia el intervalo de rotaci\xc3\xb3n autom\xc3\xa1tica de sesiones
 
  */
 
 function startSessionRotation() {
 
-    console.log('ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Balanceo round-robin activo: cada mensaje usa una sesiï¿½?ï¿½?ï¿½?Â³n diferente');
+    console.log(' Balanceo round-robin activo: cada mensaje usa una sesi\xc3\xb3n diferente');
 
-    // Ya no usamos rotaciï¿½?ï¿½?ï¿½?Â³n por tiempo, solo round-robin por mensaje
+    // Ya no usamos rotaci\xc3\xb3n por tiempo, solo round-robin por mensaje
 
 }
 
@@ -654,7 +654,7 @@ function startSessionRotation() {
 
 /**
 
- * Detiene el intervalo de rotaciï¿½?ï¿½?ï¿½?Â³n
+ * Detiene el intervalo de rotaci\xc3\xb3n
 
  */
 
@@ -674,7 +674,7 @@ function stopSessionRotation() {
 
 /**
 
- * Obtiene informaciï¿½?ï¿½?ï¿½?Â³n sobre la rotaciï¿½?ï¿½?ï¿½?Â³n actual
+ * Obtiene informaci\xc3\xb3n sobre la rotaci\xc3\xb3n actual
 
  */
 
@@ -712,7 +712,7 @@ function getRotationInfo() {
 
 
 
-// ======================== CREACIï¿½?ï¿½?ï¿½?ï¿½?N DE SESIONES ========================
+// ======================== CREACIN DE SESIONES ========================
 
 
 
@@ -734,7 +734,7 @@ async function loadSessionsFromDisk() {
 
         const files = await fs.readdir(config.SESSION_DATA_PATH);
 
-        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Buscando sesiones en ${config.SESSION_DATA_PATH}...`);
+        console.log(` Buscando sesiones en ${config.SESSION_DATA_PATH}...`);
 
         
 
@@ -760,7 +760,7 @@ async function loadSessionsFromDisk() {
 
                 if (stat.isDirectory()) {
 
-                    // Verificar si tiene creds.json (indicador de sesiï¿½?ï¿½?ï¿½?Â³n vï¿½?ï¿½?ï¿½?Â¡lida)
+                    // Verificar si tiene creds.json (indicador de sesi\xc3\xb3n v\xc3\xa1lida)
 
                     const credsPath = path.join(fullPath, 'creds.json');
 
@@ -768,7 +768,7 @@ async function loadSessionsFromDisk() {
 
                         await fs.access(credsPath);
 
-                        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Cargando sesiï¿½?ï¿½?ï¿½?Â³n encontrada: ${file}`);
+                        console.log(` Cargando sesi\xc3\xb3n encontrada: ${file}`);
 
                         await createSession(file);
 
@@ -776,17 +776,17 @@ async function loadSessionsFromDisk() {
 
                     } catch (e) {
 
-                        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Carpeta ${file} ignorada (no tiene credenciales vï¿½?ï¿½?ï¿½?Â¡lidas). Eliminando...`);
+                        console.log(`Â¢Â¯Â¸ Carpeta ${file} ignorada (no tiene credenciales v\xc3\xa1lidas). Eliminando...`);
 
                         try {
 
                             await fs.rm(fullPath, { recursive: true, force: true });
 
-                            console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¯ï¿½?Â¸ï¿½?Â Carpeta invï¿½?ï¿½?ï¿½?Â¡lida ${file} eliminada`);
+                            console.log(`Â¯Â¸ Carpeta inv\xc3\xa1lida ${file} eliminada`);
 
                         } catch (delErr) {
 
-                            console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error eliminando carpeta invï¿½?ï¿½?ï¿½?Â¡lida ${file}:`, delErr.message);
+                            console.error(`Â¢ Error eliminando carpeta inv\xc3\xa1lida ${file}:`, delErr.message);
 
                         }
 
@@ -804,13 +804,13 @@ async function loadSessionsFromDisk() {
 
         
 
-        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? Se cargaron ${loadedCount} sesiones del disco`);
+        console.log(`Â¢ Se cargaron ${loadedCount} sesiones del disco`);
 
         return loadedCount;
 
     } catch (error) {
 
-        console.error('ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error cargando sesiones del disco:', error.message);
+        console.error('Â¢ Error cargando sesiones del disco:', error.message);
 
         return 0;
 
@@ -822,19 +822,19 @@ async function loadSessionsFromDisk() {
 
 /**
 
- * Crea una nueva sesiï¿½?ï¿½?ï¿½?Â³n de WhatsApp con Baileys
+ * Crea una nueva sesi\xc3\xb3n de WhatsApp con Baileys
 
  */
 
 async function createSession(sessionName) {
 
-    console.log(`\nï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Iniciando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} con Baileys...`);
+    console.log(`\n Iniciando sesi\xc3\xb3n ${sessionName} con Baileys...`);
 
     
 
     if (sessions[sessionName]) {
 
-        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â La sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} ya existe`);
+        console.log(`Â¢Â¯Â¸ La sesi\xc3\xb3n ${sessionName} ya existe`);
 
         return sessions[sessionName];
 
@@ -844,7 +844,7 @@ async function createSession(sessionName) {
 
     try {
 
-        // Crear directorio de autenticaciï¿½?ï¿½?ï¿½?Â³n
+        // Crear directorio de autenticaci\xc3\xb3n
 
         const authPath = path.join(config.SESSION_DATA_PATH, sessionName);
 
@@ -852,17 +852,17 @@ async function createSession(sessionName) {
 
         
 
-        // Crear estado de autenticaciï¿½?ï¿½?ï¿½?Â³n
+        // Crear estado de autenticaci\xc3\xb3n
 
         const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
         
 
-        // Obtener la versiï¿½?ï¿½?ï¿½?Â³n mï¿½?ï¿½?ï¿½?Â¡s reciente de Baileys
+        // Obtener la versi\xc3\xb3n m\xc3\xa1s reciente de Baileys
 
         const { version, isLatest } = await fetchLatestBaileysVersion();
 
-        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â± Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
+        console.log(`\xc3\xb1 Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
 
         
 
@@ -912,7 +912,7 @@ async function createSession(sessionName) {
 
         
 
-        // Crear sesiï¿½?ï¿½?ï¿½?Â³n
+        // Crear sesi\xc3\xb3n
 
         const session = {
 
@@ -950,7 +950,7 @@ async function createSession(sessionName) {
 
         
 
-        // Manejar eventos de conexiï¿½?ï¿½?ï¿½?Â³n
+        // Manejar eventos de conexi\xc3\xb3n
 
         socket.ev.on('connection.update', async (update) => {
 
@@ -958,7 +958,7 @@ async function createSession(sessionName) {
 
             
 
-            console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} connection.update:`, JSON.stringify({ connection, qr: !!qr, isNewLogin, statusCode: lastDisconnect?.error?.output?.statusCode }));
+            console.log(` ${sessionName} connection.update:`, JSON.stringify({ connection, qr: !!qr, isNewLogin, statusCode: lastDisconnect?.error?.output?.statusCode }));
 
             
 
@@ -970,7 +970,7 @@ async function createSession(sessionName) {
 
                 session.state = config.SESSION_STATES.WAITING_FOR_QR;
 
-                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â± QR generado para ${sessionName} (${session.qrCount})`);
+                console.log(`\xc3\xb1 QR generado para ${sessionName} (${session.qrCount})`);
 
             }
 
@@ -986,11 +986,11 @@ async function createSession(sessionName) {
 
 
 
-                // Si es loggedOut/401 justo despuï¿½?ï¿½?ï¿½?Â©s de un restart, forzamos reintento (hasta 3 veces)
+                // Si es loggedOut/401 justo despu\xc3\xa9s de un restart, forzamos reintento (hasta 3 veces)
 
                 if (isLoggedOut && session.retryCount < 3) {
 
-                    console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ estado ${statusCode} (loggedOut). Intentando rescate rï¿½?ï¿½?ï¿½?Â¡pido (${session.retryCount + 1}/3)...`);
+                    console.log(`Â¢Â¯Â¸ ${sessionName} recibi\xc3\xb3 estado ${statusCode} (loggedOut). Intentando rescate r\xc3\xa1pido (${session.retryCount + 1}/3)...`);
 
                     shouldReconnect = true;
 
@@ -998,7 +998,7 @@ async function createSession(sessionName) {
 
                 
 
-                console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
+                console.log(`Â¢ ${sessionName} desconectado. Status: ${statusCode}. Reconectar: ${shouldReconnect}`);
 
                 notifySessionDisconnect(sessionName, statusCode);
 
@@ -1016,7 +1016,7 @@ async function createSession(sessionName) {
 
                     if (session.qr && isQRConnectionClose && !isRestartRequired) {
 
-                        console.log(`ï¿½?Â¢ï¿½?Âï¿½?Â³ ${sessionName} cierre temporal durante QR, esperando reconexiï¿½?ï¿½?ï¿½?Â³n automï¿½?ï¿½?ï¿½?Â¡tica...`);
+                        console.log(`Â¢\xc3\xb3 ${sessionName} cierre temporal durante QR, esperando reconexi\xc3\xb3n autom\xc3\xa1tica...`);
 
                         session.state = config.SESSION_STATES.WAITING_FOR_QR;
 
@@ -1026,7 +1026,7 @@ async function createSession(sessionName) {
 
                     
 
-                    // Caso 2: restartRequired despuï¿½?ï¿½?ï¿½?Â©s de hacer pairing: recrear socket conservando credenciales
+                    // Caso 2: restartRequired despu\xc3\xa9s de hacer pairing: recrear socket conservando credenciales
 
                     if (isRestartRequired) {
 
@@ -1036,7 +1036,7 @@ async function createSession(sessionName) {
 
                         if (session.retryCount <= 5) {
 
-                            console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} necesita restart (515). Reintentando en 2s (${session.retryCount}/5)...`);
+                            console.log(` ${sessionName} necesita restart (515). Reintentando en 2s (${session.retryCount}/5)...`);
 
                             // Cerramos socket previo pero NO borramos carpeta de auth
 
@@ -1058,7 +1058,7 @@ async function createSession(sessionName) {
 
                             session.state = config.SESSION_STATES.ERROR;
 
-                            console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${sessionName} superï¿½?ï¿½?ï¿½?Â³ el lï¿½?ï¿½?ï¿½?Â­mite de reintentos (5) tras restartRequired`);
+                            console.log(`Â¢ ${sessionName} super\xc3\xb3 el l\xc3\xadmite de reintentos (5) tras restartRequired`);
 
                         }
 
@@ -1068,7 +1068,7 @@ async function createSession(sessionName) {
 
                     
 
-                    // Caso 3: 401/loggedOut inmediatamente despuï¿½?ï¿½?ï¿½?Â©s de restartRequired, intentamos rescatar credenciales (hasta 3 reintentos rï¿½?ï¿½?ï¿½?Â¡pidos)
+                    // Caso 3: 401/loggedOut inmediatamente despu\xc3\xa9s de restartRequired, intentamos rescatar credenciales (hasta 3 reintentos r\xc3\xa1pidos)
 
                     // Si la sesion esta siendo eliminada intencionalmente, NO reconectar
                     if (session.isBeingDeleted) {
@@ -1084,7 +1084,7 @@ async function createSession(sessionName) {
 
                         session.retryCount++;
 
-                        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ 401 tras restartRequired. Intento de rescate ${session.retryCount}/3 en 3s...`);
+                        console.log(`Â¢Â¯Â¸ ${sessionName} recibi\xc3\xb3 401 tras restartRequired. Intento de rescate ${session.retryCount}/3 en 3s...`);
 
                         if (session.socket) {
 
@@ -1104,13 +1104,13 @@ async function createSession(sessionName) {
 
 
 
-                    // Caso 3b: Si ya intentamos rescatar 3 veces y continï¿½?ï¿½?ï¿½?Âºa 401, limpiamos credenciales y pedimos nuevo QR
+                    // Caso 3b: Si ya intentamos rescatar 3 veces y contin\xc3\xbaa 401, limpiamos credenciales y pedimos nuevo QR
 
                     if (isLoggedOut && session.retryCount >= 3) {
 
                         session.state = config.SESSION_STATES.RECONNECTING;
 
-                        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?Â§ï¿½?Â¹ ${sessionName} continï¿½?ï¿½?ï¿½?Âºa con 401 tras ${session.retryCount} intentos. Limpiando datos y solicitando nuevo QR...`);
+                        console.log(`Â§Â¹ ${sessionName} contin\xc3\xbaa con 401 tras ${session.retryCount} intentos. Limpiando datos y solicitando nuevo QR...`);
 
                         try {
 
@@ -1122,17 +1122,17 @@ async function createSession(sessionName) {
 
                             }
 
-                            // Eliminar datos de autenticaciï¿½?ï¿½?ï¿½?Â³n
+                            // Eliminar datos de autenticaci\xc3\xb3n
 
                             await deleteSessionData(sessionName);
 
                         } catch (cleanErr) {
 
-                            console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error limpiando datos de ${sessionName}: ${cleanErr.message}`);
+                            console.error(`Â¢ Error limpiando datos de ${sessionName}: ${cleanErr.message}`);
 
                         }
 
-                        // Reiniciar sesiï¿½?ï¿½?ï¿½?Â³n desde cero
+                        // Reiniciar sesi\xc3\xb3n desde cero
 
                         delete sessions[sessionName];
 
@@ -1154,7 +1154,7 @@ async function createSession(sessionName) {
 
                     if (session.retryCount <= 5) {
 
-                        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Reintentando conexiï¿½?ï¿½?ï¿½?Â³n ${sessionName} (${session.retryCount}/5) en 5s...`);
+                        console.log(` Reintentando conexi\xc3\xb3n ${sessionName} (${session.retryCount}/5) en 5s...`);
 
                         if (session.socket) {
 
@@ -1172,7 +1172,7 @@ async function createSession(sessionName) {
 
                         session.state = config.SESSION_STATES.ERROR;
 
-                        console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${sessionName} superï¿½?ï¿½?ï¿½?Â³ el lï¿½?ï¿½?ï¿½?Â­mite de reintentos (5)`);
+                        console.log(`Â¢ ${sessionName} super\xc3\xb3 el l\xc3\xadmite de reintentos (5)`);
 
                     }
 
@@ -1182,7 +1182,7 @@ async function createSession(sessionName) {
 
                     delete sessions[sessionName];
 
-                    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} cerrï¿½?ï¿½?ï¿½?Â³ sesiï¿½?ï¿½?ï¿½?Â³n. Manteniendo datos de autenticaciï¿½?ï¿½?ï¿½?Â³n para diagnï¿½?ï¿½?ï¿½?Â³stico.`);
+                    console.log(` ${sessionName} cerr\xc3\xb3 sesi\xc3\xb3n. Manteniendo datos de autenticaci\xc3\xb3n para diagn\xc3\xb3stico.`);
 
                 }
 
@@ -1202,7 +1202,7 @@ async function createSession(sessionName) {
 
                 
 
-                // Obtener informaciï¿½?ï¿½?ï¿½?Â³n del usuario
+                // Obtener informaci\xc3\xb3n del usuario
 
                 const user = socket.user;
 
@@ -1222,9 +1222,9 @@ async function createSession(sessionName) {
 
                     
 
-                    console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? ${sessionName} conectado: ${session.phoneNumber}`);
+                    console.log(`Â¢ ${sessionName} conectado: ${session.phoneNumber}`);
 
-                    // Guardar credenciales por seguridad tras conexiï¿½?ï¿½?ï¿½?Â³n
+                    // Guardar credenciales por seguridad tras conexi\xc3\xb3n
 
                     try { await saveCreds(); } catch (e) {}
 
@@ -1250,7 +1250,7 @@ async function createSession(sessionName) {
 
             if (!message.key.fromMe && m.type === 'notify') {
 
-                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¨ ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ mensaje de ${message.key.remoteJid}`);
+                console.log(`Â¨ ${sessionName} recibi\xc3\xb3 mensaje de ${message.key.remoteJid}`);
 
                 session.lastActivity = new Date();
 
@@ -1302,7 +1302,7 @@ async function createSession(sessionName) {
 
                 
 
-                // Auto-respuesta si estï¿½?ï¿½?ï¿½?Â¡ configurada
+                // Auto-respuesta si est\xc3\xa1 configurada
 
                 if (config.AUTO_RESPONSE && message.message) {
 
@@ -1334,7 +1334,7 @@ async function createSession(sessionName) {
 
     } catch (error) {
 
-        console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error creando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName}:`, error.message);
+        console.error(`Â¢ Error creando sesi\xc3\xb3n ${sessionName}:`, error.message);
 
         if (sessions[sessionName]) {
 
@@ -1352,7 +1352,7 @@ async function createSession(sessionName) {
 
 /**
 
- * Obtiene el cï¿½?ï¿½?ï¿½?Â³digo QR en formato base64
+ * Obtiene el c\xc3\xb3digo QR en formato base64
 
  */
 
@@ -1388,7 +1388,7 @@ async function getQRCode(sessionName) {
 
 /**
 
- * Cierra una sesiï¿½?ï¿½?ï¿½?Â³n
+ * Cierra una sesi\xc3\xb3n
 
  */
 
@@ -1398,7 +1398,7 @@ async function closeSession(sessionName, shouldLogout = true) {
 
     if (!session) {
 
-        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} no existe`);
+        console.log(`Â¢Â¯Â¸ Sesi\xc3\xb3n ${sessionName} no existe`);
 
         return false;
 
@@ -1415,13 +1415,13 @@ async function closeSession(sessionName, shouldLogout = true) {
 
             if (shouldLogout) {
 
-                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Cerrando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} con logout...`);
+                console.log(` Cerrando sesi\xc3\xb3n ${sessionName} con logout...`);
 
                 await session.socket.logout();
 
             } else {
 
-                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Cerrando conexiï¿½?ï¿½?ï¿½?Â³n ${sessionName} (sin logout)...`);
+                console.log(` Cerrando conexi\xc3\xb3n ${sessionName} (sin logout)...`);
 
                 session.socket.end(undefined);
 
@@ -1437,13 +1437,13 @@ async function closeSession(sessionName, shouldLogout = true) {
 
         
 
-        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½? Sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName} cerrada exitosamente`);
+        console.log(` Sesi\xc3\xb3n ${sessionName} cerrada exitosamente`);
 
         return true;
 
     } catch (error) {
 
-        console.error(`Error cerrando sesiï¿½?ï¿½?ï¿½?Â³n ${sessionName}:`, error.message);
+        console.error(`Error cerrando sesi\xc3\xb3n ${sessionName}:`, error.message);
 
         return false;
 
@@ -1455,7 +1455,7 @@ async function closeSession(sessionName, shouldLogout = true) {
 
 /**
 
- * Elimina los datos de autenticaciï¿½?ï¿½?ï¿½?Â³n de una sesiï¿½?ï¿½?ï¿½?Â³n
+ * Elimina los datos de autenticaci\xc3\xb3n de una sesi\xc3\xb3n
 
  */
 
@@ -1469,7 +1469,7 @@ async function deleteSessionData(sessionName) {
 
         await fs.rm(authPath, { recursive: true, force: true });
 
-        console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¯ï¿½?Â¸ï¿½?Â Datos de ${sessionName} eliminados`);
+        console.log(`Â¯Â¸ Datos de ${sessionName} eliminados`);
 
         return true;
 
@@ -1485,13 +1485,13 @@ async function deleteSessionData(sessionName) {
 
 
 
-// ======================== ENVï¿½?ï¿½?ï¿½?ÂO DE MENSAJES ========================
+// ======================== ENV\xc3\x8dO DE MENSAJES ========================
 
 
 
 /**
 
- * Envï¿½?ï¿½?ï¿½?Â­a mensaje con reintentos y manejo de errores
+ * Env\xc3\xada mensaje con reintentos y manejo de errores
 
  */
 
@@ -1507,13 +1507,13 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
             if (session.state !== config.SESSION_STATES.READY || !session.socket) {
 
-                throw new Error('Sesiï¿½?ï¿½?ï¿½?Â³n no estï¿½?ï¿½?ï¿½?Â¡ lista');
+                throw new Error('Sesi\xc3\xb3n no est\xc3\xa1 lista');
 
             }
 
             
 
-            // Formatear nï¿½?ï¿½?ï¿½?Âºmero para Baileys (debe incluir @s.whatsapp.net)
+            // Formatear n\xc3\xbamero para Baileys (debe incluir @s.whatsapp.net)
 
             const formattedJid = phoneNumber.includes('@') 
 
@@ -1533,7 +1533,7 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
             
 
-            console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? ${session.name}: Mensaje enviado a ${phoneNumber}`);
+            console.log(`Â¢ ${session.name}: Mensaje enviado a ${phoneNumber}`);
 
             return { success: true, messageResult: result };
 
@@ -1553,7 +1553,7 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
             if (attempt < maxRetries) {
 
-                // Delay progresivo mï¿½?ï¿½?ï¿½?Â¡s natural
+                // Delay progresivo m\xc3\xa1s natural
 
                 await sleep(3000 * attempt);
 
@@ -1573,7 +1573,7 @@ async function sendMessageWithRetry(session, phoneNumber, message, maxRetries = 
 
 /**
 
- * Envï¿½?ï¿½?ï¿½?Â­a mensaje con media (imagen, video, audio, documento)
+ * Env\xc3\xada mensaje con media (imagen, video, audio, documento)
 
  */
 
@@ -1583,7 +1583,7 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
         if (session.state !== config.SESSION_STATES.READY || !session.socket) {
 
-            throw new Error('Sesiï¿½?ï¿½?ï¿½?Â³n no estï¿½?ï¿½?ï¿½?Â¡ lista');
+            throw new Error('Sesi\xc3\xb3n no est\xc3\xa1 lista');
 
         }
 
@@ -1637,7 +1637,7 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
         
 
-        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? ${session.name}: Media enviado a ${phoneNumber}`);
+        console.log(`Â¢ ${session.name}: Media enviado a ${phoneNumber}`);
 
         return { success: true, messageResult: result };
 
@@ -1645,7 +1645,7 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
     } catch (error) {
 
-        console.error(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? ${session.name}: Error enviando media:`, error.message);
+        console.error(`Â¢ ${session.name}: Error enviando media:`, error.message);
 
         return { success: false, error };
 
@@ -1657,9 +1657,9 @@ async function sendMediaMessage(session, phoneNumber, mediaBuffer, mimetype, cap
 
 /**
 
- * Obtiene la siguiente sesiï¿½?ï¿½?ï¿½?Â³n usando balanceo round-robin
+ * Obtiene la siguiente sesi\xc3\xb3n usando balanceo round-robin
 
- * @returns {Object|null} - Sesiï¿½?ï¿½?ï¿½?Â³n para usar o null
+ * @returns {Object|null} - Sesi\xc3\xb3n para usar o null
 
  */
 
@@ -1671,7 +1671,7 @@ function getNextSessionRoundRobin() {
 
     
 
-    // Asegurar que el ï¿½?ï¿½?ï¿½?Â­ndice estï¿½?ï¿½?ï¿½?Â© dentro del rango
+    // Asegurar que el \xc3\xadndice est\xc3\xa9 dentro del rango
 
     if (currentSessionIndex >= activeSessions.length) {
 
@@ -1685,7 +1685,7 @@ function getNextSessionRoundRobin() {
 
     
 
-    // Rotar al siguiente ï¿½?ï¿½?ï¿½?Â­ndice para el prï¿½?ï¿½?ï¿½?Â³ximo mensaje
+    // Rotar al siguiente \xc3\xadndice para el pr\xc3\xb3ximo mensaje
 
     currentSessionIndex = (currentSessionIndex + 1) % activeSessions.length;
 
@@ -1701,21 +1701,21 @@ function getNextSessionRoundRobin() {
 
 /**
 
- * Envï¿½?ï¿½?ï¿½?Â­a mensaje usando rotaciï¿½?ï¿½?ï¿½?Â³n automï¿½?ï¿½?ï¿½?Â¡tica de sesiones
+ * Env\xc3\xada mensaje usando rotaci\xc3\xb3n autom\xc3\xa1tica de sesiones
 
- * Con balanceo round-robin: cada mensaje usa una sesiï¿½?ï¿½?ï¿½?Â³n diferente
+ * Con balanceo round-robin: cada mensaje usa una sesi\xc3\xb3n diferente
 
- * @param {string} phoneNumber - Nï¿½?ï¿½?ï¿½?Âºmero de telï¿½?ï¿½?ï¿½?Â©fono
+ * @param {string} phoneNumber - N\xc3\xbamero de tel\xc3\xa9fono
 
  * @param {string} message - Mensaje a enviar
 
- * @returns {Object} - Resultado del envï¿½?ï¿½?ï¿½?Â­o
+ * @returns {Object} - Resultado del env\xc3\xado
 
  */
 
 async function sendMessageWithRotation(phoneNumber, message) {
 
-    // Usar balanceo round-robin (cada mensaje rota a la siguiente sesiï¿½?ï¿½?ï¿½?Â³n)
+    // Usar balanceo round-robin (cada mensaje rota a la siguiente sesi\xc3\xb3n)
 
     const activeSessions = getActiveSessions();
 
@@ -1735,7 +1735,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
 
 
-    // Seleccionar sesiï¿½?ï¿½?ï¿½?Â³n actual y luego avanzar el ï¿½?ï¿½?ï¿½?Â­ndice
+    // Seleccionar sesi\xc3\xb3n actual y luego avanzar el \xc3\xadndice
 
     if (currentSessionIndex >= activeSessions.length) currentSessionIndex = 0;
 
@@ -1747,7 +1747,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
 
 
-    console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¤ Enviando via ${session.name} (idx ${currentSessionIndex}/${activeSessions.length})`);
+    console.log(` Enviando via ${session.name} (idx ${currentSessionIndex}/${activeSessions.length})`);
 
 
 
@@ -1759,7 +1759,7 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
             success: false,
 
-            error: new Error('Nï¿½?ï¿½?ï¿½?Âºmero de telï¿½?ï¿½?ï¿½?Â©fono invï¿½?ï¿½?ï¿½?Â¡lido')
+            error: new Error('N\xc3\xbamero de tel\xc3\xa9fono inv\xc3\xa1lido')
 
         };
 
@@ -1871,7 +1871,7 @@ function notifySessionDisconnect(sessionName, statusCode) {
 
 /**
 
- * Envï¿½?ï¿½?ï¿½?Â­a SMS usando API de Hablame.co
+ * Env\xc3\xada SMS usando API de Hablame.co
 
  */
 
@@ -1879,7 +1879,7 @@ async function sendSMSNotification(message) {
 
     if (!config.SMS_API_KEY) {
 
-        console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â API Key de Hablame.co no configurada');
+        console.log('Â¢Â¯Â¸ API Key de Hablame.co no configurada');
 
         return false;
 
@@ -1921,7 +1921,7 @@ async function sendSMSNotification(message) {
 
         if (response.status === 200 && response.data.statusCode === 200) {
 
-            console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?ï¿½? SMS enviado exitosamente');
+            console.log('Â¢ SMS enviado exitosamente');
 
             return true;
 
@@ -1931,7 +1931,7 @@ async function sendSMSNotification(message) {
 
     } catch (error) {
 
-        console.log(`ï¿½?Â¢ï¿½?Âï¿½?ï¿½? Error enviando SMS: ${error.message}`);
+        console.log(`Â¢ Error enviando SMS: ${error.message}`);
 
         return false;
 
@@ -1943,7 +1943,7 @@ async function sendSMSNotification(message) {
 
 /**
 
- * Envï¿½?ï¿½?ï¿½?Â­a notificaciï¿½?ï¿½?ï¿½?Â³n al administrador
+ * Env\xc3\xada notificaci\xc3\xb3n al administrador
 
  */
 
@@ -1953,7 +1953,7 @@ async function sendNotificationToAdmin(message) {
 
     if (!formattedNumber) {
 
-        console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Nï¿½?ï¿½?ï¿½?Âºmero de notificaciï¿½?ï¿½?ï¿½?Â³n no configurado');
+        console.log('Â¢Â¯Â¸ N\xc3\xbamero de notificaci\xc3\xb3n no configurado');
 
         return false;
 
@@ -1961,13 +1961,13 @@ async function sendNotificationToAdmin(message) {
 
     
 
-    // Intentar con la primera sesiï¿½?ï¿½?ï¿½?Â³n disponible
+    // Intentar con la primera sesi\xc3\xb3n disponible
 
     const session = getCurrentSession();
 
     if (!session) {
 
-        console.log('ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â No hay sesiones disponibles para enviar notificaciï¿½?ï¿½?ï¿½?Â³n');
+        console.log('Â¢Â¯Â¸ No hay sesiones disponibles para enviar notificaci\xc3\xb3n');
 
         return await sendSMSNotification(message);
 
@@ -1989,7 +1989,7 @@ async function sendNotificationToAdmin(message) {
 
     } catch (error) {
 
-        console.log(`ï¿½?Â¢ï¿½?ï¿½?ï¿½?Â ï¿½?Â¯ï¿½?Â¸ï¿½?Â Error enviando notificaciï¿½?ï¿½?ï¿½?Â³n: ${error.message}`);
+        console.log(`Â¢Â¯Â¸ Error enviando notificaci\xc3\xb3n: ${error.message}`);
 
         return await sendSMSNotification(message);
 
@@ -1999,7 +1999,7 @@ async function sendNotificationToAdmin(message) {
 
 
 
-// ======================== INFORMACIï¿½?ï¿½?ï¿½?ï¿½?N Y ESTADO ========================
+// ======================== INFORMACIN Y ESTADO ========================
 
 
 
@@ -2019,7 +2019,7 @@ function getAllSessions() {
 
 /**
 
- * Obtiene una sesiï¿½?ï¿½?ï¿½?Â³n por nombre
+ * Obtiene una sesi\xc3\xb3n por nombre
 
  */
 
@@ -2063,7 +2063,7 @@ function getSessionsStatus() {
 
 
 
-// ======================== EXPORTACIï¿½?ï¿½?ï¿½?ï¿½?N ========================
+// ======================== EXPORTACIN ========================
 
 
 
