@@ -28,6 +28,15 @@ const {
 
 } = require('@whiskeysockets/baileys');
 
+const { SocksProxyAgent } = require('socks-proxy-agent');
+
+// Configurar proxy si está disponible
+const PROXY_URL = process.env.ALL_PROXY || process.env.SOCKS_PROXY || null;
+const proxyAgent = PROXY_URL ? new SocksProxyAgent(PROXY_URL) : null;
+if (proxyAgent) {
+    console.log('🌐 Proxy SOCKS5 configurado:', PROXY_URL);
+}
+
 const pino = require('pino');
 
 const fs = require('fs').promises;
@@ -865,7 +874,7 @@ async function createSession(sessionName) {
 
         // Crear socket de WhatsApp
 
-        const socket = makeWASocket({
+        const socketConfig = {
 
             version,
 
@@ -891,7 +900,15 @@ async function createSession(sessionName) {
 
             }
 
-        });
+        };
+
+        // Agregar proxy si está configurado
+        if (proxyAgent) {
+            socketConfig.agent = proxyAgent;
+            console.log('🌐 Usando proxy para sesión:', sessionName);
+        }
+
+        const socket = makeWASocket(socketConfig);
 
         
 
