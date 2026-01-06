@@ -626,20 +626,23 @@ async function loadQueueMessages() {
         
         // Actualizar badge
         const badge = document.getElementById('queueBadge');
-        if (stats.total > 0) {
-            badge.textContent = stats.total;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
+        if (badge) {
+            if (stats.total > 0) {
+                badge.textContent = stats.total;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
         }
         
         // Renderizar lista de mensajes
         const messages = data.messages || [];
+        const msgListEl = document.getElementById('queueMessageList');
         if (messages.length === 0) {
             const emptyMsg = currentQueueTab === 'pending' 
                 ? '📭 Sin mensajes pendientes' 
                 : '📭 Sin mensajes enviados hoy';
-            document.getElementById('queueMessageList').innerHTML = `<p class="text-gray-500 text-center py-8">${emptyMsg}</p>`;
+            if (msgListEl) msgListEl.innerHTML = `<p class="text-gray-500 text-center py-8">${emptyMsg}</p>`;
             return;
         }
         
@@ -677,11 +680,12 @@ async function loadQueueMessages() {
             `;
         }).join('');
         
-        document.getElementById('queueMessageList').innerHTML = html;
+        if (msgListEl) msgListEl.innerHTML = html;
         
     } catch (error) {
         console.error('Error loading queue:', error);
-        document.getElementById('queueMessageList').innerHTML = '<p class="text-red-500 text-center">Error de conexión</p>';
+        const el = document.getElementById('queueMessageList');
+        if (el) el.innerHTML = '<p class="text-red-500 text-center">Error de conexión</p>';
     }
 }
 
