@@ -200,7 +200,7 @@ app.get('/api/network/ip', async (req, res) => {
 /**
  * GET /api/sessions - Lista todas las sesiones
  */
-app.get('/api/sessions', async async (req, res) => {
+app.get('/api/sessions', async (req, res) => {
     try {
         const sessions = sessionManager.getSessionsStatus();
         const publicIP = await getPublicIP();
