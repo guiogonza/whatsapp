@@ -543,9 +543,31 @@ function showMonitorTab(tabName) {
     if (tabName === 'queue') loadQueueMessages();
 }
 
+// Estado actual de la pestaña de cola
+let currentQueueTab = 'pending';
+
+// Cambiar pestaña de cola
+function switchQueueTab(tab) {
+    currentQueueTab = tab;
+    
+    // Actualizar estilos de pestañas
+    const tabPending = document.getElementById('tabPending');
+    const tabSent = document.getElementById('tabSent');
+    
+    if (tab === 'pending') {
+        tabPending.className = 'px-4 py-2 text-sm font-medium text-orange-600 border-b-2 border-orange-500';
+        tabSent.className = 'px-4 py-2 text-sm font-medium text-gray-500 hover:text-green-600';
+    } else {
+        tabPending.className = 'px-4 py-2 text-sm font-medium text-gray-500 hover:text-orange-600';
+        tabSent.className = 'px-4 py-2 text-sm font-medium text-green-600 border-b-2 border-green-500';
+    }
+    
+    loadQueueMessages();
+}
+
 async function loadQueueMessages() {
     try {
-        const response = await fetch(`${API_URL}/api/queue/messages`);
+        const response = await fetch(`${API_URL}/api/queue/messages?status=${currentQueueTab}&limit=50`);
         const data = await response.json();
         
         if (!data.success) {
@@ -555,55 +577,61 @@ async function loadQueueMessages() {
         
         // Actualizar stats
         const stats = data.stats || {};
-        document.getElementById('queueTotalNumbers').textContent = stats.uniqueNumbers || 0;
-        document.getElementById('queueTotalMessages').textContent = stats.totalQueued || 0;
+        document.getElementById('queueTotalNumbers').textContent = stats.pendingNumbers || 0;
+        document.getElementById('queueTotalMessages').textContent = stats.total || 0;
+        document.getElementById('queueSentToday').textContent = stats.sentToday || 0;
+        document.getElementById('pendingCount').textContent = stats.total || 0;
+        document.getElementById('sentTodayCount').textContent = stats.sentToday || 0;
         
         // Actualizar badge
         const badge = document.getElementById('queueBadge');
-        if (stats.totalQueued > 0) {
-            badge.textContent = stats.totalQueued;
+        if (stats.total > 0) {
+            badge.textContent = stats.total;
             badge.classList.remove('hidden');
         } else {
             badge.classList.add('hidden');
         }
         
-        // Calcular tiempo más antiguo
-        const messages = data.messages || [];
-        if (messages.length > 0) {
-            const oldest = new Date(messages[messages.length - 1].enqueued_at);
-            const now = new Date();
-            const diffMs = now - oldest;
-            const diffMins = Math.floor(diffMs / 60000);
-            if (diffMins < 60) {
-                document.getElementById('queueOldest').textContent = `${diffMins}m`;
-            } else {
-                document.getElementById('queueOldest').textContent = `${Math.floor(diffMins / 60)}h`;
-            }
-        } else {
-            document.getElementById('queueOldest').textContent = '-';
-        }
-        
         // Renderizar lista de mensajes
+        const messages = data.messages || [];
         if (messages.length === 0) {
-            document.getElementById('queueMessageList').innerHTML = '<p class="text-gray-500 text-center py-8">📭 Sin mensajes en cola</p>';
+            const emptyMsg = currentQueueTab === 'pending' 
+                ? '📭 Sin mensajes pendientes' 
+                : '📭 Sin mensajes enviados hoy';
+            document.getElementById('queueMessageList').innerHTML = `<p class="text-gray-500 text-center py-8">${emptyMsg}</p>`;
             return;
         }
         
         const html = messages.map(msg => {
-            const date = new Date(msg.enqueued_at);
+            const isPending = msg.status === 'pending' || !msg.sent_at;
+            const timeField = isPending ? msg.arrived_at : msg.sent_at;
+            const date = new Date(timeField);
             const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-            const msgPreview = msg.message ? msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : '') : '(sin texto)';
+            const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' });
+            const msgPreview = msg.message ? msg.message.substring(0, 80) + (msg.message.length > 80 ? '...' : '') : '(sin texto)';
+            
+            let statusBadge;
+            if (isPending) {
+                statusBadge = '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">⏳ pendiente</span>';
+            } else if (msg.send_type === 'manual') {
+                statusBadge = '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">✋ manual</span>';
+            } else {
+                statusBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">✅ auto</span>';
+            }
+            
+            const timeLabel = isPending ? 'Recibido' : 'Enviado';
             
             return `
-                <div class="border-b border-gray-200 py-2 last:border-0">
+                <div class="border-b border-gray-200 py-3 last:border-0">
                     <div class="flex justify-between items-start">
                         <div>
                             <span class="font-mono text-sm text-gray-800">📱 ${msg.phone_number}</span>
-                            <span class="text-xs text-gray-400 ml-2">${timeStr}</span>
+                            <span class="text-xs text-gray-400 ml-2">${timeLabel}: ${dateStr} ${timeStr}</span>
                         </div>
-                        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">pendiente</span>
+                        ${statusBadge}
                     </div>
-                    <div class="text-sm text-gray-600 mt-1 truncate">${msgPreview}</div>
+                    <div class="text-sm text-gray-600 mt-1">${msgPreview}</div>
+                    ${msg.char_count ? `<div class="text-xs text-gray-400 mt-1">${msg.char_count} caracteres</div>` : ''}
                 </div>
             `;
         }).join('');
@@ -613,6 +641,38 @@ async function loadQueueMessages() {
     } catch (error) {
         console.error('Error loading queue:', error);
         document.getElementById('queueMessageList').innerHTML = '<p class="text-red-500 text-center">Error de conexión</p>';
+    }
+}
+
+// Marcar todos los mensajes pendientes como enviados manualmente
+async function markAllAsSent() {
+    const stats = document.getElementById('queueTotalMessages').textContent;
+    if (stats === '0') {
+        showToast('No hay mensajes pendientes para marcar', 'info');
+        return;
+    }
+    
+    if (!confirm(`¿Estás seguro de marcar ${stats} mensajes pendientes como enviados manualmente?\n\nEsto NO los enviará, solo los marcará como "enviado manual" para limpiar la cola.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/api/queue/mark-all-sent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`✅ ${data.markedCount} mensajes marcados como enviados`, 'success');
+            loadQueueMessages(); // Recargar la lista
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error marking as sent:', error);
+        showToast('Error de conexión', 'error');
     }
 }
 

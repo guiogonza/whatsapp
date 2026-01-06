@@ -103,6 +103,9 @@ async function initDatabase() {
     try {
         db.run(`ALTER TABLE outgoing_queue ADD COLUMN char_count INTEGER DEFAULT 0`);
     } catch (e) { /* ya existe */ }
+    try {
+        db.run(`ALTER TABLE outgoing_queue ADD COLUMN send_type TEXT DEFAULT 'auto'`);
+    } catch (e) { /* ya existe */ }
     
     // Migrar datos antiguos: si arrived_at está vacío, usar enqueued_at (solo si la columna existe)
     try {
@@ -232,14 +235,36 @@ function getMessagesForNumber(phoneNumber) {
 
 /**
  * Marcar mensajes como enviados (actualiza sent_at)
+ * @param {Array} messageIds - IDs de mensajes a marcar
+ * @param {string} sendType - 'auto' o 'manual'
  */
-function markMessagesSent(messageIds) {
+function markMessagesSent(messageIds, sendType = 'auto') {
     if (!db || !messageIds || messageIds.length === 0) return false;
     const ids = messageIds.join(',');
     const sentAt = getColombiaTimestamp();
-    db.run(`UPDATE outgoing_queue SET sent_at = ? WHERE id IN (${ids})`, [sentAt]);
+    db.run(`UPDATE outgoing_queue SET sent_at = ?, send_type = ? WHERE id IN (${ids})`, [sentAt, sendType]);
     saveDatabase();
     return true;
+}
+
+/**
+ * Marcar TODOS los mensajes pendientes como enviados manualmente
+ * @returns {number} Cantidad de mensajes marcados
+ */
+function markAllPendingAsSent() {
+    if (!db) return 0;
+    const sentAt = getColombiaTimestamp();
+    
+    // Primero contar cuántos hay pendientes
+    const countRes = db.exec(`SELECT COUNT(*) as cnt FROM outgoing_queue WHERE sent_at IS NULL`);
+    const count = queryToObjects(countRes)[0]?.cnt || 0;
+    
+    if (count > 0) {
+        db.run(`UPDATE outgoing_queue SET sent_at = ?, send_type = 'manual' WHERE sent_at IS NULL`, [sentAt]);
+        saveDatabase();
+    }
+    
+    return count;
 }
 
 /**
@@ -254,13 +279,29 @@ function clearQueueForNumber(phoneNumber) {
 
 /**
  * Obtener mensajes en cola con detalle (para mostrar en UI)
+ * @param {number} limit - Límite de resultados
+ * @param {string} status - 'pending', 'sent', 'all' (default: 'pending')
  */
-function getQueuedMessages(limit = 50) {
+function getQueuedMessages(limit = 50, status = 'pending') {
     if (!db) return [];
+    
+    let whereClause = '';
+    let orderBy = 'arrived_at DESC';
+    
+    if (status === 'pending') {
+        whereClause = 'WHERE sent_at IS NULL';
+        orderBy = 'arrived_at ASC';
+    } else if (status === 'sent') {
+        whereClause = 'WHERE sent_at IS NOT NULL';
+        orderBy = 'sent_at DESC';
+    }
+    
     const res = db.exec(`
-        SELECT id, phone_number, message, enqueued_at, tries
+        SELECT id, phone_number, message, char_count, arrived_at, sent_at, send_type,
+               CASE WHEN sent_at IS NULL THEN 'pending' ELSE 'sent' END as status
         FROM outgoing_queue
-        ORDER BY enqueued_at ASC
+        ${whereClause}
+        ORDER BY ${orderBy}
         LIMIT ${parseInt(limit) || 50}
     `);
     return queryToObjects(res);
@@ -270,13 +311,20 @@ function getQueuedMessages(limit = 50) {
  * Estadísticas de la cola (solo mensajes pendientes - sin enviar)
  */
 function getQueueStats() {
-    if (!db) return { total: 0, pendingNumbers: 0, totalChars: 0 };
+    if (!db) return { total: 0, pendingNumbers: 0, totalChars: 0, sentToday: 0 };
     const totalRes = db.exec(`SELECT COUNT(*) as total, SUM(char_count) as chars FROM outgoing_queue WHERE sent_at IS NULL`);
     const numbersRes = db.exec(`SELECT COUNT(DISTINCT phone_number) as cnt FROM outgoing_queue WHERE sent_at IS NULL`);
+    
+    // Mensajes enviados hoy
+    const today = getColombiaTimestamp().split('T')[0];
+    const sentTodayRes = db.exec(`SELECT COUNT(*) as cnt FROM outgoing_queue WHERE sent_at IS NOT NULL AND sent_at LIKE '${today}%'`);
+    
     const total = queryToObjects(totalRes)[0]?.total || 0;
     const totalChars = queryToObjects(totalRes)[0]?.chars || 0;
     const pendingNumbers = queryToObjects(numbersRes)[0]?.cnt || 0;
-    return { total, pendingNumbers, totalChars };
+    const sentToday = queryToObjects(sentTodayRes)[0]?.cnt || 0;
+    
+    return { total, pendingNumbers, totalChars, sentToday };
 }
 
 /**
@@ -535,6 +583,7 @@ module.exports = {
     getQueuedNumbers,
     getMessagesForNumber,
     markMessagesSent,
+    markAllPendingAsSent,
     clearQueueForNumber,
     getQueueStats,
     getQueuedMessages,

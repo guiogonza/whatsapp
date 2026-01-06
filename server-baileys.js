@@ -926,17 +926,22 @@ app.post('/api/settings/notification-interval', (req, res) => {
 
 /**
  * GET /api/queue/messages - Obtiene mensajes en cola
+ * Query params:
+ *   - limit: número máximo de resultados (default: 50)
+ *   - status: 'pending', 'sent', 'all' (default: 'pending')
  */
 app.get('/api/queue/messages', (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
-        const messages = database.getQueuedMessages(limit);
+        const status = req.query.status || 'pending';
+        const messages = database.getQueuedMessages(limit, status);
         const stats = database.getQueueStats();
         
         res.json({
             success: true,
             stats,
-            messages
+            messages,
+            filter: status
         });
     } catch (error) {
         res.status(500).json({
@@ -946,10 +951,29 @@ app.get('/api/queue/messages', (req, res) => {
     }
 });
 
-// ======================== BÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚ÂšSQUEDA DE MENSAJES ========================
+/**
+ * POST /api/queue/mark-all-sent - Marca todos los mensajes pendientes como enviados manualmente
+ */
+app.post('/api/queue/mark-all-sent', (req, res) => {
+    try {
+        const count = database.markAllPendingAsSent();
+        res.json({
+            success: true,
+            message: `${count} mensajes marcados como enviados manualmente`,
+            markedCount: count
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ======================== BÚSQUEDA DE MENSAJES ========================
 
 /**
- * GET /api/messages/phones - Obtiene nÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Âºmeros ÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Âºnicos
+ * GET /api/messages/phones - Obtiene números únicos
  */
 app.get('/api/messages/phones', (req, res) => {
     try {
