@@ -52,7 +52,19 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.static(config.PUBLIC_PATH));
+
+// Configurar charset UTF-8 para archivos estáticos
+app.use(express.static(config.PUBLIC_PATH, {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        } else if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+    }
+}));
 
 // ======================== FUNCIONES AUXILIARES ========================
 

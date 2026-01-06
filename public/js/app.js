@@ -662,7 +662,7 @@ async function searchMessages(offset = 0) {
         const data = await response.json();
         
         if (!data.success) {
-            document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-500">Error al buscar</td></tr>';
+            document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">Error al buscar</td></tr>';
             return;
         }
         
@@ -670,7 +670,7 @@ async function searchMessages(offset = 0) {
         document.getElementById('searchResultCount').textContent = `(${data.total} mensajes encontrados)`;
         
         if (data.messages.length === 0) {
-            document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No se encontraron mensajes</td></tr>';
+            document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No se encontraron mensajes</td></tr>';
             document.getElementById('searchPagination').innerHTML = '';
             return;
         }
@@ -699,6 +699,7 @@ async function searchMessages(offset = 0) {
                     <td class="px-4 py-3 text-purple-600 font-medium">${msg.session}</td>
                     <td class="px-4 py-3 font-mono text-sm">${msg.phone_number}</td>
                     <td class="px-4 py-3">${messageCell}</td>
+                    <td class="px-4 py-3 text-indigo-600 font-medium">${(msg.char_count || 0).toLocaleString()}</td>
                     <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span></td>
                 </tr>
             `;
@@ -711,7 +712,7 @@ async function searchMessages(offset = 0) {
         
     } catch (error) {
         console.error('Error searching messages:', error);
-        document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-500">Error de conexión</td></tr>';
+        document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">Error de conexión</td></tr>';
     }
 }
 
@@ -753,7 +754,7 @@ function clearSearchFilters() {
     document.getElementById('searchStartDate').value = '';
     document.getElementById('searchEndDate').value = '';
     document.getElementById('searchLimit').value = '50';
-    document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Selecciona filtros y haz clic en Buscar</td></tr>';
+    document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Selecciona filtros y haz clic en Buscar</td></tr>';
     document.getElementById('searchResultCount').textContent = '';
     document.getElementById('searchPagination').innerHTML = '';
 }

@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     ca-certificates \
     fonts-liberation \
+    git \
     libasound2 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -61,10 +62,11 @@ RUN npm install --omit=dev && npm cache clean --force
 COPY . .
 
 # Crea carpetas con permisos correctos
-RUN mkdir -p /app/whatsapp-sessions /app/logs \
+RUN mkdir -p /app/whatsapp-sessions /app/logs /app/data \
  && chown -R node:node /app \
  && chmod -R 755 /app \
- && chmod 775 /app/whatsapp-sessions
+ && chmod 775 /app/whatsapp-sessions \
+ && chmod 775 /app/data
 
 # Usuario no root
 USER node

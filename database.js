@@ -104,8 +104,14 @@ async function initDatabase() {
         db.run(`ALTER TABLE outgoing_queue ADD COLUMN char_count INTEGER DEFAULT 0`);
     } catch (e) { /* ya existe */ }
     
-    // Migrar datos antiguos: si arrived_at está vacío, usar enqueued_at
-    db.run(`UPDATE outgoing_queue SET arrived_at = enqueued_at WHERE arrived_at IS NULL OR arrived_at = ''`);
+    // Migrar datos antiguos: si arrived_at está vacío, usar enqueued_at (solo si la columna existe)
+    try {
+        const cols = db.exec("PRAGMA table_info(outgoing_queue)");
+        const hasEnqueuedAt = cols[0]?.values?.some(row => row[1] === 'enqueued_at');
+        if (hasEnqueuedAt) {
+            db.run(`UPDATE outgoing_queue SET arrived_at = enqueued_at WHERE arrived_at IS NULL OR arrived_at = ''`);
+        }
+    } catch (e) { /* columna no existe, no hay nada que migrar */ }
     
     // Índice para búsqueda de pendientes
     db.run(`CREATE INDEX IF NOT EXISTS idx_queue_pending ON outgoing_queue(sent_at, phone_number)`);
