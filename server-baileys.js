@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * WhatsApp Bot Server con Baileys
  * 
  * Características principales:
@@ -78,8 +78,8 @@ function clearConsole() {
     
     if (minutesSinceLastClear >= config.CONSOLE_CLEAR_INTERVAL) {
         console.clear();
-        console.log(`ƒ°‚Ÿ‚§‚¹ Consola limpiada (${consoleLogCount} logs desde última limpieza)`);
-        console.log(`ƒ¢‚‚° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
+        console.log(`\\uD83E\\uDDF9 Consola limpiada (${consoleLogCount} logs desde ultima limpieza)`);
+        console.log(`\\uD83D\\uDD50 ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
         
         consoleLogCount = 0;
         lastClearTime = new Date();
@@ -93,21 +93,21 @@ async function monitorSessions() {
     const sessions = sessionManager.getAllSessions();
     const activeSessions = sessionManager.getActiveSessions();
     
-    console.log('\nƒ°‚Ÿ‚“‚Š === MONITOR DE SESIONES ===');
-    console.log(`ƒ¢‚‚° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
-    console.log(`ƒ°‚Ÿ‚“‚± Total sesiones: ${Object.keys(sessions).length}`);
+    console.log('\n\\uD83D\\uDCCA === MONITOR DE SESIONES ===');
+    console.log(`\\uD83D\\uDD50 ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
+    console.log(`\\uD83D\\uDCF1 Total sesiones: ${Object.keys(sessions).length}`);
     console.log(`✅ Sesiones activas: ${activeSessions.length}`);
     
     for (const [name, session] of Object.entries(sessions)) {
         const uptimeMinutes = Math.floor((Date.now() - session.startTime.getTime()) / 1000 / 60);
-        const status = session.state === config.SESSION_STATES.READY ? '✅' : 'ƒ¢‚‚Œ';
+        const status = session.state === config.SESSION_STATES.READY ? '✅' : '\\u274C';
         
         console.log(`${status} ${name}: ${session.state} | Teléfono: ${session.phoneNumber || 'N/A'} | Uptime: ${uptimeMinutes}m | Mensajes: ${session.messages?.length || 0}`);
     }
     
     const rotationInfo = sessionManager.getRotationInfo();
-    console.log(`\nƒ°‚Ÿ‚”‚„ Sesión actual: ${rotationInfo.currentSession || 'N/A'}`);
-    console.log(`ƒ°‚Ÿ‚“‚Š Balanceo: ${rotationInfo.balancingMode}`);
+    console.log(`\n\\uD83D\\uDCC4 Sesion actual: ${rotationInfo.currentSession || 'N/A'}`);
+    console.log(`\\uD83D\\uDCCA Balanceo: ${rotationInfo.balancingMode}`);
     console.log('==========================\n');
 }
 
@@ -299,7 +299,7 @@ app.get('/api/sessions/:name/status', (req, res) => {
         if (!session) {
             return res.status(404).json({
                 success: false,
-                error: 'Sesión no encontrada'
+                error: 'Sesion no encontrada'
             });
         }
         
@@ -469,7 +469,7 @@ app.post('/api/session/send-message', async (req, res) => {
         if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
             return res.status(400).json({
                 success: false,
-                error: 'Sesión no disponible o no está lista'
+                error: 'Sesion no disponible o no está lista'
             });
         }
 
@@ -521,7 +521,7 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
 
         const session = sessionManager.getSession(sessionName);
         if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
-            return res.status(400).json({ success: false, error: 'Sesión no disponible o no está lista' });
+            return res.status(400).json({ success: false, error: 'Sesion no disponible o no está lista' });
         }
 
         const formattedNumber = formatPhoneNumber(phoneNumber);
@@ -1065,7 +1065,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(config.PUBLIC_PATH, 'index.html'));
 });
 
-// ======================== INICIALIZACIƒƒ‚“N ========================
+// ======================== INICIALIZACI=N ========================
 
 /**
  * Inicia los intervalos de monitoreo
@@ -1094,7 +1094,7 @@ function stopMonitoring() {
     if (notificationInterval) clearInterval(notificationInterval);
     sessionManager.stopSessionRotation();
     
-    console.log('ƒ¢‚‚¹ƒ¯‚¸‚ Monitoreo detenido');
+    console.log('\\u2139 Monitoreo detenido');
 }
 
 /**
@@ -1102,7 +1102,7 @@ function stopMonitoring() {
  */
 async function initialize() {
     try {
-        console.log('\nƒ°‚Ÿ‚š‚€ Iniciando WhatsApp Bot Server con Baileys...\n');
+        console.log('\n\\uD83D\\uDE80 Iniciando WhatsApp Bot Server con Baileys...\n');
         
         // Inicializar base de datos
         await database.init();
@@ -1113,8 +1113,8 @@ async function initialize() {
         // Iniciar servidor HTTP
         server.listen(config.PORT, () => {
             console.log(`✅ Servidor escuchando en puerto ${config.PORT}`);
-            console.log(`ƒ°‚Ÿ‚Œ‚ http://localhost:${config.PORT}`);
-            console.log(`ƒ¢‚‚° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
+            console.log(`\\uD83C\\uDF10 http://localhost:${config.PORT}`);
+            console.log(`\\uD83D\\uDD50 ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
         });
         
         // Iniciar monitoreo
@@ -1129,14 +1129,14 @@ async function initialize() {
         console.log('✅ Sistema iniciado correctamente\n');
         
     } catch (error) {
-        console.error('ƒ¢‚‚Œ Error iniciando servidor:', error);
+        console.error('\\u274C Error iniciando servidor:', error);
         process.exit(1);
     }
 }
 
-// Manejo de seƒƒ‚±ales de cierre
+// Manejo de se\\u00F1ales de cierre
 process.on('SIGINT', async () => {
-    console.log('\n\nƒ°‚Ÿ‚›‚‘ Recibida seƒƒ‚±al SIGINT, cerrando servidor...');
+    console.log('\n\n\\uD83D\\uDED1 Recibida se\\u00F1al SIGINT, cerrando servidor...');
     stopMonitoring();
     
     // Cerrar todas las sesiones
@@ -1149,7 +1149,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('SIGTERM', async () => {
-    console.log('\n\nƒ°‚Ÿ‚›‚‘ Recibida seƒƒ‚±al SIGTERM, cerrando servidor...');
+    console.log('\n\n\\uD83D\\uDED1 Recibida se\\u00F1al SIGTERM, cerrando servidor...');
     stopMonitoring();
     
     const sessions = sessionManager.getAllSessions();
