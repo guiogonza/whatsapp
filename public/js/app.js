@@ -37,15 +37,21 @@ function showSection(sectionId) {
 }
 
 // ======================== SESIONES ========================
+let networkInfo = { publicIP: 'Cargando...', lastChecked: null };
+
 async function loadSessions() {
     try {
         const response = await fetch(`${API_URL}/api/sessions`);
         const data = await response.json();
         sessions = data.sessions || [];
+        if (data.networkInfo) {
+            networkInfo = data.networkInfo;
+        }
         await updateRotationInfo();
         updateSessionsList();
         populateSessionSelects();
         updateSessionsCount();
+        updateNetworkInfo();
     } catch (error) {
         console.error('Error cargando sesiones:', error);
         document.getElementById('sessionsList').innerHTML = `
@@ -139,6 +145,21 @@ function stopRotationUpdates() {
     }
 }
 
+function updateNetworkInfo() {
+    const container = document.getElementById('networkInfoDisplay');
+    if (container && networkInfo.publicIP) {
+        const isColombianIP = networkInfo.publicIP.startsWith('181.') || networkInfo.publicIP.startsWith('190.') || networkInfo.publicIP.startsWith('186.');
+        const flagEmoji = isColombianIP ? '🇨🇴' : '🇩🇪';
+        const location = isColombianIP ? 'Colombia (Residencial)' : 'Alemania (VPS)';
+        container.innerHTML = `
+            <div class="flex items-center gap-2 text-sm">
+                <span class="font-bold">🌐 IP:</span>
+                <span class="font-mono bg-gray-100 px-2 py-1 rounded">${networkInfo.publicIP}</span>
+                <span>${flagEmoji} ${location}</span>
+            </div>`;
+    }
+}
+
 function updateSessionsList() {
     const container = document.getElementById('sessionsList');
     if (sessions.length === 0) {
@@ -210,6 +231,7 @@ function createSessionCard(session) {
                 ${qrHtml}
                 <div class="mt-3 text-xs text-gray-500">
                     <p>📊 Mensajes: ${session.messagesCount || 0}</p>
+                    <p class="mt-1">🌐 IP: <span class="font-mono">${networkInfo.publicIP || 'N/A'}</span></p>
                 </div>
                 ${session.state === 'DISCONNECTED' || session.state === 'ERROR' ? `
                     <div class="mt-4">

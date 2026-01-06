@@ -157,15 +157,60 @@ function sendSessionsStatusNotification() {
 
 // ======================== RUTAS - SESIONES ========================
 
+// Cache de IP pública (se actualiza cada 5 minutos)
+let cachedPublicIP = null;
+let lastIPCheck = 0;
+const IP_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+async function getPublicIP() {
+    const now = Date.now();
+    if (cachedPublicIP && (now - lastIPCheck) < IP_CACHE_DURATION) {
+        return cachedPublicIP;
+    }
+    try {
+        const https = require('https');
+        const ip = await new Promise((resolve, reject) => {
+            https.get('https://api.ipify.org', (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => resolve(data.trim()));
+            }).on('error', reject);
+        });
+        cachedPublicIP = ip;
+        lastIPCheck = now;
+        return ip;
+    } catch (error) {
+        console.error('Error obteniendo IP pública:', error.message);
+        return cachedPublicIP || 'No disponible';
+    }
+}
+
+/**
+ * GET /api/network/ip - Obtiene la IP pública actual
+ */
+app.get('/api/network/ip', async (req, res) => {
+    try {
+        const ip = await getPublicIP();
+        res.json({ success: true, ip });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 /**
  * GET /api/sessions - Lista todas las sesiones
  */
-app.get('/api/sessions', (req, res) => {
+app.get('/api/sessions', async async (req, res) => {
     try {
         const sessions = sessionManager.getSessionsStatus();
+        const publicIP = await getPublicIP();
         res.json({
             success: true,
-            sessions
+            sessions,
+            networkInfo: {
+                publicIP,
+                lastChecked: new Date(lastIPCheck).toISOString()
+            }
         });
     } catch (error) {
         res.status(500).json({
