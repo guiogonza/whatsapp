@@ -194,9 +194,9 @@ function enqueueMessage(phoneNumber, message) {
     const arrivedAt = getColombiaTimestamp();
     
     db.run(`
-        INSERT INTO outgoing_queue (phone_number, message, char_count, arrived_at, enqueued_at, sent_at)
-        VALUES (?, ?, ?, ?, ?, NULL)
-    `, [num, msg, charCount, arrivedAt, arrivedAt]);
+        INSERT INTO outgoing_queue (phone_number, message, char_count, arrived_at, sent_at)
+        VALUES (?, ?, ?, ?, NULL)
+    `, [num, msg, charCount, arrivedAt]);
     saveDatabase();
     
     // Resumen rápido
