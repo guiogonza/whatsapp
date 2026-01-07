@@ -1939,7 +1939,7 @@ function notifySessionDisconnect(sessionName, statusCode) {
         TOOLS: '\uD83D\uDD27'         // 🔧
     };
     
-    let message = `${EMOJI.ALERT} *ALERTA: SESION DESCONECTADA*\n\n` +
+    let message = `${EMOJI.CHART} *REPORTE SESIONES*\n\n` +
                   `${EMOJI.CLOCK} ${nowStr}\n\n` +
                   `${EMOJI.PHONE} Sesion: *${sessionName}*\n` +
                   `${EMOJI.CODE} Status Code: ${codeText}\n\n` +
