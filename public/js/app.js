@@ -183,13 +183,18 @@ function stopRotationUpdates() {
 function updateNetworkInfo() {
     const container = document.getElementById('networkInfoDisplay');
     if (container && networkInfo.publicIP) {
-        const isColombianIP = networkInfo.publicIP.startsWith('181.') || networkInfo.publicIP.startsWith('190.') || networkInfo.publicIP.startsWith('186.');
-        const flagEmoji = isColombianIP ? '🇨🇴' : '🇩🇪';
-        const location = isColombianIP ? 'Colombia (Residencial)' : 'Alemania (VPS)';
+        // Usar la información del servidor si está disponible
+        const usingProxy = networkInfo.usingProxy || false;
+        const location = networkInfo.location || (usingProxy ? 'Colombia (via Proxy)' : 'VPS Directo');
+        const flagEmoji = usingProxy ? '🇨🇴' : '🇩🇪';
+        const statusColor = usingProxy ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+        const statusText = usingProxy ? 'Proxy Activo' : 'Conexión Directa';
+        
         container.innerHTML = `
-            <div class="flex items-center gap-2 text-sm">
+            <div class="flex items-center gap-2 text-sm flex-wrap">
                 <span class="font-bold">🌐 IP:</span>
-                <span class="font-mono bg-gray-100 px-2 py-1 rounded">${networkInfo.publicIP}</span>
+                <span class="font-mono bg-purple-100 text-purple-800 px-2 py-1 rounded">${networkInfo.publicIP}</span>
+                <span class="${statusColor} px-2 py-1 rounded text-xs font-medium">${statusText}</span>
                 <span>${flagEmoji} ${location}</span>
             </div>`;
     }

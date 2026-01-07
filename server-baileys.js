@@ -157,25 +157,73 @@ function sendSessionsStatusNotification() {
 
 // ======================== RUTAS - SESIONES ========================
 
-// Cache de IP pública (se actualiza cada 5 minutos)
+// Cache de IP pública (se actualiza cada 30 segundos para reflejar cambios de proxy)
 let cachedPublicIP = null;
+let cachedProxyStatus = null;
 let lastIPCheck = 0;
-const IP_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+const IP_CACHE_DURATION = 30 * 1000; // 30 segundos para detectar cambios rápidamente
+const net = require('net');
+
+/**
+ * Verifica si el proxy SOCKS5 está disponible
+ */
+async function checkProxyAvailable(proxyUrl) {
+    if (!proxyUrl) return false;
+    
+    try {
+        const proxyMatch = proxyUrl.match(/socks5?:\/\/([^:]+):(\d+)/);
+        if (!proxyMatch) return false;
+        
+        const [, host, port] = proxyMatch;
+        
+        return new Promise((resolve) => {
+            const socket = new net.Socket();
+            socket.setTimeout(3000);
+            
+            socket.on('connect', () => {
+                socket.destroy();
+                resolve(true);
+            });
+            
+            socket.on('timeout', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            
+            socket.on('error', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            
+            socket.connect(parseInt(port), host);
+        });
+    } catch (error) {
+        return false;
+    }
+}
 
 async function getPublicIP() {
     const now = Date.now();
     if (cachedPublicIP && (now - lastIPCheck) < IP_CACHE_DURATION) {
-        return cachedPublicIP;
+        return { ip: cachedPublicIP, usingProxy: cachedProxyStatus };
     }
     try {
         const https = require('https');
         const PROXY_URL = process.env.ALL_PROXY || process.env.SOCKS_PROXY || null;
         let agent = null;
+        let usingProxy = false;
         
-        // Usar proxy si está configurado
+        // Verificar si el proxy está disponible antes de usarlo
         if (PROXY_URL) {
-            const { SocksProxyAgent } = require('socks-proxy-agent');
-            agent = new SocksProxyAgent(PROXY_URL);
+            const proxyAvailable = await checkProxyAvailable(PROXY_URL);
+            if (proxyAvailable) {
+                const { SocksProxyAgent } = require('socks-proxy-agent');
+                agent = new SocksProxyAgent(PROXY_URL);
+                usingProxy = true;
+                console.log('🌐 Proxy disponible, obteniendo IP a través del proxy (Colombia)');
+            } else {
+                console.log('⚠️ Proxy no disponible, obteniendo IP directa del VPS');
+            }
         }
         
         const ip = await new Promise((resolve, reject) => {
@@ -187,11 +235,12 @@ async function getPublicIP() {
             }).on('error', reject);
         });
         cachedPublicIP = ip;
+        cachedProxyStatus = usingProxy;
         lastIPCheck = now;
-        return ip;
+        return { ip, usingProxy };
     } catch (error) {
         console.error('Error obteniendo IP pública:', error.message);
-        return cachedPublicIP || 'No disponible';
+        return { ip: cachedPublicIP || 'No disponible', usingProxy: cachedProxyStatus || false };
     }
 }
 
@@ -200,8 +249,8 @@ async function getPublicIP() {
  */
 app.get('/api/network/ip', async (req, res) => {
     try {
-        const ip = await getPublicIP();
-        res.json({ success: true, ip });
+        const { ip, usingProxy } = await getPublicIP();
+        res.json({ success: true, ip, usingProxy });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -213,12 +262,14 @@ app.get('/api/network/ip', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
     try {
         const sessions = sessionManager.getSessionsStatus();
-        const publicIP = await getPublicIP();
+        const { ip: publicIP, usingProxy } = await getPublicIP();
         res.json({
             success: true,
             sessions,
             networkInfo: {
                 publicIP,
+                usingProxy,
+                location: usingProxy ? 'Colombia (via Proxy)' : 'VPS Directo',
                 lastChecked: new Date(lastIPCheck).toISOString()
             }
         });
@@ -403,7 +454,7 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
  */
 app.post('/api/messages/send', async (req, res) => {
     try {
-        const { phoneNumber, message, immediate } = req.body;
+        const { phoneNumber, message } = req.body;
         
         if (!phoneNumber || !message) {
             return res.status(400).json({
@@ -412,36 +463,17 @@ app.post('/api/messages/send', async (req, res) => {
             });
         }
         
-        // Modo 1: Envio inmediato sin consolidacion (bypass)
-        if (immediate === true || immediate === 'true') {
-            const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
-            
-            if (result.success) {
-                res.json({
-                    success: true,
-                    sessionUsed: result.sessionUsed,
-                    message: 'Mensaje enviado exitosamente (inmediato sin consolidacion)'
-                });
-            } else {
-                res.status(500).json({
-                    success: false,
-                    error: result.error?.message || 'Error enviando mensaje'
-                });
-            }
-        } 
-        // Modo 2 (DEFAULT): Consolidar mensajes del mismo numero antes de enviar
-        else {
-            const result = sessionManager.addToConsolidation(phoneNumber, message);
-            if (result.success) {
-                res.json({ 
-                    success: true, 
-                    consolidated: true, 
-                    message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
-                    details: result 
-                });
-            } else {
-                res.status(500).json({ success: false, error: result.error });
-            }
+        // SIEMPRE consolidar - sin opcion de bypass
+        const result = sessionManager.addToConsolidation(phoneNumber, message);
+        if (result.success) {
+            res.json({ 
+                success: true, 
+                consolidated: true, 
+                message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
+                details: result 
+            });
+        } else {
+            res.status(500).json({ success: false, error: result.error });
         }
     } catch (error) {
         res.status(500).json({
@@ -456,7 +488,7 @@ app.post('/api/messages/send', async (req, res) => {
  */
 app.post('/api/session/send-message', async (req, res) => {
     try {
-        const { sessionName, phoneNumber, message, immediate } = req.body;
+        const { phoneNumber, message } = req.body;
 
         if (!phoneNumber || !message) {
             return res.status(400).json({
@@ -465,27 +497,17 @@ app.post('/api/session/send-message', async (req, res) => {
             });
         }
 
-        // SIEMPRE usar consolidacion por defecto
-        if (immediate === true || immediate === 'true') {
-            // Envio inmediato solo si se pide explicitamente
-            const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
-            if (result.success) {
-                return res.json({ success: true, sessionUsed: result.sessionUsed, message: 'Mensaje enviado exitosamente (inmediato)' });
-            }
-            return res.status(500).json({ success: false, error: result.error?.message || 'Error enviando mensaje' });
+        // SIEMPRE consolidar - sin opcion de bypass
+        const result = sessionManager.addToConsolidation(phoneNumber, message);
+        if (result.success) {
+            res.json({ 
+                success: true, 
+                consolidated: true, 
+                message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
+                details: result 
+            });
         } else {
-            // DEFAULT: Consolidar mensaje
-            const result = sessionManager.addToConsolidation(phoneNumber, message);
-            if (result.success) {
-                res.json({ 
-                    success: true, 
-                    consolidated: true, 
-                    message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
-                    details: result 
-                });
-            } else {
-                res.status(500).json({ success: false, error: result.error });
-            }
+            res.status(500).json({ success: false, error: result.error });
         }
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -554,7 +576,7 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
  */
 app.post('/api/messages/send-bulk', async (req, res) => {
     try {
-        const { contacts, message, immediate } = req.body;
+        const { contacts, message } = req.body;
         
         if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
             return res.status(400).json({
@@ -579,59 +601,30 @@ app.post('/api/messages/send-bulk', async (req, res) => {
         
         const results = [];
         
-        // SIEMPRE usar consolidacion por defecto
-        if (immediate === true || immediate === 'true') {
-            // Envio inmediato solo si se pide explicitamente
-            for (const contact of contacts) {
-                const phoneNumber = contact.phoneNumber || contact.phone || contact;
-                if (!phoneNumber) continue;
-                
-                const delay = 3000 + Math.random() * 5000;
-                await new Promise(resolve => setTimeout(resolve, delay));
-                
-                const result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
-                results.push({
-                    phoneNumber,
-                    success: result.success,
-                    sessionUsed: result.sessionUsed,
-                    error: result.error?.message
-                });
-            }
+        // SIEMPRE consolidar - sin opcion de bypass
+        for (const contact of contacts) {
+            const phoneNumber = contact.phoneNumber || contact.phone || contact;
+            if (!phoneNumber) continue;
             
-            const successCount = results.filter(r => r.success).length;
-            res.json({
-                success: true,
-                total: contacts.length,
-                sent: successCount,
-                failed: contacts.length - successCount,
-                results
-            });
-        } else {
-            // DEFAULT: Consolidar todos los mensajes
-            for (const contact of contacts) {
-                const phoneNumber = contact.phoneNumber || contact.phone || contact;
-                if (!phoneNumber) continue;
-                
-                const result = sessionManager.addToConsolidation(phoneNumber, message);
-                results.push({
-                    phoneNumber,
-                    success: result.success,
-                    consolidated: true,
-                    pendingCount: result.pendingCount
-                });
-            }
-            
-            const successCount = results.filter(r => r.success).length;
-            res.json({
-                success: true,
+            const result = sessionManager.addToConsolidation(phoneNumber, message);
+            results.push({
+                phoneNumber,
+                success: result.success,
                 consolidated: true,
-                total: contacts.length,
-                queued: successCount,
-                failed: contacts.length - successCount,
-                message: `${successCount} mensajes agregados a consolidacion`,
-                results
+                pendingCount: result.pendingCount
             });
         }
+        
+        const successCount = results.filter(r => r.success).length;
+        res.json({
+            success: true,
+            consolidated: true,
+            total: contacts.length,
+            queued: successCount,
+            failed: contacts.length - successCount,
+            message: `${successCount} mensajes agregados a consolidacion`,
+            results
+        });
     } catch (error) {
         res.status(500).json({
             success: false,

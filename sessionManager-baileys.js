@@ -29,13 +29,100 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const { SocksProxyAgent } = require('socks-proxy-agent');
+const net = require('net');
 
 // Configurar proxy si está disponible
 const PROXY_URL = process.env.ALL_PROXY || process.env.SOCKS_PROXY || null;
-const proxyAgent = PROXY_URL ? new SocksProxyAgent(PROXY_URL) : null;
-if (proxyAgent) {
-    console.log(' Proxy SOCKS5 configurado:', PROXY_URL);
+let proxyAgent = null;
+let proxyAvailable = false;
+let lastProxyCheck = 0;
+const PROXY_CHECK_INTERVAL = 30 * 1000; // Verificar cada 30 segundos
+
+/**
+ * Verifica si el servidor proxy SOCKS5 está disponible
+ * @returns {Promise<boolean>}
+ */
+async function checkProxyAvailability() {
+    if (!PROXY_URL) return false;
+    
+    try {
+        // Extraer host y puerto del URL del proxy
+        const proxyMatch = PROXY_URL.match(/socks5?:\/\/([^:]+):(\d+)/);
+        if (!proxyMatch) {
+            console.log('⚠️ URL de proxy inválida:', PROXY_URL);
+            return false;
+        }
+        
+        const [, host, port] = proxyMatch;
+        
+        return new Promise((resolve) => {
+            const socket = new net.Socket();
+            socket.setTimeout(3000); // 3 segundos de timeout
+            
+            socket.on('connect', () => {
+                socket.destroy();
+                resolve(true);
+            });
+            
+            socket.on('timeout', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            
+            socket.on('error', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            
+            socket.connect(parseInt(port), host);
+        });
+    } catch (error) {
+        return false;
+    }
 }
+
+/**
+ * Obtiene el agente de proxy si está disponible, null si no
+ * @returns {Promise<SocksProxyAgent|null>}
+ */
+async function getProxyAgent() {
+    if (!PROXY_URL) return null;
+    
+    const now = Date.now();
+    
+    // Verificar disponibilidad del proxy periódicamente
+    if (now - lastProxyCheck > PROXY_CHECK_INTERVAL) {
+        lastProxyCheck = now;
+        const wasAvailable = proxyAvailable;
+        proxyAvailable = await checkProxyAvailability();
+        
+        if (proxyAvailable && !wasAvailable) {
+            console.log('✅ Proxy SOCKS5 conectado:', PROXY_URL, '(IP Colombia)');
+            proxyAgent = new SocksProxyAgent(PROXY_URL);
+        } else if (!proxyAvailable && wasAvailable) {
+            console.log('⚠️ Proxy SOCKS5 desconectado, usando IP del VPS');
+            proxyAgent = null;
+        }
+    }
+    
+    return proxyAvailable ? proxyAgent : null;
+}
+
+// Verificación inicial del proxy
+(async () => {
+    if (PROXY_URL) {
+        console.log('🔍 Verificando disponibilidad del proxy:', PROXY_URL);
+        proxyAvailable = await checkProxyAvailability();
+        if (proxyAvailable) {
+            proxyAgent = new SocksProxyAgent(PROXY_URL);
+            console.log('✅ Proxy SOCKS5 disponible:', PROXY_URL, '(IP Colombia)');
+        } else {
+            console.log('⚠️ Proxy SOCKS5 no disponible, usando IP del VPS directamente');
+        }
+    } else {
+        console.log('ℹ️ Sin proxy configurado, usando IP del VPS directamente');
+    }
+})();
 
 const pino = require('pino');
 
@@ -902,10 +989,13 @@ async function createSession(sessionName) {
 
         };
 
-        // Agregar proxy si está configurado
-        if (proxyAgent) {
-            socketConfig.agent = proxyAgent;
-            console.log(' Usando proxy para sesión:', sessionName);
+        // Agregar proxy si está disponible (verificación dinámica)
+        const currentProxyAgent = await getProxyAgent();
+        if (currentProxyAgent) {
+            socketConfig.agent = currentProxyAgent;
+            console.log('🌐 Usando proxy SOCKS5 para sesión:', sessionName, '(IP Colombia)');
+        } else {
+            console.log('🌐 Usando conexión directa para sesión:', sessionName, '(IP VPS)');
         }
 
         const socket = makeWASocket(socketConfig);
