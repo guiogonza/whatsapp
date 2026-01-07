@@ -91,9 +91,9 @@ const MAX_RECENT_MESSAGES = 100;
 
 
 
-// Cola persistente manejada vï¿½?ï¿½?ï¿½?Â­a BD
+// Cola persistente manejada via BD - usa config para el intervalo
 
-let batchIntervalMinutes = 3;
+let batchIntervalMinutes = config.CONSOLIDATION_INTERVAL_MINUTES || 3;
 let batchTimer = null;
 const DISCONNECT_NOTIFY_COOLDOWN_MS = 5 * 60 * 1000;
 const lastDisconnectNotify = new Map();
@@ -1837,27 +1837,39 @@ function notifySessionDisconnect(sessionName, statusCode) {
     const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
     const codeText = statusCode !== undefined && statusCode !== null ? statusCode : 'N/A';
     
-    let message = `?? *ALERTA: SESIï¿½N DESCONECTADA*\n\n` +
-                  `? ${nowStr}\n\n` +
-                  `? Sesiï¿½n: *${sessionName}*\n` +
-                  `?? Status Code: ${codeText}\n\n` +
-                  `?? Total: ${sessionsStatus.length} | ? Activas: ${active.length} | ?? Inactivas: ${inactive.length}\n\n`;
+    // Emojis usando Unicode escapes para evitar problemas de codificacion
+    const EMOJI = {
+        WARNING: '\u26A0\uFE0F',      // ⚠️
+        CLOCK: '\u23F0',              // ⏰
+        PHONE: '\uD83D\uDCF1',        // 📱
+        CODE: '\uD83D\uDCBB',         // 💻
+        CHART: '\uD83D\uDCCA',        // 📊
+        CHECK: '\u2705',              // ✅
+        ALERT: '\uD83D\uDEA8',        // 🚨
+        TOOLS: '\uD83D\uDD27'         // 🔧
+    };
+    
+    let message = `${EMOJI.ALERT} *ALERTA: SESION DESCONECTADA*\n\n` +
+                  `${EMOJI.CLOCK} ${nowStr}\n\n` +
+                  `${EMOJI.PHONE} Sesion: *${sessionName}*\n` +
+                  `${EMOJI.CODE} Status Code: ${codeText}\n\n` +
+                  `${EMOJI.CHART} Total: ${sessionsStatus.length} | ${EMOJI.CHECK} Activas: ${active.length} | ${EMOJI.WARNING} Inactivas: ${inactive.length}\n\n`;
     
     if (active.length > 0) {
         message += "*Sesiones Activas:*\n";
         active.forEach((s, i) => {
             const info = sessionsObj[s.name]?.info || {};
             const label = info.pushname ? ` (${info.pushname})` : '';
-            message += `${i + 1}. ? *${s.name}*${label}\n`;
+            message += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
         });
     } else {
         message += "*Sesiones Activas:*\n- Sin sesiones activas\n";
     }
     
     if (inactive.length > 0) {
-        message += "\n*Requieren atenciï¿½n:*\n";
+        message += "\n*Requieren atencion:*\n";
         inactive.forEach((s, i) => {
-            const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? '??' : (s.state == config.SESSION_STATES.RECONNECTING ? '??' : '??');
+            const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? EMOJI.PHONE : (s.state == config.SESSION_STATES.RECONNECTING ? EMOJI.TOOLS : EMOJI.WARNING);
             message += `${i + 1}. ${icon} *${s.name}* - ${s.state}\n`;
         });
     }
