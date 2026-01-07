@@ -120,10 +120,21 @@ function sendSessionsStatusNotification() {
         const active = sessionsStatus.filter(s => s.state === config.SESSION_STATES.READY);
         const inactive = sessionsStatus.filter(s => s.state !== config.SESSION_STATES.READY);
 
+        // Emojis usando codigos Unicode para evitar problemas de codificacion
+        const EMOJI = {
+            CHART: '\uD83D\uDCCA',     // 
+            CLOCK: '\u23F0',           // 
+            GRAPH: '\uD83D\uDCC8',     // 
+            CHECK: '\u2705',           // 
+            WARNING: '\u26A0\uFE0F',   // 
+            PHONE: '\uD83D\uDCF1',     // 
+            REFRESH: '\uD83D\uDD04'    // 
+        };
+
         const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
-        let msg = "ðŸ“Š *REPORTE DE SESIONES*\n\n" +
-                  `â° ${nowStr}\n\n` +
-                  `ðŸ“ˆ Total: ${total} | âœ… Activas: ${active.length} | âš ï¸ Inactivas: ${inactive.length}\n\n`;
+        let msg = `${EMOJI.CHART} *REPORTE DE SESIONES*\n\n` +
+                  `${EMOJI.CLOCK} ${nowStr}\n\n` +
+                  `${EMOJI.GRAPH} Total: ${total} | ${EMOJI.CHECK} Activas: ${active.length} | ${EMOJI.WARNING} Inactivas: ${inactive.length}\n\n`;
 
         if (active.length === 0) {
             msg += "*Sesiones Activas:*\n- Sin sesiones activas\n";
@@ -132,16 +143,16 @@ function sendSessionsStatusNotification() {
             active.forEach((s, i) => {
                 const info = sessionsObj[s.name]?.info || {};
                 const label = info.pushname ? ` (${info.pushname})` : '';
-                msg += `${i + 1}. âœ… *${s.name}*${label}\n`;
+                msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
             });
         }
 
         if (inactive.length === 0) {
-            msg += "\n*Requieren atenciÃ³n:*\n- Sin sesiones inactivas\n";
+            msg += "\n*Requieren atencion:*\n- Sin sesiones inactivas\n";
         } else {
-            msg += "\n*Requieren atenciÃ³n:*\n";
+            msg += "\n*Requieren atencion:*\n";
             inactive.forEach((s, i) => {
-                const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? 'ðŸ“±' : (s.state == config.SESSION_STATES.RECONNECTING ? 'ðŸ”„' : 'âš ï¸');
+                const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? EMOJI.PHONE : (s.state == config.SESSION_STATES.RECONNECTING ? EMOJI.REFRESH : EMOJI.WARNING);
                 msg += `${i + 1}. ${icon} *${s.name}* - ${s.state}\n`;
             });
         }
@@ -1188,3 +1199,4 @@ app.get('/analytics', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
