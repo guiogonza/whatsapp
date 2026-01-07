@@ -534,18 +534,13 @@ function getMessagesByFilter(options = {}) {
         conditions.push(`phone_number = '${escapedPhone}'`);
     }
     if (startDate) {
-        // Convertir fecha a timestamp en milisegundos
-        const startTs = new Date(startDate).getTime();
-        if (!isNaN(startTs)) {
-            conditions.push(`timestamp >= ${startTs}`);
-        }
+        // El timestamp está en formato ISO string (YYYY-MM-DDTHH:MM:SS)
+        // Comparar como string: fecha inicio a las 00:00:00
+        conditions.push(`timestamp >= '${startDate}T00:00:00'`);
     }
     if (endDate) {
-        // Convertir fecha a timestamp en milisegundos (fin del día)
-        const endTs = new Date(endDate).getTime() + (24 * 60 * 60 * 1000 - 1);
-        if (!isNaN(endTs)) {
-            conditions.push(`timestamp <= ${endTs}`);
-        }
+        // Fecha fin a las 23:59:59
+        conditions.push(`timestamp <= '${endDate}T23:59:59'`);
     }
     
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
