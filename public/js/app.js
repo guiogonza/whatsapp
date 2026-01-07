@@ -538,7 +538,7 @@ function updateMonitorLog() {
                 <span class="text-purple-400">[${entry.session}]</span>
                 <span class="${statusColor}">${statusIcon}</span>
                 <span class="text-blue-400">→ ${entry.destination}</span>
-                <div class="text-gray-300 ml-4 truncate">${entry.message}</div>
+                <div class="text-gray-300 ml-4 whitespace-pre-wrap break-words">${entry.message}</div>
             </div>
         `;
     }).join('');
@@ -554,13 +554,12 @@ async function loadRecentMessages() {
         if (data.messages && data.messages.length > 0) {
             monitorMessages = data.messages.map(msg => {
                 const date = new Date(msg.timestamp);
-                const text = (msg.message || '').substring(0, 50);
                 return {
                     time: date.toLocaleTimeString('es-CO'),
                     type: 'whatsapp',
                     session: msg.session,
                     destination: msg.destination || msg.origin || '',
-                    message: text + ((msg.message || '').length > 50 ? '...' : ''),
+                    message: msg.message || '',
                     status: msg.status
                 };
             });
