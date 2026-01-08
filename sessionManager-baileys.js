@@ -1397,6 +1397,9 @@ async function createSession(sessionName) {
                 const isFromActiveSession = isSessionPhone(senderPhone);
                 const isFromConversation = isActiveConversationPhone(senderPhone);
                 
+                // Log para debugging
+                console.log(`📨 Mensaje de ${senderPhone} | EsSesión: ${isFromActiveSession} | EsConversaciónIA: ${isFromConversation}`);
+                
                 if (config.AUTO_RESPONSE && message.message && !isFromActiveSession && !isFromConversation) {
                     try {
                         await socket.sendMessage(message.key.remoteJid, {
@@ -1406,6 +1409,10 @@ async function createSession(sessionName) {
                     } catch (error) {
                         console.error(`Error enviando auto-respuesta: ${error.message}`);
                     }
+                } else if (isFromActiveSession) {
+                    console.log(`⏭️ Auto-respuesta omitida: ${senderPhone} es una sesión activa`);
+                } else if (isFromConversation) {
+                    console.log(`⏭️ Auto-respuesta omitida: ${senderPhone} está en conversación IA`);
                 }
             }
 
@@ -2193,17 +2200,24 @@ function isActiveConversationPhone(phone) {
 
 /**
  * Verifica si un número pertenece a una sesión activa
- * @param {string} phone - Número de teléfono a verificar
+ * @param {string} phone - Número de teléfono a verificar (puede incluir @s.whatsapp.net, :device, etc)
  * @returns {boolean}
  */
 function isSessionPhone(phone) {
     if (!phone) return false;
-    const cleaned = phone.replace(/\D/g, '').replace(/@.*/, '');
+    
+    // Extraer solo el número, eliminar @s.whatsapp.net, @lid, :device, etc
+    const cleaned = phone.split('@')[0].split(':')[0].replace(/\D/g, '');
+    
+    if (!cleaned) return false;
     
     for (const session of Object.values(sessions)) {
         if (session.state === config.SESSION_STATES.READY && session.phoneNumber) {
-            const sessionCleaned = session.phoneNumber.replace(/\D/g, '');
-            if (cleaned === sessionCleaned || cleaned.endsWith(sessionCleaned) || sessionCleaned.endsWith(cleaned)) {
+            // Limpiar el número de la sesión también
+            const sessionCleaned = session.phoneNumber.split('@')[0].split(':')[0].replace(/\D/g, '');
+            
+            // Comparar los números limpios
+            if (cleaned === sessionCleaned) {
                 return true;
             }
         }
