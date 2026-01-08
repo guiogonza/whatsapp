@@ -34,14 +34,27 @@ function initAnalytics() {
     
     analyticsInitialized = true;
     
-    // Configurar fechas por defecto
-    const today = new Date();
+    // Configurar fechas por defecto usando zona horaria Colombia
+    const getColombiaDate = () => {
+        const now = new Date();
+        return new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+    };
+    
+    const today = getColombiaDate();
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    document.getElementById('analyticsEndDate').value = today.toISOString().split('T')[0];
-    document.getElementById('analyticsStartDate').value = weekAgo.toISOString().split('T')[0];
+    
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    
+    document.getElementById('analyticsEndDate').value = formatDate(today);
+    document.getElementById('analyticsStartDate').value = formatDate(weekAgo);
     
     // Configurar selectores de fecha
-    document.getElementById('analyticsDayPicker').value = today.toISOString().split('T')[0];
+    document.getElementById('analyticsDayPicker').value = formatDate(today);
     
     // Configurar selector de semana (formato: YYYY-Www)
     const weekNum = getWeekNumber(today);
