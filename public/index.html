@@ -682,11 +682,31 @@
             <!-- SECTION: CONVERSACIÓN IA (Anti-Ban) -->
             <section id="section-conversation" class="section-content">
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
-                    <div class="flex items-center gap-3 mb-4">
-                        <span class="text-3xl">🤖</span>
-                        <div>
-                            <h3 class="text-lg font-semibold">Conversación IA Anti-Ban</h3>
-                            <p class="text-sm text-gray-500">Las sesiones conversan entre sí usando ChatGPT para simular actividad natural</p>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl">🤖</span>
+                            <div>
+                                <h3 class="text-lg font-semibold">Conversación IA Anti-Ban</h3>
+                                <p class="text-sm text-gray-500">Las sesiones conversan entre sí usando ChatGPT para simular actividad natural</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Saldo OpenAI -->
+                        <div id="openaiBalance" class="text-right">
+                            <button onclick="loadOpenAIBalance()" class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-lg hover:bg-green-200 flex items-center gap-1">
+                                <span>🔄</span>
+                                <span>Ver estado API</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Info OpenAI Balance -->
+                    <div id="openaiBalanceInfo" class="hidden bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <div class="text-sm text-green-800 flex-1" id="openaiBalanceContent">
+                                Cargando información...
+                            </div>
                         </div>
                     </div>
                     

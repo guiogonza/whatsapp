@@ -1663,3 +1663,46 @@ function stopAIConversation() {
     document.getElementById('conversationStatus').innerHTML = '';
 }
 
+// ======================== OPENAI BALANCE ========================
+
+async function loadOpenAIBalance() {
+    const balanceDiv = document.getElementById('openaiBalanceInfo');
+    const contentDiv = document.getElementById('openaiBalanceContent');
+    
+    balanceDiv.classList.remove('hidden');
+    contentDiv.innerHTML = '<div class="flex items-center gap-2"><span class="animate-spin">⏳</span> Consultando estado de la API...</div>';
+    
+    try {
+        const response = await fetch(`${API_URL}/api/openai/balance`);
+        const data = await response.json();
+        
+        if (data.success && data.apiConfigured) {
+            let html = '<strong>✅ API de OpenAI configurada correctamente</strong><br>';
+            
+            if (data.usage) {
+                html += `<span class="text-xs">Información de uso disponible en el dashboard</span>`;
+            } else if (data.message) {
+                html += `<span class="text-xs">${data.message}</span>`;
+            }
+            
+            if (data.dashboardUrl) {
+                html += `<br><a href="${data.dashboardUrl}" target="_blank" class="text-blue-600 hover:underline text-xs mt-1 inline-block">
+                    🔗 Ver uso detallado en OpenAI Dashboard →
+                </a>`;
+            }
+            
+            contentDiv.innerHTML = html;
+            
+            // Auto-ocultar después de 10 segundos
+            setTimeout(() => {
+                balanceDiv.classList.add('hidden');
+            }, 10000);
+        } else {
+            contentDiv.innerHTML = `<strong>⚠️ ${data.error || 'No se pudo obtener información'}</strong>`;
+            balanceDiv.className = 'bg-red-50 border border-red-200 rounded-lg p-3 mb-4';
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<strong>❌ Error al consultar: ${error.message}</strong>`;
+        balanceDiv.className = 'bg-red-50 border border-red-200 rounded-lg p-3 mb-4';
+    }
+}

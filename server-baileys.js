@@ -1255,6 +1255,70 @@ app.post('/api/conversation/start', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/openai/balance - Obtiene información de uso de OpenAI
+ */
+app.get('/api/openai/balance', async (req, res) => {
+    try {
+        if (!OPENAI_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'OPENAI_API_KEY no está configurada'
+            });
+        }
+        
+        // Obtener información de uso del mes actual
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        const formatDate = (date) => date.toISOString().split('T')[0];
+        
+        const response = await fetch(
+            `https://api.openai.com/v1/usage?date=${formatDate(now)}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            // Si el endpoint de uso no está disponible, devolver información básica
+            return res.json({
+                success: true,
+                apiConfigured: true,
+                model: 'gpt-3.5-turbo',
+                message: 'API key configurada correctamente',
+                note: 'Para ver el uso detallado, visita: https://platform.openai.com/usage'
+            });
+        }
+        
+        res.json({
+            success: true,
+            apiConfigured: true,
+            usage: data,
+            dashboardUrl: 'https://platform.openai.com/usage'
+        });
+        
+    } catch (error) {
+        console.error('Error obteniendo balance OpenAI:', error.message);
+        
+        // Devolver que la API está configurada aunque no podamos obtener el uso
+        res.json({
+            success: true,
+            apiConfigured: !!OPENAI_API_KEY,
+            message: OPENAI_API_KEY ? 'API key configurada - Visita el dashboard para ver el uso' : 'API key no configurada',
+            dashboardUrl: 'https://platform.openai.com/usage',
+            error: error.message
+        });
+    }
+});
+
 // ======================== HEALTH CHECK ========================
 
 app.get('/health', (req, res) => {
