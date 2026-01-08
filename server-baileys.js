@@ -1035,6 +1035,226 @@ app.get('/api/messages/search', (req, res) => {
     }
 });
 
+// ======================== CONVERSACIÓN IA ANTI-BAN ========================
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+/**
+ * Genera una respuesta usando OpenAI ChatGPT
+ */
+async function generateAIResponse(conversationHistory, style = 'casual') {
+    const stylePrompts = {
+        casual: 'Responde de manera casual, amigable y natural como un amigo colombiano. Usa expresiones coloquiales ocasionalmente.',
+        formal: 'Responde de manera formal y profesional, pero manteniendo un tono amigable.',
+        funny: 'Responde de manera graciosa y divertida, usando humor ligero.',
+        short: 'Responde de manera breve y concisa, máximo 1-2 oraciones.'
+    };
+    
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-3.5-turbo',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `Eres un participante en una conversación de WhatsApp. ${stylePrompts[style] || stylePrompts.casual} Mantén las respuestas cortas (máximo 50 palabras). No uses emojis en exceso. Responde solo el mensaje, sin explicaciones adicionales.`
+                    },
+                    ...conversationHistory.map(msg => ({
+                        role: msg.isMe ? 'assistant' : 'user',
+                        content: msg.text
+                    }))
+                ],
+                max_tokens: 100,
+                temperature: 0.8
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error OpenAI:', data.error);
+            throw new Error(data.error.message);
+        }
+        
+        return data.choices[0].message.content.trim();
+    } catch (error) {
+        console.error('Error generando respuesta IA:', error.message);
+        // Respuestas de fallback si falla la API
+        const fallbackResponses = [
+            'Sí, tienes razón',
+            'Qué interesante',
+            'Claro, entiendo',
+            'Buena idea',
+            'Me parece bien',
+            'Ya veo',
+            'Qué bien',
+            'Ah ok'
+        ];
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
+}
+
+/**
+ * POST /api/conversation/start - Inicia conversación IA entre sesiones
+ */
+app.post('/api/conversation/start', async (req, res) => {
+    try {
+        const { sessions: sessionNames, topic, messageCount = 5, delay = 15, style = 'casual' } = req.body;
+        
+        // Verificar que la API key esté configurada
+        if (!OPENAI_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'OPENAI_API_KEY no está configurada. Agrégala al archivo .env'
+            });
+        }
+        
+        if (!sessionNames || sessionNames.length < 2) {
+            return res.status(400).json({
+                success: false,
+                error: 'Se requieren al menos 2 sesiones'
+            });
+        }
+        
+        if (!topic) {
+            return res.status(400).json({
+                success: false,
+                error: 'Se requiere un tema de conversación'
+            });
+        }
+        
+        // Verificar que las sesiones existan y estén activas
+        const allSessions = sessionManager.getAllSessions();
+        const validSessions = sessionNames.filter(name => 
+            allSessions[name] && allSessions[name].state === config.SESSION_STATES.READY
+        );
+        
+        if (validSessions.length < 2) {
+            return res.status(400).json({
+                success: false,
+                error: 'Se necesitan al menos 2 sesiones activas'
+            });
+        }
+        
+        // Obtener números de teléfono de las sesiones
+        const sessionPhones = {};
+        for (const name of validSessions) {
+            const session = allSessions[name];
+            if (session.phoneNumber) {
+                sessionPhones[name] = session.phoneNumber;
+            }
+        }
+        
+        if (Object.keys(sessionPhones).length < 2) {
+            return res.status(400).json({
+                success: false,
+                error: 'Las sesiones no tienen números de teléfono configurados'
+            });
+        }
+        
+        // Registrar los números de las sesiones para evitar auto-respuesta
+        sessionManager.setActiveConversationPhones(Object.values(sessionPhones));
+        
+        const messages = [];
+        const conversationHistory = [];
+        let totalMessagesSent = 0;
+        
+        // Primera sesión envía el tema inicial
+        const sessionList = Object.keys(sessionPhones);
+        let currentSenderIndex = 0;
+        
+        console.log(`\n🤖 Iniciando conversación IA entre ${sessionList.length} sesiones`);
+        console.log(`📝 Tema: "${topic}"`);
+        console.log(`💬 Mensajes por sesión: ${messageCount}`);
+        
+        // Mensaje inicial
+        let currentMessage = topic;
+        
+        // Total de mensajes a enviar (messageCount por cada sesión)
+        const totalMessages = messageCount * sessionList.length;
+        
+        for (let i = 0; i < totalMessages; i++) {
+            const senderName = sessionList[currentSenderIndex];
+            const receiverIndex = (currentSenderIndex + 1) % sessionList.length;
+            const receiverName = sessionList[receiverIndex];
+            
+            const senderPhone = sessionPhones[senderName];
+            const receiverPhone = sessionPhones[receiverName];
+            const senderSession = allSessions[senderName];
+            
+            try {
+                // Enviar mensaje
+                const formattedReceiver = receiverPhone + '@s.whatsapp.net';
+                await senderSession.socket.sendMessage(formattedReceiver, {
+                    text: currentMessage
+                });
+                
+                console.log(`✅ ${senderName} → ${receiverName}: ${currentMessage.substring(0, 50)}...`);
+                
+                messages.push({
+                    from: senderName,
+                    to: receiverName,
+                    text: currentMessage,
+                    direction: 'sent',
+                    timestamp: new Date().toISOString()
+                });
+                
+                conversationHistory.push({
+                    text: currentMessage,
+                    isMe: currentSenderIndex === 0
+                });
+                
+                totalMessagesSent++;
+                
+                // Esperar antes del siguiente mensaje
+                if (i < totalMessages - 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay * 1000));
+                    
+                    // Generar respuesta con IA
+                    currentMessage = await generateAIResponse(conversationHistory, style);
+                }
+                
+                // Rotar al siguiente sender
+                currentSenderIndex = receiverIndex;
+                
+            } catch (error) {
+                console.error(`❌ Error enviando mensaje: ${error.message}`);
+                messages.push({
+                    from: senderName,
+                    to: receiverName,
+                    text: currentMessage,
+                    error: error.message,
+                    direction: 'failed'
+                });
+            }
+        }
+        
+        // Limpiar los números de conversación activa
+        sessionManager.clearActiveConversationPhones();
+        
+        console.log(`🏁 Conversación completada: ${totalMessagesSent} mensajes enviados\n`);
+        
+        res.json({
+            success: true,
+            totalMessages: totalMessagesSent,
+            messages
+        });
+        
+    } catch (error) {
+        sessionManager.clearActiveConversationPhones();
+        console.error('Error en conversación IA:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // ======================== HEALTH CHECK ========================
 
 app.get('/health', (req, res) => {

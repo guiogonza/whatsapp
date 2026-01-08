@@ -6,6 +6,7 @@
     <title>WhatsApp Bot - Panel de Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -76,6 +77,11 @@
                     <li>
                         <button id="nav-analytics" onclick="showSection('analytics')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
                             <span>📈</span><span>Analytics</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button id="nav-conversation" onclick="showSection('conversation')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
+                            <span>🤖</span><span>Conversación IA</span>
                         </button>
                     </li>
                     <li>
@@ -429,15 +435,25 @@
                     </div>
                     
                     <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
+                        <table class="w-full text-sm" id="searchTable">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left font-medium text-gray-600">Fecha/Hora</th>
-                                    <th class="px-4 py-3 text-left font-medium text-gray-600">Sesión</th>
-                                    <th class="px-4 py-3 text-left font-medium text-gray-600">Número</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="sortSearchTable('timestamp')">
+                                        Fecha/Hora <span id="searchSort_timestamp" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="sortSearchTable('session')">
+                                        Sesión <span id="searchSort_session" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="sortSearchTable('phone_number')">
+                                        Número <span id="searchSort_phone_number" class="text-xs">↕</span>
+                                    </th>
                                     <th class="px-4 py-3 text-left font-medium text-gray-600">Mensaje</th>
-                                    <th class="px-4 py-3 text-left font-medium text-gray-600">Chars</th>
-                                    <th class="px-4 py-3 text-left font-medium text-gray-600">Estado</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="sortSearchTable('char_count')">
+                                        Chars <span id="searchSort_char_count" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="sortSearchTable('status')">
+                                        Estado <span id="searchSort_status" class="text-xs">↕</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="searchResultsTable" class="divide-y divide-gray-200">
@@ -458,10 +474,37 @@
                                 <option value="day">Día</option>
                                 <option value="week">Semana</option>
                                 <option value="month">Mes</option>
+                                <option value="year">Año</option>
                                 <option value="custom">Personalizado</option>
                             </select>
                         </div>
                         
+                        <!-- Selector de día específico -->
+                        <div id="analyticsDayContainer" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Seleccionar día</label>
+                            <input type="date" id="analyticsDayPicker" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                        </div>
+                        
+                        <!-- Selector de semana -->
+                        <div id="analyticsWeekContainer" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Seleccionar semana</label>
+                            <input type="week" id="analyticsWeekPicker" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                        </div>
+                        
+                        <!-- Selector de mes -->
+                        <div id="analyticsMonthContainer" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Seleccionar mes</label>
+                            <input type="month" id="analyticsMonthPicker" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                        </div>
+                        
+                        <!-- Selector de año -->
+                        <div id="analyticsYearContainer" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Seleccionar año</label>
+                            <select id="analyticsYearPicker" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
+                            </select>
+                        </div>
+                        
+                        <!-- Rango personalizado -->
                         <div id="analyticsCustomDateContainer" class="hidden">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
                             <input type="date" id="analyticsStartDate" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
@@ -470,17 +513,6 @@
                         <div id="analyticsCustomDateContainer2" class="hidden">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
                             <input type="date" id="analyticsEndDate" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
-                        </div>
-                        
-                        <div id="analyticsRangeContainer">
-                            <label class="block text-sm font-medium text-gray-700 mb-1" id="analyticsRangeLabel">Período</label>
-                            <select id="analyticsRangeSelector" class="w-full rounded-lg border-gray-300 shadow-sm p-2.5 border">
-                                <option value="today">Hoy</option>
-                                <option value="yesterday">Ayer</option>
-                                <option value="7">Últimos 7 días</option>
-                                <option value="15">Últimos 15 días</option>
-                                <option value="30">Últimos 30 días</option>
-                            </select>
                         </div>
                         
                         <div>
@@ -585,16 +617,25 @@
                         <button onclick="clearAnalyticsFilter()" id="analyticsClearFilterBtn" class="hidden px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg">✖ Quitar filtro</button>
                     </div>
                     <div class="overflow-auto max-h-96">
-                        <table class="min-w-full text-sm">
+                        <table class="min-w-full text-sm" id="analyticsTopTable">
                             <thead class="border-b border-gray-200 sticky top-0 bg-white">
                                 <tr class="text-left">
                                     <th class="py-2 pr-4">#</th>
-                                    <th class="py-2 pr-4">Número</th>
-                                    <th class="py-2 pr-4">Total</th>
-                                    <th class="py-2 pr-4">Chars</th>
-                                    <th class="py-2 pr-4">Enviados</th>
-                                    <th class="py-2 pr-4">Errores</th>
-                                    <th class="py-2 pr-4">En cola</th>
+                                    <th class="py-2 pr-4 cursor-pointer hover:bg-gray-50 select-none" onclick="sortAnalyticsTable('phone_number')">
+                                        Número <span id="analyticsSort_phone_number" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="py-2 pr-4 cursor-pointer hover:bg-gray-50 select-none" onclick="sortAnalyticsTable('total')">
+                                        Total <span id="analyticsSort_total" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="py-2 pr-4 cursor-pointer hover:bg-gray-50 select-none" onclick="sortAnalyticsTable('enviados')">
+                                        Enviados <span id="analyticsSort_enviados" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="py-2 pr-4 cursor-pointer hover:bg-gray-50 select-none" onclick="sortAnalyticsTable('errores')">
+                                        Errores <span id="analyticsSort_errores" class="text-xs">↕</span>
+                                    </th>
+                                    <th class="py-2 pr-4 cursor-pointer hover:bg-gray-50 select-none" onclick="sortAnalyticsTable('en_cola')">
+                                        En cola <span id="analyticsSort_en_cola" class="text-xs">↕</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="analyticsTopTableBody">
@@ -635,6 +676,102 @@
                     <div>DB size (MB): <span id="analyticsDbSize">-</span></div>
                     <div>Estados en DB: <span id="analyticsDbByStatus">-</span></div>
                     <div>Última actualización: <span id="analyticsLastUpdate">-</span></div>
+                </div>
+            </section>
+
+            <!-- SECTION: CONVERSACIÓN IA (Anti-Ban) -->
+            <section id="section-conversation" class="section-content">
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-3xl">🤖</span>
+                        <div>
+                            <h3 class="text-lg font-semibold">Conversación IA Anti-Ban</h3>
+                            <p class="text-sm text-gray-500">Las sesiones conversan entre sí usando ChatGPT para simular actividad natural</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                        <div class="flex items-start gap-2">
+                            <span class="text-yellow-600">⚠️</span>
+                            <div class="text-sm text-yellow-800">
+                                <strong>¿Cómo funciona?</strong><br>
+                                Selecciona dos o más sesiones activas. Una iniciará la conversación con el tema que escribas, 
+                                y las demás responderán automáticamente usando IA. Esto genera actividad natural en las cuentas.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Sesiones para conversar (mínimo 2)</label>
+                                <div id="conversationSessionCheckboxes" class="border rounded-lg p-3 max-h-40 overflow-y-auto bg-gray-50">
+                                    <p class="text-gray-500 text-sm">Cargando sesiones...</p>
+                                </div>
+                                <div class="flex gap-2 mt-2">
+                                    <button onclick="selectAllConversationSessions()" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200">Seleccionar todas</button>
+                                    <button onclick="deselectAllConversationSessions()" class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200">Deseleccionar</button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tema inicial de conversación</label>
+                                <textarea id="conversationTopic" placeholder="Ej: Hola, ¿cómo estás? ¿Qué planes tienes para hoy?" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none h-24"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Mensajes por sesión</label>
+                                <div class="flex items-center gap-4">
+                                    <input type="range" id="conversationMessageCount" min="2" max="20" value="5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                    <span id="conversationMessageCountValue" class="text-2xl font-bold text-purple-600 w-12 text-center">5</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Total de mensajes que enviará cada sesión en la conversación</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Delay entre mensajes (segundos)</label>
+                                <div class="flex items-center gap-4">
+                                    <input type="range" id="conversationDelay" min="5" max="60" value="15" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                    <span id="conversationDelayValue" class="text-xl font-bold text-purple-600 w-16 text-center">15s</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Tiempo de espera entre cada mensaje para parecer natural</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Estilo de conversación</label>
+                                <select id="conversationStyle" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                                    <option value="casual">😊 Casual y amigable</option>
+                                    <option value="formal">👔 Formal y profesional</option>
+                                    <option value="funny">😂 Gracioso y divertido</option>
+                                    <option value="short">💬 Respuestas cortas</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex gap-4">
+                        <button onclick="startAIConversation()" id="startConversationBtn" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold flex items-center gap-2">
+                            🚀 Iniciar Conversación
+                        </button>
+                        <button onclick="stopAIConversation()" id="stopConversationBtn" class="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors font-semibold hidden">
+                            ⏹️ Detener
+                        </button>
+                    </div>
+                    
+                    <div id="conversationStatus" class="mt-4"></div>
+                </div>
+                
+                <!-- Log de conversación -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">📝 Log de Conversación</h3>
+                        <button onclick="clearConversationLog()" class="bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg text-sm transition-colors">🗑️ Limpiar</button>
+                    </div>
+                    <div id="conversationLog" class="bg-gray-900 rounded-lg p-4 h-80 overflow-y-auto font-mono text-sm">
+                        <p class="text-gray-500">Esperando inicio de conversación...</p>
+                    </div>
                 </div>
             </section>
 

@@ -1391,27 +1391,22 @@ async function createSession(sessionName) {
                 }
 
                 
-
-                // Auto-respuesta si estï¿½?ï¿½?ï¿½?Â¡ configurada
-
-                if (config.AUTO_RESPONSE && message.message) {
-
+                // Auto-respuesta solo si NO es de una sesión activa y NO es parte de conversación IA
+                // Esto evita responder a las conversaciones anti-ban entre sesiones
+                const senderPhone = message.key.remoteJid;
+                const isFromActiveSession = isSessionPhone(senderPhone);
+                const isFromConversation = isActiveConversationPhone(senderPhone);
+                
+                if (config.AUTO_RESPONSE && message.message && !isFromActiveSession && !isFromConversation) {
                     try {
-
                         await socket.sendMessage(message.key.remoteJid, {
-
                             text: config.AUTO_RESPONSE
-
                         });
-
+                        console.log(`📤 Auto-respuesta enviada a ${senderPhone}`);
                     } catch (error) {
-
                         console.error(`Error enviando auto-respuesta: ${error.message}`);
-
                     }
-
                 }
-
             }
 
         });
@@ -2163,7 +2158,58 @@ function getSessionsStatus() {
 
 }
 
+// ======================== CONVERSACIÓN IA ANTI-BAN ========================
 
+// Variable para almacenar los teléfonos en conversación activa
+let activeConversationPhones = new Set();
+
+/**
+ * Establece los números de teléfono que están en conversación activa
+ * @param {Array} phones - Array de números de teléfono
+ */
+function setActiveConversationPhones(phones) {
+    activeConversationPhones = new Set(phones.map(p => p.replace(/\D/g, '')));
+    console.log(`🤖 Conversación IA activa con ${activeConversationPhones.size} números`);
+}
+
+/**
+ * Limpia los números de conversación activa
+ */
+function clearActiveConversationPhones() {
+    activeConversationPhones.clear();
+    console.log('🤖 Conversación IA finalizada');
+}
+
+/**
+ * Verifica si un número está en conversación activa
+ * @param {string} phone - Número de teléfono a verificar
+ * @returns {boolean}
+ */
+function isActiveConversationPhone(phone) {
+    if (!phone) return false;
+    const cleaned = phone.replace(/\D/g, '').replace(/@.*/, '');
+    return activeConversationPhones.has(cleaned);
+}
+
+/**
+ * Verifica si un número pertenece a una sesión activa
+ * @param {string} phone - Número de teléfono a verificar
+ * @returns {boolean}
+ */
+function isSessionPhone(phone) {
+    if (!phone) return false;
+    const cleaned = phone.replace(/\D/g, '').replace(/@.*/, '');
+    
+    for (const session of Object.values(sessions)) {
+        if (session.state === config.SESSION_STATES.READY && session.phoneNumber) {
+            const sessionCleaned = session.phoneNumber.replace(/\D/g, '');
+            if (cleaned === sessionCleaned || cleaned.endsWith(sessionCleaned) || sessionCleaned.endsWith(cleaned)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 // ======================== EXPORTACIï¿½?ï¿½?ï¿½?ï¿½?N ========================
 
@@ -2225,7 +2271,12 @@ module.exports = {
     addToConsolidation,
     processConsolidationQueue,
     startConsolidationProcessor,
-    getConsolidationStatus
+    getConsolidationStatus,
+
+    // Conversación IA Anti-Ban
+    setActiveConversationPhones,
+    clearActiveConversationPhones,
+    isActiveConversationPhone
 
 };
 

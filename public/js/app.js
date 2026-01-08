@@ -9,6 +9,11 @@ let monitorRefreshInterval = null;
 let monitorMessages = [];
 const MAX_MONITOR_MESSAGES = 50;
 
+// Variables para ordenamiento de tablas
+let searchSortColumn = 'timestamp';
+let searchSortDirection = 'desc';
+let searchCurrentData = [];
+
 // ======================== UTILIDADES ========================
 function showToast(message, type = 'info') {
     // Crear toast container si no existe
@@ -57,6 +62,7 @@ function showSection(sectionId) {
         personal: { title: 'Mensaje Personalizado', subtitle: 'Envía mensajes individuales' },
         bulk: { title: 'Envío Masivo', subtitle: 'Envía mensajes a múltiples destinatarios' },
         analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' },
+        conversation: { title: 'Conversación IA Anti-Ban', subtitle: 'Genera actividad natural entre sesiones' },
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' }
     };
     
@@ -69,6 +75,7 @@ function showSection(sectionId) {
     if (sectionId === 'analytics') initAnalytics();
     if (sectionId === 'settings') initSettings();
     if (sectionId === 'search') loadPhoneNumbers();
+    if (sectionId === 'conversation') populateConversationSessions();
 }
 
 // ======================== SESIONES ========================
@@ -798,6 +805,8 @@ async function searchMessages(offset = 0) {
         }
         
         searchTotalMessages = data.total;
+        searchCurrentData = data.messages; // Guardar datos para ordenamiento
+        resetSearchSortIndicators(); // Resetear indicadores al cargar nuevos datos
         document.getElementById('searchResultCount').textContent = `(${data.total} mensajes encontrados)`;
         
         if (data.messages.length === 0) {
@@ -806,37 +815,8 @@ async function searchMessages(offset = 0) {
             return;
         }
         
-        const html = data.messages.map(msg => {
-            const date = new Date(msg.timestamp);
-            const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' });
-            const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-            const statusClass = msg.status === 'sent' || msg.status === 'success' ? 'bg-green-100 text-green-700' : 
-                               msg.status === 'received' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700';
-            const statusText = msg.status === 'sent' || msg.status === 'success' ? '✅ Enviado' : 
-                              msg.status === 'received' ? '📥 Recibido' : '❌ Error';
-            const fullMessage = msg.message_preview || '';
-            const preview = fullMessage ? fullMessage.substring(0, 80) + (fullMessage.length > 80 ? '...' : '') : '-';
-            const encodedMessage = fullMessage ? encodeURIComponent(fullMessage) : '';
-            const messageCell = fullMessage
-                ? `<button type="button" class="text-left text-gray-600 max-w-xs truncate hover:underline block w-full" data-message="${encodedMessage}" onclick="openSearchMessageModal(this)">${preview}</button>`
-                : `<span class="text-gray-600">-</span>`;
-            
-            return `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 whitespace-nowrap">
-                        <div class="text-gray-800">${dateStr}</div>
-                        <div class="text-gray-500 text-xs">${timeStr}</div>
-                    </td>
-                    <td class="px-4 py-3 text-purple-600 font-medium">${msg.session}</td>
-                    <td class="px-4 py-3 font-mono text-sm">${msg.phone_number}</td>
-                    <td class="px-4 py-3">${messageCell}</td>
-                    <td class="px-4 py-3 text-indigo-600 font-medium">${(msg.char_count || 0).toLocaleString()}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span></td>
-                </tr>
-            `;
-        }).join('');
-        
-        document.getElementById('searchResultsTable').innerHTML = html;
+        // Usar la función de renderizado compartida
+        renderSearchResults(data.messages);
         
         // Paginación
         renderSearchPagination(data.total, parseInt(limit), offset);
@@ -888,6 +868,109 @@ function clearSearchFilters() {
     document.getElementById('searchResultsTable').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Selecciona filtros y haz clic en Buscar</td></tr>';
     document.getElementById('searchResultCount').textContent = '';
     document.getElementById('searchPagination').innerHTML = '';
+    searchCurrentData = [];
+    resetSearchSortIndicators();
+}
+
+// ======================== ORDENAMIENTO DE TABLAS ========================
+function sortSearchTable(column) {
+    if (searchCurrentData.length === 0) return;
+    
+    // Cambiar dirección si es la misma columna
+    if (searchSortColumn === column) {
+        searchSortDirection = searchSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        searchSortColumn = column;
+        searchSortDirection = 'asc';
+    }
+    
+    // Ordenar datos
+    const sorted = [...searchCurrentData].sort((a, b) => {
+        let valA = a[column];
+        let valB = b[column];
+        
+        // Manejar valores nulos
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+        
+        // Comparar según tipo
+        if (column === 'char_count' || column === 'total' || column === 'enviados' || column === 'errores' || column === 'en_cola') {
+            valA = Number(valA) || 0;
+            valB = Number(valB) || 0;
+        } else if (column === 'timestamp') {
+            valA = new Date(valA).getTime();
+            valB = new Date(valB).getTime();
+        } else {
+            valA = String(valA).toLowerCase();
+            valB = String(valB).toLowerCase();
+        }
+        
+        if (valA < valB) return searchSortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return searchSortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    // Actualizar indicadores visuales
+    updateSearchSortIndicators(column);
+    
+    // Re-renderizar tabla
+    renderSearchResults(sorted);
+}
+
+function updateSearchSortIndicators(activeColumn) {
+    const columns = ['timestamp', 'session', 'phone_number', 'char_count', 'status'];
+    columns.forEach(col => {
+        const el = document.getElementById(`searchSort_${col}`);
+        if (el) {
+            el.textContent = col === activeColumn 
+                ? (searchSortDirection === 'asc' ? '↑' : '↓')
+                : '↕';
+        }
+    });
+}
+
+function resetSearchSortIndicators() {
+    const columns = ['timestamp', 'session', 'phone_number', 'char_count', 'status'];
+    columns.forEach(col => {
+        const el = document.getElementById(`searchSort_${col}`);
+        if (el) el.textContent = '↕';
+    });
+    searchSortColumn = 'timestamp';
+    searchSortDirection = 'desc';
+}
+
+function renderSearchResults(messages) {
+    const html = messages.map(msg => {
+        const date = new Date(msg.timestamp);
+        const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+        const statusClass = msg.status === 'sent' || msg.status === 'success' ? 'bg-green-100 text-green-700' : 
+                           msg.status === 'received' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700';
+        const statusText = msg.status === 'sent' || msg.status === 'success' ? '✅ Enviado' : 
+                          msg.status === 'received' ? '📥 Recibido' : '❌ Error';
+        const fullMessage = msg.message_preview || '';
+        const preview = fullMessage ? fullMessage.substring(0, 80) + (fullMessage.length > 80 ? '...' : '') : '-';
+        const encodedMessage = fullMessage ? encodeURIComponent(fullMessage) : '';
+        const messageCell = fullMessage
+            ? `<button type="button" class="text-left text-gray-600 max-w-xs truncate hover:underline block w-full" data-message="${encodedMessage}" onclick="openSearchMessageModal(this)">${preview}</button>`
+            : `<span class="text-gray-600">-</span>`;
+        
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="text-gray-800">${dateStr}</div>
+                    <div class="text-gray-500 text-xs">${timeStr}</div>
+                </td>
+                <td class="px-4 py-3 text-purple-600 font-medium">${msg.session}</td>
+                <td class="px-4 py-3 font-mono text-sm">${msg.phone_number}</td>
+                <td class="px-4 py-3">${messageCell}</td>
+                <td class="px-4 py-3 text-indigo-600 font-medium">${(msg.char_count || 0).toLocaleString()}</td>
+                <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span></td>
+            </tr>
+        `;
+    }).join('');
+    
+    document.getElementById('searchResultsTable').innerHTML = html;
 }
 
 async function loadHistory() {
@@ -1397,11 +1480,194 @@ async function loadNotificationSettings() {
     }
 }
 
-// Auto-refresh sessions
-setInterval(() => {
-    if (!document.getElementById('mainApp').classList.contains('hidden')) {
-        loadSessions();
-    }
-}, 30000);
+// ======================== CONVERSACIÓN IA ANTI-BAN ========================
+let conversationActive = false;
+let conversationAbortController = null;
 
+// Inicializar sliders de conversación
+document.addEventListener('DOMContentLoaded', function() {
+    const messageCountSlider = document.getElementById('conversationMessageCount');
+    const messageCountValue = document.getElementById('conversationMessageCountValue');
+    const delaySlider = document.getElementById('conversationDelay');
+    const delayValue = document.getElementById('conversationDelayValue');
+    
+    if (messageCountSlider) {
+        messageCountSlider.addEventListener('input', function() {
+            messageCountValue.textContent = this.value;
+        });
+    }
+    
+    if (delaySlider) {
+        delaySlider.addEventListener('input', function() {
+            delayValue.textContent = this.value + 's';
+        });
+    }
+});
+
+function populateConversationSessions() {
+    const container = document.getElementById('conversationSessionCheckboxes');
+    if (!container) return;
+    
+    const activeSessions = sessions.filter(s => s.state === 'READY');
+    
+    if (activeSessions.length < 2) {
+        container.innerHTML = '<p class="text-red-500 text-sm">⚠️ Necesitas al menos 2 sesiones activas para usar esta función</p>';
+        return;
+    }
+    
+    container.innerHTML = activeSessions.map(s => `
+        <label class="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+            <input type="checkbox" name="conversationSession" value="${s.name}" class="rounded text-purple-500">
+            <span class="text-sm">${s.name}</span>
+            <span class="text-xs text-gray-400">${s.phoneNumber || ''}</span>
+        </label>
+    `).join('');
+}
+
+function selectAllConversationSessions() {
+    document.querySelectorAll('input[name="conversationSession"]').forEach(cb => cb.checked = true);
+}
+
+function deselectAllConversationSessions() {
+    document.querySelectorAll('input[name="conversationSession"]').forEach(cb => cb.checked = false);
+}
+
+function getSelectedConversationSessions() {
+    return Array.from(document.querySelectorAll('input[name="conversationSession"]:checked')).map(cb => cb.value);
+}
+
+function addConversationLog(message, type = 'info') {
+    const log = document.getElementById('conversationLog');
+    if (!log) return;
+    
+    const colors = {
+        info: 'text-blue-400',
+        sent: 'text-green-400',
+        received: 'text-yellow-400',
+        error: 'text-red-400',
+        system: 'text-purple-400'
+    };
+    
+    const time = new Date().toLocaleTimeString('es-CO');
+    const entry = document.createElement('div');
+    entry.className = colors[type] || 'text-gray-400';
+    entry.innerHTML = `<span class="text-gray-500">[${time}]</span> ${message}`;
+    
+    // Limpiar mensaje inicial si existe
+    if (log.querySelector('p.text-gray-500')) {
+        log.innerHTML = '';
+    }
+    
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+function clearConversationLog() {
+    const log = document.getElementById('conversationLog');
+    if (log) {
+        log.innerHTML = '<p class="text-gray-500">Esperando inicio de conversación...</p>';
+    }
+}
+
+async function startAIConversation() {
+    const selectedSessions = getSelectedConversationSessions();
+    const topic = document.getElementById('conversationTopic')?.value?.trim();
+    const messageCount = parseInt(document.getElementById('conversationMessageCount')?.value) || 5;
+    const delay = parseInt(document.getElementById('conversationDelay')?.value) || 15;
+    const style = document.getElementById('conversationStyle')?.value || 'casual';
+    
+    if (selectedSessions.length < 2) {
+        showToast('Selecciona al menos 2 sesiones', 'error');
+        return;
+    }
+    
+    if (!topic) {
+        showToast('Escribe un tema para iniciar la conversación', 'error');
+        return;
+    }
+    
+    conversationActive = true;
+    conversationAbortController = new AbortController();
+    
+    // Actualizar UI
+    document.getElementById('startConversationBtn').classList.add('hidden');
+    document.getElementById('stopConversationBtn').classList.remove('hidden');
+    document.getElementById('conversationStatus').innerHTML = `
+        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div class="flex items-center gap-2">
+                <div class="animate-spin rounded-full h-4 w-4 border-2 border-purple-600 border-t-transparent"></div>
+                <span class="text-purple-700">Conversación en progreso...</span>
+            </div>
+        </div>
+    `;
+    
+    clearConversationLog();
+    addConversationLog(`🚀 Iniciando conversación entre ${selectedSessions.length} sesiones`, 'system');
+    addConversationLog(`📝 Tema: "${topic}"`, 'system');
+    addConversationLog(`💬 Mensajes por sesión: ${messageCount} | Delay: ${delay}s | Estilo: ${style}`, 'system');
+    
+    try {
+        const response = await fetch(`${API_URL}/api/conversation/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessions: selectedSessions,
+                topic,
+                messageCount,
+                delay,
+                style
+            }),
+            signal: conversationAbortController.signal
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addConversationLog(`✅ Conversación iniciada exitosamente`, 'system');
+            
+            // Mostrar mensajes del log
+            if (data.messages) {
+                data.messages.forEach(msg => {
+                    const type = msg.direction === 'sent' ? 'sent' : 'received';
+                    addConversationLog(`${msg.from} → ${msg.to}: ${msg.text}`, type);
+                });
+            }
+            
+            addConversationLog(`🏁 Conversación completada: ${data.totalMessages || 0} mensajes enviados`, 'system');
+        } else {
+            addConversationLog(`❌ Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            addConversationLog('⏹️ Conversación detenida por el usuario', 'system');
+        } else {
+            addConversationLog(`❌ Error: ${error.message}`, 'error');
+        }
+    } finally {
+        stopAIConversation();
+    }
+}
+
+function stopAIConversation() {
+    conversationActive = false;
+    if (conversationAbortController) {
+        conversationAbortController.abort();
+        conversationAbortController = null;
+    }
+    
+    document.getElementById('startConversationBtn').classList.remove('hidden');
+    document.getElementById('stopConversationBtn').classList.add('hidden');
+    document.getElementById('conversationStatus').innerHTML = '';
+}
+
+// Actualizar la función populateSessionSelects para incluir conversación
+const originalPopulateSessionSelects = typeof populateSessionSelects === 'function' ? populateSessionSelects : null;
+
+function populateSessionSelects() {
+    // Llamar a las funciones originales si existen
+    populatePersonalSessions();
+    populateBulkSessions();
+    populateGroupSessionSelect();
+    populateConversationSessions();
+}
 
