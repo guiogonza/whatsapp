@@ -424,6 +424,9 @@ function populateSessionSelects() {
     const groupSelect = document.getElementById('groupSessionSelect');
     groupSelect.innerHTML = '<option value="">-- Selecciona una sesión --</option>' +
         readySessions.map(s => `<option value="${s.name}">${s.name} (${s.userInfo?.wid || ''})</option>`).join('');
+    
+    // Agregar sesiones para conversación IA
+    populateConversationSessions();
 }
 
 // ======================== MONITOR ========================
@@ -1658,16 +1661,5 @@ function stopAIConversation() {
     document.getElementById('startConversationBtn').classList.remove('hidden');
     document.getElementById('stopConversationBtn').classList.add('hidden');
     document.getElementById('conversationStatus').innerHTML = '';
-}
-
-// Actualizar la función populateSessionSelects para incluir conversación
-const originalPopulateSessionSelects = typeof populateSessionSelects === 'function' ? populateSessionSelects : null;
-
-function populateSessionSelects() {
-    // Llamar a las funciones originales si existen
-    populatePersonalSessions();
-    populateBulkSessions();
-    populateGroupSessionSelect();
-    populateConversationSessions();
 }
 
