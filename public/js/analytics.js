@@ -777,9 +777,7 @@ async function refreshAnalytics() {
             enviados = timeline.map(x => Number(x.enviados || 0));
             errores = timeline.map(x => Number(x.errores || 0));
             cola = timeline.map(x => Number(x.en_cola || 0));
-            
-            // Usar línea solo para día
-            if (period === 'day') chartType = 'line';
+            // chartType ya está en 'bar' por defecto
         }
         
         const timelineCtx = document.getElementById('analyticsTimelineChart');
