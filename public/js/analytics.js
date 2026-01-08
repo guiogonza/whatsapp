@@ -137,17 +137,26 @@ function initYearPicker() {
 // Función para obtener fechas de una semana desde string "YYYY-Www"
 function getWeekDates(weekString) {
     const [year, week] = weekString.split('-W').map(Number);
-    const jan1 = new Date(year, 0, 1);
     
-    // Encontrar el primer lunes del año
-    const dayOfWeek = jan1.getDay();
-    const firstMonday = new Date(jan1);
-    firstMonday.setDate(jan1.getDate() + (dayOfWeek <= 1 ? 1 - dayOfWeek : 8 - dayOfWeek));
+    // ISO 8601: La semana 1 es la primera semana con al menos 4 días en el año nuevo
+    // El primer jueves del año siempre está en la semana 1
     
-    // Calcular inicio de la semana seleccionada
+    // Encontrar el primer jueves del año
+    const jan4 = new Date(year, 0, 4); // 4 de enero siempre está en la semana 1
+    const jan4Day = jan4.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
+    
+    // Calcular el lunes de la semana 1 (retrocediendo desde el 4 de enero)
+    // Si jan4 es jueves (4), retrocedemos 3 días para llegar al lunes
+    // Si jan4 es viernes (5), retrocedemos 4 días, etc.
+    const daysToMonday = (jan4Day === 0) ? 6 : jan4Day - 1;
+    const firstMonday = new Date(jan4);
+    firstMonday.setDate(jan4.getDate() - daysToMonday);
+    
+    // Calcular inicio de la semana seleccionada (lunes)
     const weekStart = new Date(firstMonday);
     weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
     
+    // Fin de la semana (domingo)
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     
