@@ -408,8 +408,9 @@ async function processConsolidationQueue() {
             console.error(`[CONSOLIDACION] ERROR para ${phoneNumber}: ${error.message}`);
         }
 
-        // Pequeña pausa entre numeros para no saturar
-        await sleep(500);
+        // Delay de 50 segundos entre mensajes para evitar spam (2000 msgs/día = 1 cada 43s, usamos 50s de seguridad)
+        console.log(`[ANTI-SPAM] Esperando 50 segundos antes del siguiente envío...`);
+        await sleep(50000);
     }
     
     console.log(`[CONSOLIDACION] Procesamiento completado\n`);
@@ -549,7 +550,9 @@ async function processMessageQueue() {
 
 
 
-        await sleep(1000);
+        // Delay de 50 segundos entre mensajes para evitar spam (2000 msgs/día = 1 cada 43s, usamos 50s de seguridad)
+        console.log(`[ANTI-SPAM] Esperando 50 segundos antes del siguiente envío...`);
+        await sleep(50000);
 
     }
 
