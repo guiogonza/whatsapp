@@ -1395,8 +1395,7 @@ async function createSession(sessionName) {
                 }
 
                 
-                // Auto-respuesta solo si NO es de una sesión activa y NO es parte de conversación IA
-                // Esto evita responder a las conversaciones anti-ban entre sesiones
+                // Auto-respuesta inteligente según el origen del mensaje
                 const senderPhone = message.key.remoteJid;
                 const isFromActiveSession = isSessionPhone(senderPhone);
                 const isFromConversation = isActiveConversationPhone(senderPhone);
@@ -1404,19 +1403,50 @@ async function createSession(sessionName) {
                 // Log para debugging
                 console.log(`📨 Mensaje de ${senderPhone} | EsSesión: ${isFromActiveSession} | EsConversaciónIA: ${isFromConversation}`);
                 
-                if (config.AUTO_RESPONSE && message.message && !isFromActiveSession && !isFromConversation) {
-                    try {
-                        await socket.sendMessage(message.key.remoteJid, {
-                            text: config.AUTO_RESPONSE
-                        });
-                        console.log(`📤 Auto-respuesta enviada a ${senderPhone}`);
-                    } catch (error) {
-                        console.error(`Error enviando auto-respuesta: ${error.message}`);
+                if (message.message) {
+                    // Caso 1: Mensaje de otra sesión activa (conversación entre bots)
+                    if (isFromActiveSession && !isFromConversation) {
+                        console.log(`🤖 Conversación IA: ${sessionName} responderá a sesión activa ${senderPhone}`);
+                        try {
+                            // Generar respuesta con IA usando el contexto del mensaje
+                            const messageText = message.message.conversation || 
+                                              message.message.extendedTextMessage?.text || 
+                                              'Mensaje';
+                            
+                            // Usar respuestas generadas con IA simple
+                            const aiResponse = await generateSimpleAIResponse(messageText, session.messages.slice(-5));
+                            
+                            // Responder después de un delay aleatorio (5-15 segundos) para parecer natural
+                            const delay = Math.floor(Math.random() * 10000) + 5000;
+                            setTimeout(async () => {
+                                try {
+                                    await socket.sendMessage(message.key.remoteJid, {
+                                        text: aiResponse
+                                    });
+                                    console.log(`✅ ${sessionName} respondió con IA a ${senderPhone}: "${aiResponse}"`);
+                                } catch (err) {
+                                    console.error(`Error enviando respuesta IA: ${err.message}`);
+                                }
+                            }, delay);
+                        } catch (error) {
+                            console.error(`Error generando respuesta IA: ${error.message}`);
+                        }
                     }
-                } else if (isFromActiveSession) {
-                    console.log(`⏭️ Auto-respuesta omitida: ${senderPhone} es una sesión activa`);
-                } else if (isFromConversation) {
-                    console.log(`⏭️ Auto-respuesta omitida: ${senderPhone} está en conversación IA`);
+                    // Caso 2: Mensaje de conversación IA activa (ya manejado por el endpoint)
+                    else if (isFromConversation) {
+                        console.log(`⏭️ Mensaje en conversación IA activa: ${senderPhone}`);
+                    }
+                    // Caso 3: Mensaje de humano externo (auto-respuesta estándar)
+                    else if (config.AUTO_RESPONSE && !isFromActiveSession) {
+                        try {
+                            await socket.sendMessage(message.key.remoteJid, {
+                                text: config.AUTO_RESPONSE
+                            });
+                            console.log(`📤 Auto-respuesta enviada a ${senderPhone}`);
+                        } catch (error) {
+                            console.error(`Error enviando auto-respuesta: ${error.message}`);
+                        }
+                    }
                 }
             }
 
@@ -2168,6 +2198,111 @@ function getSessionsStatus() {
     }));
 
 }
+
+/**
+ * Genera una respuesta simple con IA para conversaciones automáticas entre sesiones
+ * Usa OpenAI si está disponible, sino usa respuestas predefinidas
+ */
+async function generateSimpleAIResponse(incomingMessage, recentMessages = []) {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    
+    // Si hay API key de OpenAI, usar ChatGPT
+    if (OPENAI_API_KEY) {
+        try {
+            const conversationHistory = recentMessages
+                .filter(msg => msg.text)
+                .slice(-3) // Solo últimos 3 mensajes
+                .map(msg => ({
+                    role: msg.direction === 'sent' ? 'assistant' : 'user',
+                    content: msg.text
+                }));
+            
+            // Agregar el mensaje actual
+            conversationHistory.push({
+                role: 'user',
+                content: incomingMessage
+            });
+            
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Eres un usuario colombiano de WhatsApp conversando naturalmente con un amigo. Responde de manera casual, breve (máximo 30 palabras) y natural. Usa expresiones colombianas ocasionalmente como "parcero", "bacano", "chévere", "listo". No uses emojis en exceso.'
+                        },
+                        ...conversationHistory
+                    ],
+                    max_tokens: 80,
+                    temperature: 0.9
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error('❌ Error OpenAI:', data.error.message);
+                throw new Error(data.error.message);
+            }
+            
+            return data.choices[0].message.content.trim();
+        } catch (error) {
+            console.error('❌ Error generando respuesta IA con OpenAI:', error.message);
+            // Caer a respuestas predefinidas
+        }
+    }
+    
+    // Respuestas predefinidas si no hay OpenAI o si falla
+    const lowerMessage = incomingMessage.toLowerCase();
+    
+    // Respuestas basadas en contenido
+    if (lowerMessage.includes('hola') || lowerMessage.includes('ola') || lowerMessage.includes('hey')) {
+        const greetings = ['Hola! Cómo estás?', 'Hey! Qué más?', 'Hola parcero, todo bien?', 'Qué hubo!', 'Hola! Todo chévere?'];
+        return greetings[Math.floor(Math.random() * greetings.length)];
+    }
+    
+    if (lowerMessage.includes('cómo estás') || lowerMessage.includes('como estas') || lowerMessage.includes('qué tal')) {
+        const responses = ['Todo bien y vos?', 'Bacano, todo tranquilo', 'Bien bien, ahí vamos', 'Muy bien, gracias!', 'Excelente! Y vos cómo vas?'];
+        return responses[Math.floor(Math.random() * responses.length)];
+    }
+    
+    if (lowerMessage.includes('gracias') || lowerMessage.includes('grax')) {
+        const thanks = ['De nada!', 'Con gusto!', 'Para eso estamos!', 'Listo parcero!', 'No problem!'];
+        return thanks[Math.floor(Math.random() * thanks.length)];
+    }
+    
+    if (lowerMessage.includes('?')) {
+        const questions = ['Déjame pensar...', 'Mmm buena pregunta', 'No estoy seguro', 'Me parece que sí', 'Puede ser'];
+        return questions[Math.floor(Math.random() * questions.length)];
+    }
+    
+    // Respuestas genéricas
+    const genericResponses = [
+        'Sí, tienes razón',
+        'Qué interesante',
+        'Claro!',
+        'Verdad?',
+        'Eso mismo pensaba',
+        'Me parece bien',
+        'Listo!',
+        'Bacano!',
+        'Entiendo',
+        'Aja',
+        'Ya veo',
+        'Totalmente',
+        'Por supuesto',
+        'Sin duda',
+        'Exacto'
+    ];
+    
+    return genericResponses[Math.floor(Math.random() * genericResponses.length)];
+}
+
 
 // ======================== CONVERSACIÓN IA ANTI-BAN ========================
 
