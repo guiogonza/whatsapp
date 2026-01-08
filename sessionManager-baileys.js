@@ -180,6 +180,9 @@ const MAX_RECENT_MESSAGES = 100;
 const manualUseSessions = new Map(); // sessionName -> { lastActivity: timestamp, timeout: timeoutId }
 const MANUAL_USE_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inactividad para considerar que dejó de usar manualmente
 
+// Tracking de respuestas automáticas por conversación
+const autoResponseCounters = new Map(); // conversationKey -> { count: number, lastActivity: timestamp }
+
 
 
 // Cola persistente manejada via BD - usa config para el intervalo
