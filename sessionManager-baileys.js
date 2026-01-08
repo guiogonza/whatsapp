@@ -1427,30 +1427,52 @@ async function createSession(sessionName) {
                         if (thisSessionInManualUse) {
                             console.log(`👤 ${sessionName} está en uso manual - NO responderá automáticamente`);
                         } else {
-                            console.log(`🤖 Conversación IA: ${sessionName} responderá a sesión ${senderSessionName || senderPhone}`);
-                            try {
-                                // Generar respuesta con IA usando el contexto del mensaje
-                                const messageText = message.message.conversation || 
-                                                  message.message.extendedTextMessage?.text || 
-                                                  'Mensaje';
-                                
-                                // Usar respuestas generadas con IA simple
-                                const aiResponse = await generateSimpleAIResponse(messageText, session.messages.slice(-5));
-                                
-                                // Responder después de un delay aleatorio (5-15 segundos) para parecer natural
-                                const delay = Math.floor(Math.random() * 10000) + 5000;
-                                setTimeout(async () => {
-                                    try {
-                                        await socket.sendMessage(message.key.remoteJid, {
-                                            text: aiResponse
-                                        });
-                                        console.log(`✅ ${sessionName} respondió con IA a ${senderSessionName || senderPhone}: "${aiResponse}"`);
-                                    } catch (err) {
-                                        console.error(`Error enviando respuesta IA: ${err.message}`);
-                                    }
-                                }, delay);
-                            } catch (error) {
-                                console.error(`Error generando respuesta IA: ${error.message}`);
+                            // Verificar límite de mensajes automáticos
+                            const conversationKey = [senderSessionName, sessionName].sort().join('-');
+                            const counter = autoResponseCounters.get(conversationKey) || { count: 0, lastActivity: Date.now() };
+                            
+                            // Limpiar contador si han pasado más de 30 minutos sin actividad
+                            if (Date.now() - counter.lastActivity > 30 * 60 * 1000) {
+                                counter.count = 0;
+                            }
+                            
+                            // Límite de 5 mensajes automáticos por conversación
+                            const AUTO_RESPONSE_LIMIT = 5;
+                            
+                            if (counter.count >= AUTO_RESPONSE_LIMIT) {
+                                console.log(`⏸️ ${sessionName} alcanzó límite de ${AUTO_RESPONSE_LIMIT} respuestas automáticas con ${senderSessionName}`);
+                            } else {
+                                console.log(`🤖 Conversación IA: ${sessionName} responderá a sesión ${senderSessionName || senderPhone} (${counter.count + 1}/${AUTO_RESPONSE_LIMIT})`);
+                                try {
+                                    // Generar respuesta con IA usando el contexto del mensaje
+                                    const messageText = message.message.conversation || 
+                                                      message.message.extendedTextMessage?.text || 
+                                                      'Mensaje';
+                                    
+                                    // Usar respuestas generadas con IA simple
+                                    const aiResponse = await generateSimpleAIResponse(messageText, session.messages.slice(-5));
+                                    
+                                    // Responder después de un delay aleatorio (5-15 segundos) para parecer natural
+                                    const delay = Math.floor(Math.random() * 10000) + 5000;
+                                    setTimeout(async () => {
+                                        try {
+                                            await socket.sendMessage(message.key.remoteJid, {
+                                                text: aiResponse
+                                            });
+                                            
+                                            // Incrementar contador
+                                            counter.count++;
+                                            counter.lastActivity = Date.now();
+                                            autoResponseCounters.set(conversationKey, counter);
+                                            
+                                            console.log(`✅ ${sessionName} respondió con IA a ${senderSessionName || senderPhone}: "${aiResponse}" (${counter.count}/${AUTO_RESPONSE_LIMIT})`);
+                                        } catch (err) {
+                                            console.error(`Error enviando respuesta IA: ${err.message}`);
+                                        }
+                                    }, delay);
+                                } catch (error) {
+                                    console.error(`Error generando respuesta IA: ${error.message}`);
+                                }
                             }
                         }
                     }
