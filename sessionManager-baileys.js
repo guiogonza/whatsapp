@@ -1299,12 +1299,16 @@ async function createSession(sessionName) {
                 if (user) {
 
                     session.phoneNumber = user.id.split(':')[0];
+                    // Guardar también el LID si existe
+                    session.lid = socket.authState?.creds?.me?.lid ? socket.authState.creds.me.lid.split(':')[0] : null;
 
                     session.info = {
 
                         wid: user.id,
 
                         phone: session.phoneNumber,
+                        
+                        lid: session.lid,
 
                         pushname: user.name || 'Usuario'
 
@@ -2206,19 +2210,27 @@ function isActiveConversationPhone(phone) {
 function isSessionPhone(phone) {
     if (!phone) return false;
     
-    // Extraer solo el número, eliminar @s.whatsapp.net, @lid, :device, etc
+    // Extraer solo el identificador, eliminar @s.whatsapp.net, @lid, :device, etc
     const cleaned = phone.split('@')[0].split(':')[0].replace(/\D/g, '');
     
     if (!cleaned) return false;
     
     for (const session of Object.values(sessions)) {
-        if (session.state === config.SESSION_STATES.READY && session.phoneNumber) {
-            // Limpiar el número de la sesión también
-            const sessionCleaned = session.phoneNumber.split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (session.state === config.SESSION_STATES.READY) {
+            // Comparar con el número de teléfono (PN)
+            if (session.phoneNumber) {
+                const sessionCleaned = session.phoneNumber.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (cleaned === sessionCleaned) {
+                    return true;
+                }
+            }
             
-            // Comparar los números limpios
-            if (cleaned === sessionCleaned) {
-                return true;
+            // Comparar también con el LID
+            if (session.lid) {
+                const lidCleaned = session.lid.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (cleaned === lidCleaned) {
+                    return true;
+                }
             }
         }
     }
