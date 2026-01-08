@@ -359,7 +359,8 @@ function addToConsolidation(phoneNumber, message) {
 
 /**
  * Procesa todos los mensajes pendientes en BD
- * Agrupa por numero y envia con balanceo round-robin
+ * Agrupa por numero y envia con balanceo round-robin en RONDAS
+ * Cada ronda envia 1 mensaje por sesion en paralelo, luego espera 50s
  */
 async function processConsolidationQueue() {
     const numbersData = database.getQueuedNumbers();
@@ -368,52 +369,96 @@ async function processConsolidationQueue() {
         return;
     }
 
-    console.log(`\n[CONSOLIDACION] Procesando ${numbersData.length} numeros pendientes...`);
+    const activeSessions = getActiveSessions();
+    if (activeSessions.length === 0) {
+        console.error('[CONSOLIDACION] No hay sesiones activas disponibles');
+        return;
+    }
+
+    console.log(`\n[CONSOLIDACION] Procesando ${numbersData.length} numeros pendientes con ${activeSessions.length} sesiones...`);
     
     const icon = config.MESSAGE_CONSOLIDATION_ICON || '';
+    let numberIndex = 0;
+    let roundNumber = 1;
 
-    for (const numData of numbersData) {
-        const phoneNumber = numData.phone_number;
-        const messages = database.getMessagesForNumber(phoneNumber);
-        
-        if (!messages || messages.length === 0) continue;
-
-        // Formatear cada mensaje con icono y hora de llegada
-        const formattedMessages = messages.map(msg => {
-            return `${icon} [${msg.arrived_at}]\n${msg.message}`;
-        });
-        
-        // Unir todos los mensajes
-        const combinedMessage = formattedMessages.join('\n\n');
-        const msgCount = messages.length;
-        const messageIds = messages.map(m => m.id);
-
-        console.log(`[CONSOLIDACION] Enviando ${msgCount} mensajes a ${phoneNumber}`);
-
-        try {
-            // Enviar con balanceo round-robin (cada numero usa sesion diferente)
-            const result = await sendMessageWithRotation(phoneNumber, combinedMessage);
-            
-            if (result.success) {
-                // Marcar como enviados en BD
-                database.markMessagesSent(messageIds);
-                console.log(`[CONSOLIDACION] OK - ${msgCount} msgs enviados a ${phoneNumber} via ${result.sessionUsed}`);
-                
-                // Registrar en monitor como enviado
-                logMessageSent(result.sessionUsed, phoneNumber, `[${msgCount} mensajes consolidados]`, 'sent');
-            } else {
-                console.error(`[CONSOLIDACION] ERROR enviando a ${phoneNumber}: ${result.error?.message}`);
-            }
-        } catch (error) {
-            console.error(`[CONSOLIDACION] ERROR para ${phoneNumber}: ${error.message}`);
+    // Procesar en rondas: cada ronda usa todas las sesiones en paralelo
+    while (numberIndex < numbersData.length) {
+        const currentActiveSessions = getActiveSessions(); // Re-verificar sesiones activas
+        if (currentActiveSessions.length === 0) {
+            console.error('[CONSOLIDACION] No hay sesiones activas, deteniendo proceso');
+            break;
         }
 
-        // Delay de 50 segundos entre mensajes para evitar spam (2000 msgs/día = 1 cada 43s, usamos 50s de seguridad)
-        console.log(`[ANTI-SPAM] Esperando 50 segundos antes del siguiente envío...`);
-        await sleep(50000);
+        console.log(`\n[RONDA ${roundNumber}] Enviando con ${currentActiveSessions.length} sesiones en paralelo...`);
+        
+        // Preparar envíos paralelos (1 por sesión)
+        const sendPromises = [];
+        
+        for (let i = 0; i < currentActiveSessions.length && numberIndex < numbersData.length; i++) {
+            const session = currentActiveSessions[i];
+            const numData = numbersData[numberIndex];
+            const phoneNumber = numData.phone_number;
+            
+            const messages = database.getMessagesForNumber(phoneNumber);
+            if (!messages || messages.length === 0) {
+                numberIndex++;
+                continue;
+            }
+
+            // Formatear mensajes consolidados
+            const formattedMessages = messages.map(msg => {
+                return `${icon} [${msg.arrived_at}]\n${msg.message}`;
+            });
+            
+            const combinedMessage = formattedMessages.join('\n\n');
+            const msgCount = messages.length;
+            const messageIds = messages.map(m => m.id);
+
+            console.log(`  → ${session.name}: ${msgCount} msgs a ${phoneNumber}`);
+
+            // Crear promesa de envío
+            const sendPromise = (async () => {
+                try {
+                    const formattedNumber = formatPhoneNumber(phoneNumber);
+                    const result = await sendMessageWithRetry(session, formattedNumber, combinedMessage, 3);
+                    
+                    if (result.success) {
+                        database.markMessagesSent(messageIds);
+                        console.log(`  ✅ ${session.name}: ${msgCount} msgs → ${phoneNumber}`);
+                        logMessageSent(session.name, phoneNumber, `[${msgCount} mensajes consolidados]`, 'sent');
+                        return { success: true, session: session.name, phone: phoneNumber };
+                    } else {
+                        console.error(`  ❌ ${session.name}: Error → ${phoneNumber}: ${result.error?.message}`);
+                        return { success: false, session: session.name, phone: phoneNumber, error: result.error };
+                    }
+                } catch (error) {
+                    console.error(`  ❌ ${session.name}: Excepción → ${phoneNumber}: ${error.message}`);
+                    return { success: false, session: session.name, phone: phoneNumber, error };
+                }
+            })();
+
+            sendPromises.push(sendPromise);
+            numberIndex++;
+        }
+
+        // Ejecutar todos los envíos de esta ronda en paralelo
+        if (sendPromises.length > 0) {
+            const results = await Promise.all(sendPromises);
+            const successful = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            
+            console.log(`[RONDA ${roundNumber}] Completada: ${successful} exitosos, ${failed} fallidos`);
+            
+            // Delay de 50 segundos entre rondas (no entre mensajes individuales)
+            if (numberIndex < numbersData.length) {
+                console.log(`[ANTI-SPAM] Esperando 50 segundos antes de la siguiente ronda...`);
+                await sleep(50000);
+                roundNumber++;
+            }
+        }
     }
     
-    console.log(`[CONSOLIDACION] Procesamiento completado\n`);
+    console.log(`[CONSOLIDACION] Procesamiento completado (${roundNumber} rondas)\n`);
 }
 
 /**
