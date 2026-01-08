@@ -1256,7 +1256,7 @@ app.post('/api/conversation/start', async (req, res) => {
 });
 
 /**
- * GET /api/openai/balance - Obtiene información de uso de OpenAI
+ * GET /api/openai/balance - Obtiene información de uso y balance de OpenAI
  */
 app.get('/api/openai/balance', async (req, res) => {
     try {
@@ -1267,52 +1267,89 @@ app.get('/api/openai/balance', async (req, res) => {
             });
         }
         
-        // Obtener información de uso del mes actual
-        const now = new Date();
-        const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        const formatDate = (date) => date.toISOString().split('T')[0];
-        
-        const response = await fetch(
-            `https://api.openai.com/v1/usage?date=${formatDate(now)}`,
-            {
+        // Intentar obtener información de billing/subscription
+        try {
+            const billingResponse = await fetch('https://api.openai.com/v1/dashboard/billing/subscription', {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json'
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
                 }
-            }
-        );
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            // Si el endpoint de uso no está disponible, devolver información básica
-            return res.json({
-                success: true,
-                apiConfigured: true,
-                model: 'gpt-3.5-turbo',
-                message: 'API key configurada correctamente',
-                note: 'Para ver el uso detallado, visita: https://platform.openai.com/usage'
             });
+            
+            if (billingResponse.ok) {
+                const billingData = await billingResponse.json();
+                
+                // Intentar obtener también el uso del mes actual
+                const now = new Date();
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                
+                const usageResponse = await fetch(
+                    `https://api.openai.com/v1/dashboard/billing/usage?start_date=${startOfMonth.toISOString().split('T')[0]}&end_date=${endOfMonth.toISOString().split('T')[0]}`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${OPENAI_API_KEY}`
+                        }
+                    }
+                );
+                
+                let usageData = null;
+                if (usageResponse.ok) {
+                    usageData = await usageResponse.json();
+                }
+                
+                return res.json({
+                    success: true,
+                    apiConfigured: true,
+                    balance: billingData,
+                    usage: usageData,
+                    dashboardUrl: 'https://platform.openai.com/usage'
+                });
+            }
+        } catch (billingError) {
+            console.log('No se pudo obtener información de billing:', billingError.message);
         }
         
+        // Fallback: intentar obtener créditos disponibles (para cuentas con créditos de prueba)
+        try {
+            const creditResponse = await fetch('https://api.openai.com/v1/dashboard/billing/credit_grants', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                }
+            });
+            
+            if (creditResponse.ok) {
+                const creditData = await creditResponse.json();
+                return res.json({
+                    success: true,
+                    apiConfigured: true,
+                    credits: creditData,
+                    dashboardUrl: 'https://platform.openai.com/usage'
+                });
+            }
+        } catch (creditError) {
+            console.log('No se pudo obtener información de créditos:', creditError.message);
+        }
+        
+        // Si no se puede obtener información detallada, devolver información básica
         res.json({
             success: true,
             apiConfigured: true,
-            usage: data,
+            model: 'gpt-3.5-turbo',
+            message: 'API key configurada correctamente',
+            note: 'Para ver el saldo y uso detallado, visita el dashboard de OpenAI',
             dashboardUrl: 'https://platform.openai.com/usage'
         });
         
     } catch (error) {
         console.error('Error obteniendo balance OpenAI:', error.message);
         
-        // Devolver que la API está configurada aunque no podamos obtener el uso
         res.json({
             success: true,
             apiConfigured: !!OPENAI_API_KEY,
-            message: OPENAI_API_KEY ? 'API key configurada - Visita el dashboard para ver el uso' : 'API key no configurada',
+            message: OPENAI_API_KEY ? 'API key configurada - Visita el dashboard para ver el saldo' : 'API key no configurada',
             dashboardUrl: 'https://platform.openai.com/usage',
             error: error.message
         });

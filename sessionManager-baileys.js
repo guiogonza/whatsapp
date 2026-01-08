@@ -176,6 +176,10 @@ let recentMessages = [];
 
 const MAX_RECENT_MESSAGES = 100;
 
+// Tracking de sesiones en uso manual (humano escribiendo desde celular)
+const manualUseSessions = new Map(); // sessionName -> { lastActivity: timestamp, timeout: timeoutId }
+const MANUAL_USE_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inactividad para considerar que dejó de usar manualmente
+
 
 
 // Cola persistente manejada via BD - usa config para el intervalo
@@ -1341,10 +1345,16 @@ async function createSession(sessionName) {
         socket.ev.on('messages.upsert', async (m) => {
 
             const message = m.messages[0];
+            
+            // Detectar cuando el usuario envía un mensaje desde su celular
+            if (message.key.fromMe && m.type === 'notify') {
+                console.log(`👤📤 ${sessionName} envió mensaje desde celular - marcando como uso manual`);
+                markSessionAsManualUse(sessionName);
+            }
 
             if (!message.key.fromMe && m.type === 'notify') {
 
-                console.log(`ï¿½?Â°ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?Â¨ ${sessionName} recibiï¿½?ï¿½?ï¿½?Â³ mensaje de ${message.key.remoteJid}`);
+                console.log(`💬📥 ${sessionName} recibió mensaje de ${message.key.remoteJid}`);
 
                 session.lastActivity = new Date();
 
@@ -1399,37 +1409,49 @@ async function createSession(sessionName) {
                 const senderPhone = message.key.remoteJid;
                 const isFromActiveSession = isSessionPhone(senderPhone);
                 const isFromConversation = isActiveConversationPhone(senderPhone);
+                const senderSessionName = getSessionNameByPhone(senderPhone);
+                
+                // Detectar si el remitente está usando manualmente su sesión
+                const senderInManualUse = senderSessionName ? isSessionInManualUse(senderSessionName) : false;
+                
+                // Detectar si esta sesión receptora está en uso manual
+                const thisSessionInManualUse = isSessionInManualUse(sessionName);
                 
                 // Log para debugging
-                console.log(`📨 Mensaje de ${senderPhone} | EsSesión: ${isFromActiveSession} | EsConversaciónIA: ${isFromConversation}`);
+                console.log(`📨 Mensaje de ${senderPhone} | EsSesión: ${isFromActiveSession} | EsConversaciónIA: ${isFromConversation} | RemitenteManual: ${senderInManualUse} | ReceptorManual: ${thisSessionInManualUse}`);
                 
                 if (message.message) {
                     // Caso 1: Mensaje de otra sesión activa (conversación entre bots)
                     if (isFromActiveSession && !isFromConversation) {
-                        console.log(`🤖 Conversación IA: ${sessionName} responderá a sesión activa ${senderPhone}`);
-                        try {
-                            // Generar respuesta con IA usando el contexto del mensaje
-                            const messageText = message.message.conversation || 
-                                              message.message.extendedTextMessage?.text || 
-                                              'Mensaje';
-                            
-                            // Usar respuestas generadas con IA simple
-                            const aiResponse = await generateSimpleAIResponse(messageText, session.messages.slice(-5));
-                            
-                            // Responder después de un delay aleatorio (5-15 segundos) para parecer natural
-                            const delay = Math.floor(Math.random() * 10000) + 5000;
-                            setTimeout(async () => {
-                                try {
-                                    await socket.sendMessage(message.key.remoteJid, {
-                                        text: aiResponse
-                                    });
-                                    console.log(`✅ ${sessionName} respondió con IA a ${senderPhone}: "${aiResponse}"`);
-                                } catch (err) {
-                                    console.error(`Error enviando respuesta IA: ${err.message}`);
-                                }
-                            }, delay);
-                        } catch (error) {
-                            console.error(`Error generando respuesta IA: ${error.message}`);
+                        // Si esta sesión receptora está en uso manual, NO responder automáticamente
+                        if (thisSessionInManualUse) {
+                            console.log(`👤 ${sessionName} está en uso manual - NO responderá automáticamente`);
+                        } else {
+                            console.log(`🤖 Conversación IA: ${sessionName} responderá a sesión ${senderSessionName || senderPhone}`);
+                            try {
+                                // Generar respuesta con IA usando el contexto del mensaje
+                                const messageText = message.message.conversation || 
+                                                  message.message.extendedTextMessage?.text || 
+                                                  'Mensaje';
+                                
+                                // Usar respuestas generadas con IA simple
+                                const aiResponse = await generateSimpleAIResponse(messageText, session.messages.slice(-5));
+                                
+                                // Responder después de un delay aleatorio (5-15 segundos) para parecer natural
+                                const delay = Math.floor(Math.random() * 10000) + 5000;
+                                setTimeout(async () => {
+                                    try {
+                                        await socket.sendMessage(message.key.remoteJid, {
+                                            text: aiResponse
+                                        });
+                                        console.log(`✅ ${sessionName} respondió con IA a ${senderSessionName || senderPhone}: "${aiResponse}"`);
+                                    } catch (err) {
+                                        console.error(`Error enviando respuesta IA: ${err.message}`);
+                                    }
+                                }, delay);
+                            } catch (error) {
+                                console.error(`Error generando respuesta IA: ${error.message}`);
+                            }
                         }
                     }
                     // Caso 2: Mensaje de conversación IA activa (ya manejado por el endpoint)
@@ -2197,6 +2219,67 @@ function getSessionsStatus() {
 
     }));
 
+}
+
+/**
+ * Marca una sesión como en uso manual (humano escribiendo desde celular)
+ */
+function markSessionAsManualUse(sessionName) {
+    // Limpiar timeout anterior si existe
+    if (manualUseSessions.has(sessionName)) {
+        clearTimeout(manualUseSessions.get(sessionName).timeout);
+    }
+    
+    // Crear nuevo timeout para desmarcar después de inactividad
+    const timeout = setTimeout(() => {
+        manualUseSessions.delete(sessionName);
+        console.log(`⏰ Sesión ${sessionName} ya no está en uso manual (timeout)`);
+    }, MANUAL_USE_TIMEOUT);
+    
+    manualUseSessions.set(sessionName, {
+        lastActivity: Date.now(),
+        timeout
+    });
+    
+    console.log(`👤 Sesión ${sessionName} marcada como en uso manual`);
+}
+
+/**
+ * Verifica si una sesión está siendo usada manualmente por un humano
+ */
+function isSessionInManualUse(sessionName) {
+    return manualUseSessions.has(sessionName);
+}
+
+/**
+ * Obtiene el nombre de sesión a partir de un phoneNumber
+ */
+function getSessionNameByPhone(phone) {
+    if (!phone) return null;
+    
+    const cleaned = phone.split('@')[0].split(':')[0].replace(/\D/g, '');
+    
+    for (const [sessionName, session] of Object.entries(sessions)) {
+        if (session.state === config.SESSION_STATES.READY) {
+            // Comparar con número PN
+            if (session.phoneNumber) {
+                const sessionCleaned = session.phoneNumber.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (cleaned === sessionCleaned) {
+                    return sessionName;
+                }
+            }
+            
+            // Comparar con LID
+            if (session.lid) {
+                const lidCleaned = session.lid.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (cleaned === lidCleaned) {
+                    return sessionName;
+                }
+            }
+        }
+    }
+    
+    return null;
 }
 
 /**

@@ -1670,7 +1670,8 @@ async function loadOpenAIBalance() {
     const contentDiv = document.getElementById('openaiBalanceContent');
     
     balanceDiv.classList.remove('hidden');
-    contentDiv.innerHTML = '<div class="flex items-center gap-2"><span class="animate-spin">⏳</span> Consultando estado de la API...</div>';
+    balanceDiv.className = 'bg-green-50 border border-green-200 rounded-lg p-3 mb-4';
+    contentDiv.innerHTML = '<div class="flex items-center gap-2"><span class="animate-spin">⏳</span> Consultando saldo de OpenAI...</div>';
     
     try {
         const response = await fetch(`${API_URL}/api/openai/balance`);
@@ -1679,24 +1680,57 @@ async function loadOpenAIBalance() {
         if (data.success && data.apiConfigured) {
             let html = '<strong>✅ API de OpenAI configurada correctamente</strong><br>';
             
-            if (data.usage) {
-                html += `<span class="text-xs">Información de uso disponible en el dashboard</span>`;
-            } else if (data.message) {
-                html += `<span class="text-xs">${data.message}</span>`;
+            // Mostrar balance si está disponible
+            if (data.balance) {
+                const hardLimit = data.balance.hard_limit_usd || 0;
+                const softLimit = data.balance.soft_limit_usd || 0;
+                const systemHardLimit = data.balance.system_hard_limit_usd || 0;
+                
+                html += `<div class="mt-2 space-y-1">`;
+                if (hardLimit > 0) {
+                    html += `<div class="text-sm">💳 Límite de cuenta: <strong class="text-green-700">$${hardLimit.toFixed(2)}</strong></div>`;
+                }
+                if (softLimit > 0 && softLimit !== hardLimit) {
+                    html += `<div class="text-sm">⚠️ Límite suave: $${softLimit.toFixed(2)}</div>`;
+                }
+                html += `</div>`;
+            }
+            
+            // Mostrar créditos si están disponibles
+            if (data.credits && data.credits.total_granted > 0) {
+                const totalGranted = data.credits.total_granted || 0;
+                const totalUsed = data.credits.total_used || 0;
+                const totalAvailable = data.credits.total_available || 0;
+                
+                html += `<div class="mt-2 space-y-1">`;
+                html += `<div class="text-sm">🎁 Créditos otorgados: $${totalGranted.toFixed(2)}</div>`;
+                html += `<div class="text-sm">📊 Créditos usados: $${totalUsed.toFixed(2)}</div>`;
+                html += `<div class="text-sm">💰 Créditos disponibles: <strong class="text-green-700">$${totalAvailable.toFixed(2)}</strong></div>`;
+                html += `</div>`;
+            }
+            
+            // Mostrar uso del mes actual
+            if (data.usage && data.usage.total_usage) {
+                const totalUsage = (data.usage.total_usage / 100).toFixed(2); // Convertir de centavos a dólares
+                html += `<div class="mt-2 text-sm">📈 Uso este mes: $${totalUsage}</div>`;
+            }
+            
+            if (data.message && !data.balance && !data.credits) {
+                html += `<div class="text-xs mt-1">${data.message}</div>`;
             }
             
             if (data.dashboardUrl) {
-                html += `<br><a href="${data.dashboardUrl}" target="_blank" class="text-blue-600 hover:underline text-xs mt-1 inline-block">
-                    🔗 Ver uso detallado en OpenAI Dashboard →
+                html += `<br><a href="${data.dashboardUrl}" target="_blank" class="text-blue-600 hover:underline text-xs mt-2 inline-block">
+                    🔗 Ver detalles completos en OpenAI Dashboard →
                 </a>`;
             }
             
             contentDiv.innerHTML = html;
             
-            // Auto-ocultar después de 10 segundos
+            // Auto-ocultar después de 15 segundos
             setTimeout(() => {
                 balanceDiv.classList.add('hidden');
-            }, 10000);
+            }, 15000);
         } else {
             contentDiv.innerHTML = `<strong>⚠️ ${data.error || 'No se pudo obtener información'}</strong>`;
             balanceDiv.className = 'bg-red-50 border border-red-200 rounded-lg p-3 mb-4';
