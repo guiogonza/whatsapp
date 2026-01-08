@@ -1998,7 +1998,8 @@ async function sendMessageWithRotation(phoneNumber, message) {
 
         logMessageSent(session.name, formattedNumber, message, 'sent');
 
-
+        // Incrementar contador de mensajes enviados
+        session.messagesSentCount = (session.messagesSentCount || 0) + 1;
 
         if (!session.messages) session.messages = [];
 
@@ -2282,7 +2283,7 @@ function getSessionsStatus() {
 
         qrReady: !!session.qr,
 
-        messagesCount: session.messages?.length || 0,
+        messagesCount: session.messagesSentCount || 0,
 
         lastActivity: session.lastActivity,
 

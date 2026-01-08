@@ -565,6 +565,43 @@ function getMessagesByFilter(options = {}) {
     };
 }
 
+/**
+ * Obtener conteo de mensajes enviados hoy por sesión
+ * @returns {Object} Objeto con session como clave y count como valor
+ */
+function getTodayMessagesBySession() {
+    if (!db) return {};
+    
+    // Obtener fecha de hoy en zona horaria Colombia
+    const now = new Date();
+    const colombiaOffset = -5 * 60; // UTC-5 en minutos
+    const localOffset = now.getTimezoneOffset();
+    const colombiaTime = new Date(now.getTime() + (localOffset - colombiaOffset) * 60000);
+    
+    const year = colombiaTime.getFullYear();
+    const month = String(colombiaTime.getMonth() + 1).padStart(2, '0');
+    const day = String(colombiaTime.getDate()).padStart(2, '0');
+    const todayStart = `${year}-${month}-${day} 00:00:00`;
+    const todayEnd = `${year}-${month}-${day} 23:59:59`;
+    
+    const res = db.exec(`
+        SELECT session, COUNT(*) as count
+        FROM messages 
+        WHERE status = 'sent' 
+        AND timestamp >= '${todayStart}' 
+        AND timestamp <= '${todayEnd}'
+        GROUP BY session
+    `);
+    
+    const rows = queryToObjects(res);
+    const result = {};
+    rows.forEach(row => {
+        result[row.session] = row.count;
+    });
+    
+    return result;
+}
+
 module.exports = {
     init: initDatabase,
     initDatabase,
@@ -583,5 +620,6 @@ module.exports = {
     getQueuedMessages,
     getUniquePhoneNumbers,
     getMessagesByFilter,
+    getTodayMessagesBySession,
     close
 };

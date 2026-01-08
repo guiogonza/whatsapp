@@ -273,10 +273,18 @@ app.get('/api/network/ip', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
     try {
         const sessions = sessionManager.getSessionsStatus();
+        const todayMessages = database.getTodayMessagesBySession();
+        
+        // Agregar conteo de mensajes del día a cada sesión
+        const sessionsWithTodayCount = sessions.map(session => ({
+            ...session,
+            messagesCount: todayMessages[session.name] || 0
+        }));
+        
         const { ip: publicIP, usingProxy } = await getPublicIP();
         res.json({
             success: true,
-            sessions,
+            sessions: sessionsWithTodayCount,
             networkInfo: {
                 publicIP,
                 usingProxy,
@@ -372,7 +380,7 @@ app.get('/api/sessions/:name/status', (req, res) => {
                 state: session.state,
                 phoneNumber: session.phoneNumber,
                 qrReady: !!session.qr,
-                messagesCount: session.messages?.length || 0,
+                messagesCount: session.messagesSentCount || 0,
                 lastActivity: session.lastActivity,
                 uptime: Date.now() - session.startTime.getTime()
             }

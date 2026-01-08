@@ -500,7 +500,7 @@ async function refreshMonitorStats() {
                     ${activeIndicator}
                     <div class="font-semibold text-gray-800">${session.name}</div>
                     <div class="text-2xl font-bold text-purple-600">${msgCount}</div>
-                    <div class="text-xs text-gray-500">mensajes enviados</div>
+                    <div class="text-xs text-gray-500">mensajes hoy</div>
                     <div class="mt-2 text-xs ${session.state === 'READY' ? 'text-green-600' : 'text-gray-500'}">
                         ${session.state === 'READY' ? '✅ Conectada' : '⚠️ ' + session.state}
                     </div>
