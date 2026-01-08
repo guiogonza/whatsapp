@@ -348,12 +348,34 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
     if (analyticsTimelineChart) analyticsTimelineChart.destroy();
     
     const datasets = [
-        { label: 'Enviados', data: enviados, tension: 0.35, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.8)', fill: false },
-        { label: 'Errores', data: errores, tension: 0.35, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.8)', fill: false },
-        { label: 'En cola', data: cola, tension: 0.35, borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.8)', fill: false },
+        { 
+            label: 'Enviados', 
+            data: enviados, 
+            tension: 0.35, 
+            borderColor: '#10b981', 
+            backgroundColor: chartType === 'bar' ? '#10b981' : 'rgba(16, 185, 129, 0.8)', 
+            fill: false,
+            borderWidth: chartType === 'bar' ? 0 : 2
+        },
+        { 
+            label: 'Errores', 
+            data: errores, 
+            tension: 0.35, 
+            borderColor: '#ef4444', 
+            backgroundColor: chartType === 'bar' ? '#ef4444' : 'rgba(239, 68, 68, 0.8)', 
+            fill: false,
+            borderWidth: chartType === 'bar' ? 0 : 2
+        },
+        { 
+            label: 'En cola', 
+            data: cola, 
+            tension: 0.35, 
+            borderColor: '#f59e0b', 
+            backgroundColor: chartType === 'bar' ? '#f59e0b' : 'rgba(245, 158, 11, 0.8)', 
+            fill: false,
+            borderWidth: chartType === 'bar' ? 0 : 2
+        },
     ];
-    
-    const stacked = chartType === 'bar';
     
     analyticsTimelineChart = new Chart(ctx, {
         type: chartType,
@@ -368,8 +390,8 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
             },
             interaction: { mode: 'index', intersect: false },
             scales: {
-                y: { beginAtZero: true, stacked, ticks: { precision: 0 } },
-                x: { stacked }
+                y: { beginAtZero: true, stacked: false, ticks: { precision: 0 } },
+                x: { stacked: false }
             }
         }
     });
@@ -702,13 +724,63 @@ async function refreshAnalytics() {
         updateAnalyticsSystemStatus(health);
         
         const timeline = data.timeline || [];
-        const labels = timeline.map(x => x.periodo);
-        const enviados = timeline.map(x => Number(x.enviados || 0));
-        const errores = timeline.map(x => Number(x.errores || 0));
-        const cola = timeline.map(x => Number(x.en_cola || 0));
-        
         const period = document.getElementById('analyticsPeriod').value;
-        let chartType = (period === 'month' || period === 'year') ? 'bar' : 'line';
+        
+        let labels, enviados, errores, cola;
+        let chartType = 'bar'; // Por defecto barras
+        
+        // Si es semana, expandir a todos los días de la semana
+        if (period === 'week') {
+            const weekPicker = document.getElementById('analyticsWeekPicker').value;
+            if (weekPicker) {
+                const { start, end } = getWeekDates(weekPicker);
+                const daysMap = {};
+                
+                // Crear un mapa con los datos existentes
+                timeline.forEach(item => {
+                    daysMap[item.periodo] = {
+                        enviados: Number(item.enviados || 0),
+                        errores: Number(item.errores || 0),
+                        en_cola: Number(item.en_cola || 0)
+                    };
+                });
+                
+                // Generar todos los días de la semana
+                labels = [];
+                enviados = [];
+                errores = [];
+                cola = [];
+                
+                const currentDay = new Date(start);
+                while (currentDay <= end) {
+                    const dateStr = currentDay.toISOString().split('T')[0];
+                    const dayName = currentDay.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+                    labels.push(dayName);
+                    
+                    const data = daysMap[dateStr] || { enviados: 0, errores: 0, en_cola: 0 };
+                    enviados.push(data.enviados);
+                    errores.push(data.errores);
+                    cola.push(data.en_cola);
+                    
+                    currentDay.setDate(currentDay.getDate() + 1);
+                }
+            } else {
+                // Fallback si no hay week picker
+                labels = timeline.map(x => x.periodo);
+                enviados = timeline.map(x => Number(x.enviados || 0));
+                errores = timeline.map(x => Number(x.errores || 0));
+                cola = timeline.map(x => Number(x.en_cola || 0));
+            }
+        } else {
+            // Para otros periodos, usar los datos tal cual
+            labels = timeline.map(x => x.periodo);
+            enviados = timeline.map(x => Number(x.enviados || 0));
+            errores = timeline.map(x => Number(x.errores || 0));
+            cola = timeline.map(x => Number(x.en_cola || 0));
+            
+            // Usar línea solo para día
+            if (period === 'day') chartType = 'line';
+        }
         
         const timelineCtx = document.getElementById('analyticsTimelineChart');
         if (timelineCtx) {
