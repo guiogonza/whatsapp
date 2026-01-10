@@ -15,6 +15,19 @@ let searchSortDirection = 'desc';
 let searchCurrentData = [];
 
 // ======================== UTILIDADES ========================
+
+/**
+ * Convierte código de país a emoji de bandera
+ */
+function getFlagEmoji(countryCode) {
+    if (!countryCode || countryCode.length !== 2) return '';
+    const codePoints = countryCode
+        .toUpperCase()
+        .split('')
+        .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+}
+
 function showToast(message, type = 'info') {
     // Crear toast container si no existe
     let container = document.getElementById('toastContainer');
@@ -277,8 +290,9 @@ function createSessionCard(session) {
                 ${userInfoHtml}
                 ${qrHtml}
                 <div class="mt-3 text-xs text-gray-500">
-                    <p>📊 Mensajes: ${session.messagesCount || 0}</p>
-                    <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span>${session.proxyInfo?.ip ? ' <span class="text-green-500">(Proxy)</span>' : ' <span class="text-gray-400">(VPS)</span>'}</p>
+                    <p>📊 Mensajes enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
+                    <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span></p>
+                    <p class="mt-1">📍 Ubicación: <span class="font-semibold">${session.proxyInfo?.city || 'Desconocido'}, ${session.proxyInfo?.country || 'Desconocido'}</span> ${session.proxyInfo?.countryCode ? getFlagEmoji(session.proxyInfo.countryCode) : ''}</p>
                 </div>
                 ${session.state === 'DISCONNECTED' || session.state === 'ERROR' ? `
                     <div class="mt-4">
