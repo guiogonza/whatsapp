@@ -290,7 +290,7 @@ function createSessionCard(session) {
                 ${userInfoHtml}
                 ${qrHtml}
                 <div class="mt-3 text-xs text-gray-500">
-                    <p>📊 Mensajes enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
+                    <p>� Recibidos: <span class="font-bold text-green-600">${session.messagesReceivedCount || 0}</span> | 📤 Enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
                     <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span></p>
                     <p class="mt-1">📍 Ubicación: <span class="font-semibold">${session.proxyInfo?.city || 'Desconocido'}, ${session.proxyInfo?.country || 'Desconocido'}</span> ${session.proxyInfo?.countryCode ? getFlagEmoji(session.proxyInfo.countryCode) : ''}</p>
                 </div>
