@@ -278,7 +278,7 @@ function createSessionCard(session) {
                 ${qrHtml}
                 <div class="mt-3 text-xs text-gray-500">
                     <p>📊 Mensajes: ${session.messagesCount || 0}</p>
-                    <p class="mt-1">🌐 IP: <span class="font-mono">${networkInfo.publicIP || 'N/A'}</span></p>
+                    <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span>${session.proxyInfo?.ip ? ' <span class="text-green-500">(Proxy)</span>' : ' <span class="text-gray-400">(VPS)</span>'}</p>
                 </div>
                 ${session.state === 'DISCONNECTED' || session.state === 'ERROR' ? `
                     <div class="mt-4">

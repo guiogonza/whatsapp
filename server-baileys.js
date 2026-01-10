@@ -274,17 +274,22 @@ app.get('/api/sessions', async (req, res) => {
     try {
         const sessions = sessionManager.getSessionsStatus();
         const todayMessages = database.getTodayMessagesBySession();
+        const { getAllSessionProxyIPs } = require('./lib/session/proxy');
         
-        // Agregar conteo de mensajes del día a cada sesión
-        const sessionsWithTodayCount = sessions.map(session => ({
+        // Obtener IPs de proxies para cada sesión
+        const proxyIPs = await getAllSessionProxyIPs();
+        
+        // Agregar conteo de mensajes del día y IP del proxy a cada sesión
+        const sessionsWithInfo = sessions.map(session => ({
             ...session,
-            messagesCount: todayMessages[session.name] || 0
+            messagesCount: todayMessages[session.name] || 0,
+            proxyInfo: proxyIPs[session.name] || { ip: null, proxyUrl: null, location: 'VPS Directo' }
         }));
         
         const { ip: publicIP, usingProxy } = await getPublicIP();
         res.json({
             success: true,
-            sessions: sessionsWithTodayCount,
+            sessions: sessionsWithInfo,
             networkInfo: {
                 publicIP,
                 usingProxy,
