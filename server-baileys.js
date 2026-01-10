@@ -443,6 +443,29 @@ app.get('/api/sessions/rotation/info', (req, res) => {
 });
 
 /**
+ * GET /api/proxy/status - Estado de los proxies SOCKS5
+ */
+app.get('/api/proxy/status', (req, res) => {
+    try {
+        const proxyStatus = sessionManager.getProxyStatus();
+        const assignments = sessionManager.getSessionProxyAssignments();
+        
+        res.json({
+            success: true,
+            proxy: {
+                ...proxyStatus,
+                sessionAssignments: Object.fromEntries(assignments)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * POST /api/sessions/rotation/rotate - Fuerza la rotaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n de sesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n
  */
 app.post('/api/sessions/rotation/rotate', (req, res) => {
