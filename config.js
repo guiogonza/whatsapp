@@ -52,6 +52,10 @@ module.exports = {
     // Auto respuesta
     AUTO_RESPONSE: process.env.AUTO_RESPONSE || '',
     
+    // Números que reciben respuesta automática con IA
+    // Separados por coma en .env: AI_AUTO_RESPONSE_NUMBERS=573183499539,573001234567
+    AI_AUTO_RESPONSE_NUMBERS: (process.env.AI_AUTO_RESPONSE_NUMBERS || '573183499539').split(',').map(n => n.trim()).filter(n => n),
+    
     // Estados de sesión
     SESSION_STATES: {
         STARTING: 'STARTING',
