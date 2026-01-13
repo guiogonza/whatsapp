@@ -499,11 +499,14 @@ async function refreshMonitorStats() {
             document.getElementById('monitorNextRotation').textContent = '🔄 Rotando...';
         }
         
-        const sessionsResponse = await fetch(`${API_URL}/api/sessions`);
-        const sessionsData = await sessionsResponse.json();
+        // Recargar sesiones para obtener datos actualizados (esto actualiza la variable global 'sessions')
+        await loadSessions();
+        
+        // Actualizar la sesión activa de rotación
+        currentRotationSession = rotationData.currentSession;
         
         let totalMessages = 0;
-        const statsHtml = (sessionsData.sessions || []).map(session => {
+        const statsHtml = sessions.map(session => {
             const sentCount = session.messagesSentCount || 0;
             const receivedCount = session.messagesReceivedCount || 0;
             const consolidatedCount = session.consolidatedCount || 0;
