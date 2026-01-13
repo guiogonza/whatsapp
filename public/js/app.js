@@ -290,7 +290,8 @@ function createSessionCard(session) {
                 ${userInfoHtml}
                 ${qrHtml}
                 <div class="mt-3 text-xs text-gray-500">
-                    <p>� Recibidos: <span class="font-bold text-green-600">${session.messagesReceivedCount || 0}</span> | 📤 Enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
+                    <p>📦 Consolidados: <span class="font-bold text-purple-600">${session.consolidatedCount || 0}</span></p>
+                    <p class="mt-1">📥 Recibidos: <span class="font-bold text-green-600">${session.messagesReceivedCount || 0}</span> | 📤 Enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
                     <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span></p>
                     <p class="mt-1">📍 Ubicación: <span class="font-semibold">${session.proxyInfo?.city || 'Desconocido'}, ${session.proxyInfo?.country || 'Desconocido'}</span> ${session.proxyInfo?.countryCode ? getFlagEmoji(session.proxyInfo.countryCode) : ''}</p>
                 </div>
@@ -503,20 +504,52 @@ async function refreshMonitorStats() {
         
         let totalMessages = 0;
         const statsHtml = (sessionsData.sessions || []).map(session => {
-            const msgCount = session.messagesCount || 0;
-            totalMessages += msgCount;
+            const sentCount = session.messagesSentCount || 0;
+            const receivedCount = session.messagesReceivedCount || 0;
+            const consolidatedCount = session.consolidatedCount || 0;
+            totalMessages += sentCount;
             const isActive = session.name === rotationData.currentSession;
-            const statusColor = session.state === 'READY' ? 'bg-green-100 border-green-300' : 'bg-gray-100 border-gray-300';
-            const activeIndicator = isActive ? '<span class="absolute -top-1 -right-1 bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">ACTIVA</span>' : '';
+            
+            // Usar el mismo estilo que las tarjetas de sesión
+            const colors = {
+                'READY': 'border-green-500 bg-green-50',
+                'WAITING_FOR_QR': 'border-yellow-500 bg-yellow-50',
+                'LOADING': 'border-blue-500 bg-blue-50',
+                'DISCONNECTED': 'border-red-500 bg-red-50',
+                'ERROR': 'border-red-500 bg-red-50'
+            };
+            const labels = {
+                'READY': '✅ Conectada',
+                'WAITING_FOR_QR': '📱 Esperando QR',
+                'LOADING': '⏳ Cargando',
+                'DISCONNECTED': '❌ Desconectada',
+                'ERROR': '⚠️ Error'
+            };
+            const colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
+            const stateLabel = labels[session.state] || session.state;
             
             return `
-                <div class="relative ${statusColor} border rounded-lg p-4">
-                    ${activeIndicator}
-                    <div class="font-semibold text-gray-800">${session.name}</div>
-                    <div class="text-2xl font-bold text-purple-600">${msgCount}</div>
-                    <div class="text-xs text-gray-500">mensajes hoy</div>
-                    <div class="mt-2 text-xs ${session.state === 'READY' ? 'text-green-600' : 'text-gray-500'}">
-                        ${session.state === 'READY' ? '✅ Conectada' : '⚠️ ' + session.state}
+                <div class="session-card bg-white rounded-lg shadow-lg overflow-hidden ${isActive ? 'ring-2 ring-purple-500 heartbeat-active' : ''}">
+                    <div class="border-l-4 ${colorClass} p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h3 class="text-lg font-bold">${session.name}</h3>
+                                    ${isActive ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
+                                </div>
+                                <span class="text-sm">${stateLabel}</span>
+                            </div>
+                        </div>
+                        ${session.phoneNumber && session.state === 'READY' ? `
+                            <div class="mt-3 p-3 bg-white rounded-lg border">
+                                <p class="text-sm"><strong>📞 Número:</strong> ${session.phoneNumber}</p>
+                            </div>` : ''}
+                        <div class="mt-3 text-xs text-gray-500">
+                            <p>📦 Consolidados: <span class="font-bold text-purple-600">${consolidatedCount}</span></p>
+                            <p class="mt-1">📥 Recibidos: <span class="font-bold text-green-600">${receivedCount}</span> | 📤 Enviados: <span class="font-bold text-blue-600">${sentCount}</span></p>
+                            <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || 'N/A'}</span></p>
+                            <p class="mt-1">📍 Ubicación: <span class="font-semibold">${session.proxyInfo?.city || 'Desconocido'}, ${session.proxyInfo?.country || 'Desconocido'}</span> ${session.proxyInfo?.countryCode ? getFlagEmoji(session.proxyInfo.countryCode) : ''}</p>
+                        </div>
                     </div>
                 </div>
             `;

@@ -286,6 +286,7 @@ app.get('/api/sessions', async (req, res) => {
                 ...session,
                 messagesSentCount: fullSession?.messagesSentCount || 0,
                 messagesReceivedCount: fullSession?.messagesReceivedCount || 0,
+                consolidatedCount: fullSession?.consolidatedCount || 0,
                 proxyInfo: proxyIPs[session.name] || { ip: null, proxyUrl: null, location: 'VPS Directo', country: 'VPS', city: 'Directo', countryCode: '' }
             };
         });
