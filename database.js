@@ -14,9 +14,11 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 const DB_PATH = path.join(DATA_DIR, 'analytics.db');
+const BACKUP_PATH = path.join(DATA_DIR, 'analytics.db.backup');
 
 let db = null;
 let saveTimeout = null;
+let backupInterval = null;
 
 /**
  * Obtiene la fecha/hora actual en zona horaria de Colombia (GMT-5)
@@ -42,12 +44,39 @@ async function initDatabase() {
     // Cargar base de datos existente o crear nueva
     if (fs.existsSync(DB_PATH)) {
         const buffer = fs.readFileSync(DB_PATH);
+        const fileSize = buffer.length;
+        
+        // Si el archivo es muy pequeño, puede estar corrupto - intentar restaurar backup
+        if (fileSize < 5000 && fs.existsSync(BACKUP_PATH)) {
+            const backupSize = fs.statSync(BACKUP_PATH).size;
+            if (backupSize > fileSize * 2) {
+                console.warn(`⚠️ Archivo DB muy pequeño (${fileSize} bytes), restaurando desde backup (${backupSize} bytes)...`);
+                fs.copyFileSync(BACKUP_PATH, DB_PATH);
+                const restoredBuffer = fs.readFileSync(DB_PATH);
+                db = new SQL.Database(restoredBuffer);
+                console.log('✅ Base de datos restaurada desde backup');
+            } else {
+                db = new SQL.Database(buffer);
+                console.log('📊 Base de datos de analytics cargada');
+            }
+        } else {
+            db = new SQL.Database(buffer);
+            console.log(`📊 Base de datos de analytics cargada (${Math.round(fileSize/1024)}KB)`);
+        }
+    } else if (fs.existsSync(BACKUP_PATH)) {
+        // No existe el archivo principal pero sí el backup - restaurar
+        console.warn('⚠️ Archivo DB no existe, restaurando desde backup...');
+        fs.copyFileSync(BACKUP_PATH, DB_PATH);
+        const buffer = fs.readFileSync(DB_PATH);
         db = new SQL.Database(buffer);
-        console.log('📊 Base de datos de analytics cargada');
+        console.log('✅ Base de datos restaurada desde backup');
     } else {
         db = new SQL.Database();
-        console.log('📊 Base de datos de analytics creada');
+        console.log('📊 Base de datos de analytics creada (nueva)');
     }
+    
+    // Iniciar backups periódicos
+    startPeriodicBackups();
     
     // Crear tabla de mensajes si no existe
     db.run(`
@@ -132,17 +161,61 @@ async function initDatabase() {
 }
 
 /**
- * Guardar la base de datos a disco (con debounce)
+ * Guardar la base de datos a disco (con debounce y protección de datos)
  */
 function saveDatabase() {
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
         if (db) {
-            const data = db.export();
-            const buffer = Buffer.from(data);
-            fs.writeFileSync(DB_PATH, buffer);
+            try {
+                const data = db.export();
+                const buffer = Buffer.from(data);
+                
+                // Protección: no sobreescribir si el nuevo archivo sería mucho más pequeño
+                if (fs.existsSync(DB_PATH)) {
+                    const existingSize = fs.statSync(DB_PATH).size;
+                    // Si el nuevo archivo es menos del 50% del tamaño anterior, hacer backup primero
+                    if (buffer.length < existingSize * 0.5 && existingSize > 10000) {
+                        console.warn(`⚠️ Protección de datos: nuevo archivo (${buffer.length}) mucho menor que existente (${existingSize}). Haciendo backup...`);
+                        fs.copyFileSync(DB_PATH, BACKUP_PATH + '.emergency');
+                    }
+                }
+                
+                fs.writeFileSync(DB_PATH, buffer);
+            } catch (error) {
+                console.error('❌ Error guardando base de datos:', error.message);
+            }
         }
     }, 1000); // Guardar después de 1 segundo de inactividad
+}
+
+/**
+ * Crear backup de la base de datos
+ */
+function createBackup() {
+    try {
+        if (fs.existsSync(DB_PATH)) {
+            const stats = fs.statSync(DB_PATH);
+            // Solo hacer backup si el archivo tiene datos (más de 10KB)
+            if (stats.size > 10000) {
+                fs.copyFileSync(DB_PATH, BACKUP_PATH);
+                console.log(`📦 Backup de analytics creado (${Math.round(stats.size/1024)}KB)`);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error creando backup:', error.message);
+    }
+}
+
+/**
+ * Iniciar backups periódicos (cada 30 minutos)
+ */
+function startPeriodicBackups() {
+    if (backupInterval) clearInterval(backupInterval);
+    // Backup inmediato al iniciar
+    setTimeout(createBackup, 5000);
+    // Backup cada 30 minutos
+    backupInterval = setInterval(createBackup, 30 * 60 * 1000);
 }
 
 /**
