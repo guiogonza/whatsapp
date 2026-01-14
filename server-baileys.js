@@ -1050,14 +1050,33 @@ app.get('/api/messages/phones', (req, res) => {
 });
 
 /**
+ * GET /api/messages/sessions - Obtiene sesiones únicas
+ */
+app.get('/api/messages/sessions', (req, res) => {
+    try {
+        const sessions = database.getUniqueSessions();
+        res.json({
+            success: true,
+            sessions
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * GET /api/messages/search - Busca mensajes con filtros
  */
 app.get('/api/messages/search', (req, res) => {
     try {
-        const { phone, startDate, endDate, limit, offset } = req.query;
+        const { phone, session, startDate, endDate, limit, offset } = req.query;
         
         const result = database.getMessagesByFilter({
             phoneNumber: phone,
+            session,
             startDate,
             endDate,
             limit: parseInt(limit) || 50,

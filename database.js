@@ -591,12 +591,29 @@ function getUniquePhoneNumbers() {
 }
 
 /**
+ * Obtener lista de sesiones únicas para filtrado
+ */
+function getUniqueSessions() {
+    if (!db) return [];
+    const res = db.exec(`
+        SELECT DISTINCT session, 
+               COUNT(*) as message_count,
+               MAX(timestamp) as last_message
+        FROM messages 
+        WHERE session IS NOT NULL AND session != ''
+        GROUP BY session 
+        ORDER BY message_count DESC, last_message DESC
+    `);
+    return queryToObjects(res);
+}
+
+/**
  * Obtener mensajes filtrados por número y rango de fechas
  */
 function getMessagesByFilter(options = {}) {
     if (!db) return { messages: [], total: 0 };
     
-    const { phoneNumber, startDate, endDate, limit = 50, offset = 0 } = options;
+    const { phoneNumber, session, startDate, endDate, limit = 50, offset = 0 } = options;
     
     let conditions = [];
     
@@ -604,6 +621,10 @@ function getMessagesByFilter(options = {}) {
         // Escapar comillas simples para evitar SQL injection
         const escapedPhone = String(phoneNumber).replace(/'/g, "''");
         conditions.push(`phone_number = '${escapedPhone}'`);
+    }
+    if (session) {
+        const escapedSession = String(session).replace(/'/g, "''");
+        conditions.push(`session = '${escapedSession}'`);
     }
     if (startDate) {
         // El timestamp está en formato ISO string (YYYY-MM-DDTHH:MM:SS)
@@ -692,6 +713,7 @@ module.exports = {
     getQueueStats,
     getQueuedMessages,
     getUniquePhoneNumbers,
+    getUniqueSessions,
     getMessagesByFilter,
     getTodayMessagesBySession,
     close

@@ -87,7 +87,10 @@ function showSection(sectionId) {
     
     if (sectionId === 'analytics') initAnalytics();
     if (sectionId === 'settings') initSettings();
-    if (sectionId === 'search') loadPhoneNumbers();
+    if (sectionId === 'search') {
+        loadPhoneNumbers();
+        loadSearchSessions();
+    }
     if (sectionId === 'conversation') populateConversationSessions();
 }
 
@@ -833,9 +836,31 @@ async function loadPhoneNumbers() {
     }
 }
 
+async function loadSearchSessions() {
+    try {
+        const response = await fetch(`${API_URL}/api/messages/sessions`);
+        const data = await response.json();
+        
+        if (!data.success) return;
+        
+        const select = document.getElementById('searchSession');
+        select.innerHTML = '<option value="">Todas las sesiones</option>';
+        
+        data.sessions.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.session;
+            option.textContent = `${session.session} (${session.message_count} msgs)`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+    }
+}
+
 async function searchMessages(offset = 0) {
     try {
         const phone = document.getElementById('searchPhone').value;
+        const session = document.getElementById('searchSession').value;
         const startDate = document.getElementById('searchStartDate').value;
         const endDate = document.getElementById('searchEndDate').value;
         const limit = document.getElementById('searchLimit').value;
@@ -844,6 +869,7 @@ async function searchMessages(offset = 0) {
         
         const params = new URLSearchParams();
         if (phone) params.append('phone', phone);
+        if (session) params.append('session', session);
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
         params.append('limit', limit);
@@ -915,6 +941,7 @@ function renderSearchPagination(total, limit, offset) {
 
 function clearSearchFilters() {
     document.getElementById('searchPhone').value = '';
+    document.getElementById('searchSession').value = '';
     document.getElementById('searchStartDate').value = '';
     document.getElementById('searchEndDate').value = '';
     document.getElementById('searchLimit').value = '50';
