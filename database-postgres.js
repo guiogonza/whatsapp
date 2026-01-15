@@ -782,6 +782,41 @@ async function getQueuedMessages(limit = 50, status = 'pending') {
     }
 }
 
+/**
+ * Obtener estadísticas por sesión desde la BD
+ * Devuelve contadores de mensajes enviados, recibidos y consolidados por sesión
+ */
+async function getSessionStats() {
+    if (!pool || !isConnected) return {};
+    
+    try {
+        // Obtener contadores por sesión
+        const result = await pool.query(`
+            SELECT 
+                session,
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
+                COUNT(CASE WHEN status = 'received' THEN 1 END) as received_count,
+                COUNT(CASE WHEN status = 'queued' THEN 1 END) as consolidated_count
+            FROM messages
+            GROUP BY session
+        `);
+        
+        const stats = {};
+        result.rows.forEach(row => {
+            stats[row.session] = {
+                sentCount: parseInt(row.sent_count) || 0,
+                receivedCount: parseInt(row.received_count) || 0,
+                consolidatedCount: parseInt(row.consolidated_count) || 0
+            };
+        });
+        
+        return stats;
+    } catch (error) {
+        console.error('❌ Error obteniendo estadísticas por sesión:', error.message);
+        return {};
+    }
+}
+
 // Exportar funciones
 module.exports = {
     initDatabase,
@@ -809,6 +844,7 @@ module.exports = {
     markAllPendingAsSent,
     clearQueueForNumber,
     getQueuedMessages,
+    getSessionStats,
     // Aliases para compatibilidad
     init: initDatabase,
     close: closeDatabase,

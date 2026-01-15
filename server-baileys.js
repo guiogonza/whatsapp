@@ -291,14 +291,20 @@ app.get('/api/sessions', async (req, res) => {
         // Obtener IPs de proxies para cada sesión
         const proxyIPs = await getAllSessionProxyIPs();
         
+        // Obtener estadísticas de la BD para cada sesión
+        const dbSessionStats = await database.getSessionStats();
+        
         // Agregar conteo de mensajes enviados desde inicio de sesión y IP del proxy a cada sesión
         const sessionsWithInfo = sessions.map(session => {
             const fullSession = allSessions[session.name];
+            const dbStats = dbSessionStats[session.name] || { sentCount: 0, receivedCount: 0, consolidatedCount: 0 };
+            
             return {
                 ...session,
-                messagesSentCount: fullSession?.messagesSentCount || 0,
-                messagesReceivedCount: fullSession?.messagesReceivedCount || 0,
-                consolidatedCount: fullSession?.consolidatedCount || 0,
+                // Usar valores de BD (históricos) en lugar de solo memoria
+                messagesSentCount: dbStats.sentCount,
+                messagesReceivedCount: dbStats.receivedCount,
+                consolidatedCount: dbStats.consolidatedCount,
                 proxyInfo: proxyIPs[session.name] || { ip: null, proxyUrl: null, location: 'VPS Directo', country: 'VPS', city: 'Directo', countryCode: '' }
             };
         });
