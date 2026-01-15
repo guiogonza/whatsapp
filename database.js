@@ -15,10 +15,16 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const DB_PATH = path.join(DATA_DIR, 'analytics.db');
 const BACKUP_PATH = path.join(DATA_DIR, 'analytics.db.backup');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
 let db = null;
 let saveTimeout = null;
 let backupInterval = null;
+
+// Asegurar que el directorio de backups existe
+if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
 
 /**
  * Obtiene la fecha/hora actual en zona horaria de Colombia (GMT-5)
@@ -190,7 +196,7 @@ function saveDatabase() {
 }
 
 /**
- * Crear backup de la base de datos
+ * Crear backup de la base de datos con timestamp
  */
 function createBackup() {
     try {
@@ -198,12 +204,54 @@ function createBackup() {
             const stats = fs.statSync(DB_PATH);
             // Solo hacer backup si el archivo tiene datos (más de 10KB)
             if (stats.size > 10000) {
+                // Backup simple (sobreescribe)
                 fs.copyFileSync(DB_PATH, BACKUP_PATH);
+                
+                // Backup con timestamp (incremental)
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const timestampBackup = path.join(BACKUP_DIR, `analytics_${timestamp}.db`);
+                fs.copyFileSync(DB_PATH, timestampBackup);
+                
                 console.log(`📦 Backup de analytics creado (${Math.round(stats.size/1024)}KB)`);
-            }
+                
+                // Limpiar backups a15 minutos)
+ */
+function startPeriodicBackups() {
+    if (backupInterval) clearInterval(backupInterval);
+    // Backup inmediato al iniciar
+    setTimeout(createBackup, 5000);
+    // Backup cada 15 minutos (más frecuente para mayor seguridad)
+    backupInterval = setInterval(createBackup, 15 * 60 * 1000);
+    console.log('🔄 Sistema de backups automáticos iniciado (cada 15 minutos)'
+
+/**
+ * Limpiar backups antiguos, mantener solo los últimos 50
+ */
+function cleanOldBackups() {
+    try {
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.startsWith('analytics_') && f.endsWith('.db'))
+            .map(f => ({
+                name: f,
+                path: path.join(BACKUP_DIR, f),
+                time: fs.statSync(path.join(BACKUP_DIR, f)).mtime.getTime()
+            }))
+            .sort((a, b) => b.time - a.time);
+        
+        // Eliminar backups antiguos (mantener últimos 50)
+        if (files.length > 50) {
+            const toDelete = files.slice(50);
+            toDelete.forEach(file => {
+                try {
+                    fs.unlinkSync(file.path);
+                } catch (e) {
+                    console.error(`Error eliminando backup antiguo ${file.name}:`, e.message);
+                }
+            });
+            console.log(`🧹 ${toDelete.length} backups antiguos eliminados`);
         }
     } catch (error) {
-        console.error('❌ Error creando backup:', error.message);
+        console.error('❌ Error limpiando backups:', error.message);
     }
 }
 

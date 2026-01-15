@@ -11,6 +11,7 @@ services:
       - ./whatsapp-sessions:/app/whatsapp-sessions
       - ./public:/app/public
       - ./data:/app/data
+      - ./data/backups:/app/data/backups
       # Si editas mucho el código en caliente:
       # - .:/app
     restart: unless-stopped
