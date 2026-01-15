@@ -80,6 +80,7 @@ async function createTables() {
                 char_count INTEGER DEFAULT 0,
                 status VARCHAR(20) NOT NULL CHECK (status IN ('sent', 'error', 'queued', 'received')),
                 error_message TEXT,
+                is_consolidated BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `);
@@ -128,8 +129,10 @@ async function createTables() {
 
 /**
  * Registrar un mensaje enviado
+ * @param {boolean} isConsolidated - Si el mensaje es parte de un envío consolidado
+ * @param {number} msgCount - Cantidad de mensajes individuales en el consolidado (para conteo)
  */
-async function logMessage(session, phoneNumber, message, status, errorMessage = null) {
+async function logMessage(session, phoneNumber, message, status, errorMessage = null, isConsolidated = false, msgCount = 1) {
     if (!pool || !isConnected) {
         console.error('❌ Base de datos no conectada');
         return;
@@ -147,9 +150,9 @@ async function logMessage(session, phoneNumber, message, status, errorMessage = 
 
     try {
         await pool.query(
-            `INSERT INTO messages (timestamp, session, phone_number, message_preview, char_count, status, error_message)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [getColombiaTimestamp(), session, phoneNumber, messageText.substring(0, 500), charCount, finalStatus, errorMessage]
+            `INSERT INTO messages (timestamp, session, phone_number, message_preview, char_count, status, error_message, is_consolidated)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [getColombiaTimestamp(), session, phoneNumber, messageText.substring(0, 500), charCount, finalStatus, errorMessage, isConsolidated]
         );
     } catch (error) {
         console.error('❌ Error registrando mensaje:', error.message);
@@ -805,13 +808,17 @@ async function getSessionStats() {
     
     try {
         // Obtener contadores por sesión
+        // - sent_count: mensajes enviados (incluyendo consolidados)
+        // - received_count: mensajes recibidos
+        // - consolidated_count: envíos consolidados (is_consolidated = true)
         const result = await pool.query(`
             SELECT 
                 session,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
                 COUNT(CASE WHEN status = 'received' THEN 1 END) as received_count,
-                COUNT(CASE WHEN status = 'queued' THEN 1 END) as consolidated_count
+                COUNT(CASE WHEN status = 'sent' AND is_consolidated = true THEN 1 END) as consolidated_count
             FROM messages
+            WHERE session NOT IN ('consolidation', 'queue')
             GROUP BY session
         `);
         
