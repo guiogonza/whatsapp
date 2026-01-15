@@ -40,7 +40,14 @@ async function refreshDatabaseStatus() {
  * Renderizar estado conectado
  */
 function renderDatabaseConnected(data) {
+    console.log('🎨 Ejecutando renderDatabaseConnected...');
     const statusContent = document.getElementById('dbStatusContent');
+    console.log('📍 Elemento dbStatusContent:', statusContent);
+    
+    if (!statusContent) {
+        console.error('❌ No se encontró elemento dbStatusContent');
+        return;
+    }
     
     // Extraer versión simple
     const versionMatch = data.version.match(/PostgreSQL ([\d.]+)/);
