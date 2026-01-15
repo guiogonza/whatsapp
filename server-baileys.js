@@ -1,4 +1,4 @@
-﻿?/**
+?/**
  * WhatsApp Bot Server con Baileys
  * 
  * CaracterÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â­sticas principales:
