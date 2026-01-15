@@ -20,17 +20,18 @@ async function loadSessionTimeoutConfig() {
     }
 }
 
-function login() {
+async function login() {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const errorEl = document.getElementById('loginError');
     if (username === CREDENTIALS.username && password === CREDENTIALS.password) {
+        await loadSessionTimeoutConfig(); // Cargar configuración primero
         const sessionData = {
             loggedIn: true,
             expiry: Date.now() + SESSION_TIMEOUT
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-        showMainApp();
+        await showMainApp();
     } else {
         errorEl.textContent = 'Usuario o contraseña incorrectos';
         errorEl.classList.remove('hidden');
@@ -38,7 +39,6 @@ function login() {
 }
 
 async function showMainApp() {
-    await loadSessionTimeoutConfig(); // Cargar configuración antes de iniciar timer
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
     startSessionTimer();
@@ -56,15 +56,15 @@ function logout() {
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
 }
+
 async function checkSavedSession() {
     await loadSessionTimeoutConfig(); // Cargar configuración al inicio
-function checkSavedSession() {
     const savedSession = localStorage.getItem(SESSION_KEY);
     if (savedSession) {
         const sessionData = JSON.parse(savedSession);
         if (sessionData.loggedIn && sessionData.expiry > Date.now()) {
             timeRemaining = sessionData.expiry - Date.now();
-            showMainApp();
+            await showMainApp();
             return true;
         }
         localStorage.removeItem(SESSION_KEY);
