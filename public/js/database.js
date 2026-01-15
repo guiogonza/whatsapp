@@ -7,6 +7,7 @@ let dbRefreshInterval = null;
  * Inicializar monitor de base de datos
  */
 function initDatabase() {
+    console.log('🗄️ Inicializando monitor de base de datos...');
     refreshDatabaseStatus();
     
     // Auto-refresh cada 30 segundos
@@ -18,9 +19,11 @@ function initDatabase() {
  * Refrescar estado de la base de datos
  */
 async function refreshDatabaseStatus() {
+    console.log('🔄 Refrescando estado de BD...');
     try {
         const response = await fetch(`${DB_API_URL}/api/database/status`);
         const data = await response.json();
+        console.log('📊 Datos recibidos:', data);
         
         if (data.success && data.connected) {
             renderDatabaseConnected(data);
@@ -28,7 +31,7 @@ async function refreshDatabaseStatus() {
             renderDatabaseDisconnected(data.error || 'No se pudo conectar');
         }
     } catch (error) {
-        console.error('Error obteniendo estado de BD:', error);
+        console.error('❌ Error obteniendo estado de BD:', error);
         renderDatabaseDisconnected(error.message);
     }
 }
