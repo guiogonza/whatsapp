@@ -413,6 +413,7 @@ async function getDatabaseStatus() {
         const messagesCount = await client.query('SELECT COUNT(*) as count FROM messages');
         const queueCount = await client.query('SELECT COUNT(*) as count FROM outgoing_queue');
         const pendingCount = await client.query('SELECT COUNT(*) as count FROM outgoing_queue WHERE sent_at IS NULL');
+        const uniquePhonesCount = await client.query('SELECT COUNT(DISTINCT phone_number) as count FROM messages');
 
         client.release();
 
@@ -425,7 +426,8 @@ async function getDatabaseStatus() {
             stats: {
                 total_messages: parseInt(messagesCount.rows[0].count),
                 queue_total: parseInt(queueCount.rows[0].count),
-                queue_pending: parseInt(pendingCount.rows[0].count)
+                queue_pending: parseInt(pendingCount.rows[0].count),
+                unique_phones: parseInt(uniquePhonesCount.rows[0].count)
             }
         };
     } catch (error) {
