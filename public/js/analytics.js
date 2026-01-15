@@ -737,8 +737,10 @@ async function refreshAnalytics() {
                 const daysMap = {};
                 
                 // Crear un mapa con los datos existentes
+                // Normalizar la clave del periodo a solo fecha (YYYY-MM-DD)
                 timeline.forEach(item => {
-                    daysMap[item.periodo] = {
+                    const periodoKey = item.periodo ? item.periodo.split('T')[0] : item.periodo;
+                    daysMap[periodoKey] = {
                         enviados: Number(item.enviados || 0),
                         errores: Number(item.errores || 0),
                         en_cola: Number(item.en_cola || 0)
@@ -757,23 +759,34 @@ async function refreshAnalytics() {
                     const dayName = currentDay.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
                     labels.push(dayName);
                     
-                    const data = daysMap[dateStr] || { enviados: 0, errores: 0, en_cola: 0 };
-                    enviados.push(data.enviados);
-                    errores.push(data.errores);
-                    cola.push(data.en_cola);
+                    const dayData = daysMap[dateStr] || { enviados: 0, errores: 0, en_cola: 0 };
+                    enviados.push(dayData.enviados);
+                    errores.push(dayData.errores);
+                    cola.push(dayData.en_cola);
                     
                     currentDay.setDate(currentDay.getDate() + 1);
                 }
             } else {
-                // Fallback si no hay week picker
-                labels = timeline.map(x => x.periodo);
+                // Fallback si no hay week picker - normalizar fechas
+                labels = timeline.map(x => {
+                    const dateStr = x.periodo ? x.periodo.split('T')[0] : x.periodo;
+                    return dateStr;
+                });
                 enviados = timeline.map(x => Number(x.enviados || 0));
                 errores = timeline.map(x => Number(x.errores || 0));
                 cola = timeline.map(x => Number(x.en_cola || 0));
             }
         } else {
-            // Para otros periodos, usar los datos tal cual
-            labels = timeline.map(x => x.periodo);
+            // Para otros periodos, normalizar las fechas del periodo a formato legible
+            labels = timeline.map(x => {
+                if (!x.periodo) return '';
+                const dateStr = x.periodo.split('T')[0];
+                const date = new Date(dateStr + 'T12:00:00');
+                if (period === 'day') {
+                    return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+                }
+                return dateStr;
+            });
             enviados = timeline.map(x => Number(x.enviados || 0));
             errores = timeline.map(x => Number(x.errores || 0));
             cola = timeline.map(x => Number(x.en_cola || 0));
