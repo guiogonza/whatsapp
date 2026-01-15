@@ -399,9 +399,8 @@ async function getDatabaseStatus() {
         // Información de tablas
         const tablesResult = await client.query(`
             SELECT 
-                relname as tablename,
+                c.relname as tablename,
                 pg_size_pretty(pg_total_relation_size(c.oid)) AS size,
-                (SELECT count(*) FROM information_schema.columns WHERE table_name = c.relname) as columns,
                 n_live_tup as row_count
             FROM pg_class c
             LEFT JOIN pg_stat_user_tables s ON c.relname = s.relname
