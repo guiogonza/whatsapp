@@ -1,4 +1,4 @@
-﻿﻿/**
+﻿?/**
  * WhatsApp Bot Server con Baileys
  * 
  * CaracterÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â­sticas principales:
@@ -154,9 +154,9 @@ function sendSessionsStatusNotification() {
                 
                 msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
                 msg += `   ${EMOJI.PHONE} ${phoneNumber}\n`;
-                msg += `   📦 Consolidados: ${consolidados} | 📥 Recibidos: ${recibidos} | 📤 Enviados: ${enviados}\n`;
-                msg += `   🌐 IP: ${proxyInfo}\n`;
-                msg += `   📍 Ubicación: ${location}\n\n`;
+                msg += `   ?? Consolidados: ${consolidados} | ?? Recibidos: ${recibidos} | ?? Enviados: ${enviados}\n`;
+                msg += `   ?? IP: ${proxyInfo}\n`;
+                msg += `   ?? Ubicación: ${location}\n\n`;
             });
         }
 
@@ -244,9 +244,9 @@ async function getPublicIP() {
                 const { SocksProxyAgent } = require('socks-proxy-agent');
                 agent = new SocksProxyAgent(PROXY_URL);
                 usingProxy = true;
-                console.log('🌐 Proxy disponible, obteniendo IP a través del proxy (Colombia)');
+                console.log('?? Proxy disponible, obteniendo IP a través del proxy (Colombia)');
             } else {
-                console.log('⚠️ Proxy no disponible, obteniendo IP directa del VPS');
+                console.log('?? Proxy no disponible, obteniendo IP directa del VPS');
             }
         }
         
@@ -1028,7 +1028,7 @@ app.post('/api/settings/session-timeout', (req, res) => {
         // Actualizar configuración
         config.SESSION_TIMEOUT_MINUTES = timeout;
         
-        console.log(`✅ Tiempo de sesión actualizado a ${timeout} minutos`);
+        console.log(`? Tiempo de sesión actualizado a ${timeout} minutos`);
         
         res.json({
             success: true,
@@ -1290,9 +1290,9 @@ app.post('/api/conversation/start', async (req, res) => {
         const sessionList = Object.keys(sessionPhones);
         let currentSenderIndex = 0;
         
-        console.log(`\n🤖 Iniciando conversación IA entre ${sessionList.length} sesiones`);
-        console.log(`📝 Tema: "${topic}"`);
-        console.log(`💬 Mensajes por sesión: ${messageCount}`);
+        console.log(`\n?? Iniciando conversación IA entre ${sessionList.length} sesiones`);
+        console.log(`?? Tema: "${topic}"`);
+        console.log(`?? Mensajes por sesión: ${messageCount}`);
         
         // Mensaje inicial
         let currentMessage = topic;
@@ -1316,7 +1316,7 @@ app.post('/api/conversation/start', async (req, res) => {
                     text: currentMessage
                 });
                 
-                console.log(`✅ ${senderName} → ${receiverName}: ${currentMessage.substring(0, 50)}...`);
+                console.log(`? ${senderName} ? ${receiverName}: ${currentMessage.substring(0, 50)}...`);
                 
                 messages.push({
                     from: senderName,
@@ -1345,7 +1345,7 @@ app.post('/api/conversation/start', async (req, res) => {
                 currentSenderIndex = receiverIndex;
                 
             } catch (error) {
-                console.error(`❌ Error enviando mensaje: ${error.message}`);
+                console.error(`? Error enviando mensaje: ${error.message}`);
                 messages.push({
                     from: senderName,
                     to: receiverName,
@@ -1359,7 +1359,7 @@ app.post('/api/conversation/start', async (req, res) => {
         // Limpiar los números de conversación activa
         sessionManager.clearActiveConversationPhones();
         
-        console.log(`🏁 Conversación completada: ${totalMessagesSent} mensajes enviados\n`);
+        console.log(`?? Conversación completada: ${totalMessagesSent} mensajes enviados\n`);
         
         res.json({
             success: true,
@@ -1602,7 +1602,7 @@ function stopMonitoring() {
  */
 async function initialize() {
     try {
-        console.log('\n🚀 Iniciando WhatsApp Bot Server con Baileys...\n');
+        console.log('\n?? Iniciando WhatsApp Bot Server con Baileys...\n');
         
         // Inicializar base de datos PostgreSQL
         await database.initDatabase();
@@ -1664,31 +1664,3 @@ process.on('SIGTERM', async () => {
 initialize();
 
 module.exports = app;
-
-// ======================== ANALYTICS (compatibilidad) ========================
-// Endpoint ÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Âºnico "/analytics" esperado por public/js/analytics.js
-app.get('/analytics', async (req, res) => {
-    try {
-        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
-        const options = { period, range, top: parseInt(top) };
-        if (period === 'custom' && start_date && end_date) {
-            options.startDate = start_date;
-            options.endDate = end_date;
-        }
-        const data = await database.getAnalytics(options);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-// Endpoint para estado de base de datos
-app.get('/api/database/status', async (req, res) => {
-    try {
-        const status = await database.getDatabaseStatus();
-        res.json(status);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
