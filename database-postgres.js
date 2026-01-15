@@ -401,10 +401,10 @@ async function getDatabaseStatus() {
             SELECT 
                 schemaname,
                 tablename,
-                pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
+                pg_size_pretty(pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(tablename)::regclass)) AS size,
                 n_live_tup as row_count
             FROM pg_stat_user_tables
-            ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+            ORDER BY pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(tablename)::regclass) DESC
         `);
 
         // Contar registros en messages y outgoing_queue
