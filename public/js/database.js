@@ -1,5 +1,6 @@
 // ======================== BASE DE DATOS MONITOR ========================
 
+const DB_API_URL = window.location.origin;
 let dbRefreshInterval = null;
 
 /**
@@ -18,7 +19,7 @@ function initDatabase() {
  */
 async function refreshDatabaseStatus() {
     try {
-        const response = await fetch(`${API_URL}/api/database/status`);
+        const response = await fetch(`${DB_API_URL}/api/database/status`);
         const data = await response.json();
         
         if (data.success && data.connected) {
