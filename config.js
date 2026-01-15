@@ -26,6 +26,10 @@ module.exports = {
     SESSION_MONITOR_INTERVAL: 45, // minutos (aumentado para menos checks)
     INACTIVE_CHECK_INTERVAL: 90, // minutos (aumentado para menos checks)
     
+    // Tiempo de sesión (en minutos)
+    // Opciones: 5, 10, 20, 30 minutos
+    SESSION_TIMEOUT_MINUTES: parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 10
+    
     // Notificaciones
     NOTIFICATION_NUMBER: process.env.NOTIFICATION_NUMBER || '573183499539',
     NOTIFICATION_INTERVAL_MINUTES: parseInt(process.env.NOTIFICATION_INTERVAL_MINUTES, 10) || 30,

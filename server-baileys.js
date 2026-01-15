@@ -143,7 +143,18 @@ function sendSessionsStatusNotification() {
             active.forEach((s, i) => {
                 const info = sessionsObj[s.name]?.info || {};
                 const label = info.pushname ? ` (${info.pushname})` : '';
+                const phoneNumber = info.me?.id?.split('@')[0] || info.me?.user || 'N/A';
+                const consolidados = s.consolidatedCount || 0;
+                const recibidos = s.messagesReceivedCount || 0;
+                const enviados = s.messagesSentCount || 0;
+                const proxyInfo = s.proxyHost ? `${s.proxyHost}:${s.proxyPort}` : 'Sin proxy';
+                const location = s.proxyCountry && s.proxyCity ? `${s.proxyCity}, ${s.proxyCountry}` : 'N/A';
+                
                 msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
+                msg += `   ${EMOJI.PHONE} ${phoneNumber}\n`;
+                msg += `   📦 Consolidados: ${consolidados} | 📥 Recibidos: ${recibidos} | 📤 Enviados: ${enviados}\n`;
+                msg += `   🌐 IP: ${proxyInfo}\n`;
+                msg += `   📍 Ubicación: ${location}\n\n`;
             });
         }
 
