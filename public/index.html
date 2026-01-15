@@ -917,6 +917,40 @@
                     </button>
                 </div>
             </section>
+
+            <!-- ======================== SECCIÓN: BASE DE DATOS ======================== -->
+            <section id="section-database" class="section-content space-y-6">
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h2 class="text-xl font-semibold mb-4">🗄️ Estado de la Base de Datos PostgreSQL</h2>
+                    
+                    <!-- Estado de Conexión -->
+                    <div id="dbStatusCard" class="bg-gray-50 rounded-lg p-4 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-semibold">Estado de Conexión</h3>
+                                <p class="text-sm text-gray-600">PostgreSQL Database</p>
+                            </div>
+                            <button onclick="refreshDatabaseStatus()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                                🔄 Actualizar
+                            </button>
+                        </div>
+                        
+                        <div id="dbStatusContent" class="space-y-3">
+                            <div class="flex items-center justify-center py-8">
+                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Información de Tablas -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4">📊 Tablas y Registros</h3>
+                        <div id="dbTablesContent" class="overflow-x-auto">
+                            <div class="text-center text-gray-500 py-4">Cargando información...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -936,60 +970,10 @@
         </div>
     </div>
 
-    <!-- ======================== SECCIÓN: BASE DE DATOS ======================== -->
-    <section id="section-database" class="section-content space-y-6">
-        <div class="bg-white rounded-lg shadow-sm p-6">
-            <h2 class="text-xl font-semibold mb-4">🗄️ Estado de la Base de Datos PostgreSQL</h2>
-            
-            <!-- Estado de Conexión -->
-            <div id="dbStatusCard" class="bg-gray-50 rounded-lg p-4 mb-6">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 class="text-lg font-semibold">Estado de Conexión</h3>
-                        <p class="text-sm text-gray-600">PostgreSQL Database</p>
-                    </div>
-                    <button onclick="refreshDatabaseStatus()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm">
-                        🔄 Actualizar
-                    </button>
-                </div>
-                
-                <div id="dbStatusContent" class="space-y-3">
-                    <div class="flex items-center justify-center py-8">
-                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Información de Tablas -->
-            <div class="bg-gray-50 rounded-lg p-4">
-                <h3 class="text-lg font-semibold mb-4">📊 Tablas y Registros</h3>
-                <div id="dbTablesContent" class="overflow-x-auto">
-                    <div class="text-center text-gray-500 py-4">Cargando información...</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ======================== MODAL: MENSAJE COMPLETO (BÚSQUEDA) ======================== -->
-    <div id="searchMessageModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="closeSearchMessageModal()">
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
-            <div class="flex items-center justify-between px-5 py-3 border-b">
-                <h3 class="text-lg font-semibold text-gray-800">Mensaje completo</h3>
-                <button onclick="closeSearchMessageModal()" class="text-gray-500 hover:text-gray-700" aria-label="Cerrar">✕</button>
-            </div>
-            <div class="px-5 py-4">
-                <div id="searchMessageModalBody" class="text-gray-700 whitespace-pre-wrap break-words"></div>
-            </div>
-            <div class="px-5 py-3 border-t flex justify-end">
-                <button onclick="closeSearchMessageModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg">Cerrar</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Scripts externos -->
-    <script src="js/auth.js?v=3"></script>
-    <script src="js/app.js?v=3"></script>
-    <script src="js/analytics.js?v=3"></script>
-    <script src="js/database.js?v=3"></script>
+    <script src="js/auth.js?v=4"></script>
+    <script src="js/app.js?v=4"></script>
+    <script src="js/analytics.js?v=4"></script>
+    <script src="js/database.js?v=4"></script>
 </body>
 </html>
