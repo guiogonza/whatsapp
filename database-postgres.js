@@ -399,12 +399,15 @@ async function getDatabaseStatus() {
         // Información de tablas
         const tablesResult = await client.query(`
             SELECT 
-                schemaname,
-                tablename,
-                pg_size_pretty(pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(tablename)::regclass)) AS size,
+                relname as tablename,
+                pg_size_pretty(pg_total_relation_size(c.oid)) AS size,
+                (SELECT count(*) FROM information_schema.columns WHERE table_name = c.relname) as columns,
                 n_live_tup as row_count
-            FROM pg_stat_user_tables
-            ORDER BY pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(tablename)::regclass) DESC
+            FROM pg_class c
+            LEFT JOIN pg_stat_user_tables s ON c.relname = s.relname
+            WHERE c.relkind = 'r' 
+            AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+            ORDER BY pg_total_relation_size(c.oid) DESC
         `);
 
         // Contar registros en messages y outgoing_queue
