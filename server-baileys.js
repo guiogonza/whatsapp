@@ -992,6 +992,55 @@ app.post('/api/settings/notification-interval', (req, res) => {
     }
 });
 
+/**
+ * GET /api/settings/session-timeout - Obtiene tiempo de sesión
+ */
+app.get('/api/settings/session-timeout', (req, res) => {
+    try {
+        res.json({
+            success: true,
+            timeout: Math.floor(config.SESSION_TIMEOUT_MINUTES)
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/settings/session-timeout - Actualiza tiempo de sesión
+ */
+app.post('/api/settings/session-timeout', (req, res) => {
+    try {
+        const { timeout } = req.body;
+        
+        if (!timeout || ![5, 10, 20, 30].includes(timeout)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tiempo de sesión debe ser 5, 10, 20 o 30 minutos'
+            });
+        }
+        
+        // Actualizar configuración
+        config.SESSION_TIMEOUT_MINUTES = timeout;
+        
+        console.log(`✅ Tiempo de sesión actualizado a ${timeout} minutos`);
+        
+        res.json({
+            success: true,
+            message: `Tiempo de sesión configurado a ${timeout} minutos`,
+            timeout
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // ======================== COLA DE MENSAJES ========================
 
 /**

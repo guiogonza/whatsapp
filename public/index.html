@@ -861,6 +861,37 @@
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">⏱️ Tiempo de Sesión</h3>
+                    <p class="text-gray-600 mb-6">
+                        Configura el tiempo máximo de actividad de cada sesión antes de requerir reconexión.
+                    </p>
+                    
+                    <div class="max-w-md">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Duración de sesión (minutos)
+                        </label>
+                        <div class="flex items-center gap-4 mb-4">
+                            <button onclick="setSessionTimeout(5)" id="timeout-5" class="session-timeout-btn flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-green-500 transition-colors">
+                                5 min
+                            </button>
+                            <button onclick="setSessionTimeout(10)" id="timeout-10" class="session-timeout-btn flex-1 px-4 py-2 border-2 border-green-500 bg-green-50 rounded-lg">
+                                10 min
+                            </button>
+                            <button onclick="setSessionTimeout(20)" id="timeout-20" class="session-timeout-btn flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-green-500 transition-colors">
+                                20 min
+                            </button>
+                            <button onclick="setSessionTimeout(30)" id="timeout-30" class="session-timeout-btn flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-green-500 transition-colors">
+                                30 min
+                            </button>
+                        </div>
+                        
+                        <button onclick="saveSessionTimeoutSettings()" class="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors w-full">
+                            Guardar Configuración
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">Estado de la Cola</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">

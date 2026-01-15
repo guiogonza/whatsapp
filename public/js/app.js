@@ -1445,6 +1445,7 @@ function clearBulkForm() {
 async function initSettings() {
     await refreshBatchStatus();
     await loadNotificationSettings();
+    await loadSessionTimeoutSettings();
     
     // Configurar listener para el slider
     const range = document.getElementById('batchIntervalRange');
@@ -1508,6 +1509,7 @@ async function saveBatchSettings() {
 }
 
 let selectedNotificationInterval = 30;
+let selectedSessionTimeout = 10;
 
 function setNotificationInterval(minutes) {
     selectedNotificationInterval = minutes;
@@ -1554,6 +1556,57 @@ async function loadNotificationSettings() {
         if (data.success && data.interval) {
             selectedNotificationInterval = data.interval;
             setNotificationInterval(data.interval);
+        }
+    } catch (error) {
+        console.error('Error cargando configuración:', error);
+    }
+}
+
+function setSessionTimeout(minutes) {
+    selectedSessionTimeout = minutes;
+    
+    // Actualizar estilos de botones
+    document.querySelectorAll('.session-timeout-btn').forEach(btn => {
+        btn.classList.remove('border-green-500', 'bg-green-50');
+        btn.classList.add('border-gray-300');
+    });
+    
+    const selectedBtn = document.getElementById(`timeout-${minutes}`);
+    if (selectedBtn) {
+        selectedBtn.classList.remove('border-gray-300');
+        selectedBtn.classList.add('border-green-500', 'bg-green-50');
+    }
+}
+
+async function saveSessionTimeoutSettings() {
+    try {
+        const response = await fetch(`${API_URL}/api/settings/session-timeout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timeout: selectedSessionTimeout })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Tiempo de sesión configurado a ${selectedSessionTimeout} minutos`);
+        } else {
+            alert(`❌ Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error guardando configuración:', error);
+        alert('❌ Error de conexión');
+    }
+}
+
+async function loadSessionTimeoutSettings() {
+    try {
+        const response = await fetch(`${API_URL}/api/settings/session-timeout`);
+        const data = await response.json();
+        
+        if (data.success && data.timeout) {
+            selectedSessionTimeout = data.timeout;
+            setSessionTimeout(data.timeout);
         }
     } catch (error) {
         console.error('Error cargando configuración:', error);
