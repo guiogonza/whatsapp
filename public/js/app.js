@@ -76,7 +76,8 @@ function showSection(sectionId) {
         bulk: { title: 'Envío Masivo', subtitle: 'Envía mensajes a múltiples destinatarios' },
         analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' },
         conversation: { title: 'Conversación IA Anti-Ban', subtitle: 'Genera actividad natural entre sesiones' },
-        settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' }
+        settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' },
+        database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' }
     };
     
     document.getElementById('sectionTitle').textContent = titles[sectionId].title;
@@ -87,6 +88,7 @@ function showSection(sectionId) {
     
     if (sectionId === 'analytics') initAnalytics();
     if (sectionId === 'settings') initSettings();
+    if (sectionId === 'database') initDatabase();
     if (sectionId === 'search') {
         loadPhoneNumbers();
         loadSearchSessions();
