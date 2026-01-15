@@ -1682,3 +1682,13 @@ app.get('/analytics', async (req, res) => {
     }
 });
 
+
+// Endpoint para estado de base de datos
+app.get('/api/database/status', async (req, res) => {
+    try {
+        const status = await database.getDatabaseStatus();
+        res.json(status);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
