@@ -214,15 +214,14 @@ function createBackup() {
                 
                 console.log(`📦 Backup de analytics creado (${Math.round(stats.size/1024)}KB)`);
                 
-                // Limpiar backups a15 minutos)
- */
-function startPeriodicBackups() {
-    if (backupInterval) clearInterval(backupInterval);
-    // Backup inmediato al iniciar
-    setTimeout(createBackup, 5000);
-    // Backup cada 15 minutos (más frecuente para mayor seguridad)
-    backupInterval = setInterval(createBackup, 15 * 60 * 1000);
-    console.log('🔄 Sistema de backups automáticos iniciado (cada 15 minutos)'
+                // Limpiar backups antiguos
+                cleanOldBackups();
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error creando backup:', error.message);
+    }
+}
 
 /**
  * Limpiar backups antiguos, mantener solo los últimos 50
@@ -256,14 +255,15 @@ function cleanOldBackups() {
 }
 
 /**
- * Iniciar backups periódicos (cada 30 minutos)
+ * Iniciar backups periódicos (cada 15 minutos)
  */
 function startPeriodicBackups() {
     if (backupInterval) clearInterval(backupInterval);
     // Backup inmediato al iniciar
     setTimeout(createBackup, 5000);
-    // Backup cada 30 minutos
-    backupInterval = setInterval(createBackup, 30 * 60 * 1000);
+    // Backup cada 15 minutos (más frecuente para mayor seguridad)
+    backupInterval = setInterval(createBackup, 15 * 60 * 1000);
+    console.log('🔄 Sistema de backups automáticos iniciado (cada 15 minutos)');
 }
 
 /**
