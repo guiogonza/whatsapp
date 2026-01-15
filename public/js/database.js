@@ -54,54 +54,54 @@ function renderDatabaseConnected(data) {
     const version = versionMatch ? versionMatch[1] : 'Unknown';
     
     statusContent.innerHTML = `
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-white rounded-lg p-3 border border-green-200">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-green-500 text-xl">✅</span>
-                    <span class="text-sm font-semibold text-gray-700">Estado</span>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+            <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #86efac;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 1.25rem;">✅</span>
+                    <span style="font-size: 0.875rem; font-weight: 600; color: #374151;">Estado</span>
                 </div>
-                <div class="text-green-600 font-bold">Conectado</div>
+                <div style="color: #16a34a; font-weight: bold;">Conectado</div>
             </div>
             
-            <div class="bg-white rounded-lg p-3 border">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-blue-500 text-xl">🗄️</span>
-                    <span class="text-sm font-semibold text-gray-700">Base de Datos</span>
+            <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #e5e7eb;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 1.25rem;">🗄️</span>
+                    <span style="font-size: 0.875rem; font-weight: 600; color: #374151;">Base de Datos</span>
                 </div>
-                <div class="text-gray-900 font-mono text-sm">${data.database}</div>
+                <div style="color: #111827; font-family: monospace; font-size: 0.875rem;">${data.database}</div>
             </div>
             
-            <div class="bg-white rounded-lg p-3 border">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-purple-500 text-xl">📦</span>
-                    <span class="text-sm font-semibold text-gray-700">Versión</span>
+            <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #e5e7eb;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 1.25rem;">📦</span>
+                    <span style="font-size: 0.875rem; font-weight: 600; color: #374151;">Versión</span>
                 </div>
-                <div class="text-gray-900 font-mono text-sm">PostgreSQL ${version}</div>
+                <div style="color: #111827; font-family: monospace; font-size: 0.875rem;">PostgreSQL ${version}</div>
             </div>
             
-            <div class="bg-white rounded-lg p-3 border">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-orange-500 text-xl">💾</span>
-                    <span class="text-sm font-semibold text-gray-700">Tamaño</span>
+            <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #e5e7eb;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 1.25rem;">💾</span>
+                    <span style="font-size: 0.875rem; font-weight: 600; color: #374151;">Tamaño</span>
                 </div>
-                <div class="text-gray-900 font-bold">${data.size}</div>
+                <div style="color: #111827; font-weight: bold;">${data.size}</div>
             </div>
         </div>
         
-        <div class="mt-4 bg-white rounded-lg p-3 border">
-            <div class="text-sm font-semibold text-gray-700 mb-2">📊 Estadísticas</div>
-            <div class="grid grid-cols-3 gap-3 text-center">
+        <div style="margin-top: 1rem; background: white; border-radius: 8px; padding: 12px; border: 1px solid #e5e7eb;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 8px;">📊 Estadísticas</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
                 <div>
-                    <div class="text-2xl font-bold text-blue-600">${data.stats.total_messages.toLocaleString()}</div>
-                    <div class="text-xs text-gray-600">Mensajes Totales</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #2563eb;">${data.stats.total_messages.toLocaleString()}</div>
+                    <div style="font-size: 0.75rem; color: #4b5563;">Mensajes Totales</div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-yellow-600">${data.stats.queue_total.toLocaleString()}</div>
-                    <div class="text-xs text-gray-600">En Cola (Total)</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #ca8a04;">${data.stats.queue_total.toLocaleString()}</div>
+                    <div style="font-size: 0.75rem; color: #4b5563;">En Cola (Total)</div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-green-600">${data.stats.queue_pending.toLocaleString()}</div>
-                    <div class="text-xs text-gray-600">Pendientes</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #16a34a;">${data.stats.queue_pending.toLocaleString()}</div>
+                    <div style="font-size: 0.75rem; color: #4b5563;">Pendientes</div>
                 </div>
             </div>
         </div>
@@ -120,23 +120,23 @@ function renderDatabaseDisconnected(error) {
     const statusContent = document.getElementById('dbStatusContent');
     
     statusContent.innerHTML = `
-        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div class="flex items-center gap-3 mb-2">
-                <span class="text-red-500 text-3xl">❌</span>
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 2rem;">❌</span>
                 <div>
-                    <div class="text-red-700 font-bold text-lg">Base de Datos Desconectada</div>
-                    <div class="text-red-600 text-sm">No se pudo establecer conexión con PostgreSQL</div>
+                    <div style="color: #b91c1c; font-weight: bold; font-size: 1.125rem;">Base de Datos Desconectada</div>
+                    <div style="color: #dc2626; font-size: 0.875rem;">No se pudo establecer conexión con PostgreSQL</div>
                 </div>
             </div>
-            <div class="mt-3 p-3 bg-white rounded border border-red-200">
-                <div class="text-xs font-mono text-gray-700">${error}</div>
+            <div style="margin-top: 12px; padding: 12px; background: white; border-radius: 4px; border: 1px solid #fecaca;">
+                <div style="font-size: 0.75rem; font-family: monospace; color: #374151;">${error}</div>
             </div>
         </div>
     `;
     
     // Limpiar tablas
     const tablesContent = document.getElementById('dbTablesContent');
-    tablesContent.innerHTML = '<div class="text-center text-red-500 py-4">❌ No se puede obtener información de tablas</div>';
+    tablesContent.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 1rem;">❌ No se puede obtener información de tablas</div>';
 }
 
 /**
@@ -146,34 +146,34 @@ function renderDatabaseTables(tables) {
     const tablesContent = document.getElementById('dbTablesContent');
     
     if (!tables || tables.length === 0) {
-        tablesContent.innerHTML = '<div class="text-center text-gray-500 py-4">No hay tablas disponibles</div>';
+        tablesContent.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 1rem;">No hay tablas disponibles</div>';
         return;
     }
     
     let html = `
-        <table class="min-w-full text-sm">
-            <thead class="bg-gray-100 border-b-2">
+        <table style="width: 100%; font-size: 0.875rem; border-collapse: collapse;">
+            <thead style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                 <tr>
-                    <th class="text-left py-3 px-4 font-semibold">Tabla</th>
-                    <th class="text-right py-3 px-4 font-semibold">Registros</th>
-                    <th class="text-right py-3 px-4 font-semibold">Tamaño</th>
+                    <th style="text-align: left; padding: 12px 16px; font-weight: 600;">Tabla</th>
+                    <th style="text-align: right; padding: 12px 16px; font-weight: 600;">Registros</th>
+                    <th style="text-align: right; padding: 12px 16px; font-weight: 600;">Tamaño</th>
                 </tr>
             </thead>
             <tbody>
     `;
     
     tables.forEach((table, index) => {
-        const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+        const bgColor = index % 2 === 0 ? '#ffffff' : '#f9fafb';
         html += `
-            <tr class="${bgClass} hover:bg-blue-50 transition-colors">
-                <td class="py-3 px-4">
-                    <div class="flex items-center gap-2">
-                        <span class="text-blue-500">📋</span>
-                        <span class="font-mono font-semibold">${table.tablename}</span>
+            <tr style="background: ${bgColor};">
+                <td style="padding: 12px 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>📋</span>
+                        <span style="font-family: monospace; font-weight: 600;">${table.tablename}</span>
                     </div>
                 </td>
-                <td class="py-3 px-4 text-right font-mono">${(table.row_count || 0).toLocaleString()}</td>
-                <td class="py-3 px-4 text-right font-mono text-gray-600">${table.size || 'N/A'}</td>
+                <td style="padding: 12px 16px; text-align: right; font-family: monospace;">${(table.row_count || 0).toLocaleString()}</td>
+                <td style="padding: 12px 16px; text-align: right; font-family: monospace; color: #4b5563;">${table.size || 'N/A'}</td>
             </tr>
         `;
     });
