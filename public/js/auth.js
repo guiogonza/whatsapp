@@ -1,10 +1,24 @@
 // ======================== CONFIGURACIÓN Y AUTENTICACIÓN ========================
 const CREDENTIALS = { username: 'admin', password: 'guio123*' };
-const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 minutos
+let SESSION_TIMEOUT = 10 * 60 * 1000; // Valor por defecto 10 minutos
 const SESSION_KEY = 'wpp_dashboard_session';
 let sessionTimer = null;
 let timerInterval = null;
 let timeRemaining = SESSION_TIMEOUT;
+
+// Cargar configuración de timeout del servidor
+async function loadSessionTimeoutConfig() {
+    try {
+        const response = await fetch('/api/settings/session-timeout');
+        if (response.ok) {
+            const data = await response.json();
+            SESSION_TIMEOUT = data.timeout * 60 * 1000; // Convertir minutos a milisegundos
+            console.log(`⏱️ Timeout de sesión configurado a ${data.timeout} minutos`);
+        }
+    } catch (error) {
+        console.error('Error cargando configuración de timeout:', error);
+    }
+}
 
 function login() {
     const username = document.getElementById('username').value;
@@ -23,7 +37,8 @@ function login() {
     }
 }
 
-function showMainApp() {
+async function showMainApp() {
+    await loadSessionTimeoutConfig(); // Cargar configuración antes de iniciar timer
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
     startSessionTimer();
@@ -41,7 +56,8 @@ function logout() {
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
 }
-
+async function checkSavedSession() {
+    await loadSessionTimeoutConfig(); // Cargar configuración al inicio
 function checkSavedSession() {
     const savedSession = localStorage.getItem(SESSION_KEY);
     if (savedSession) {
