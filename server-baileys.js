@@ -760,11 +760,11 @@ app.get('/api/rotation', (req, res) => {
  * GET /api/monitor/messages - Todos los mensajes para el monitor (desde la BD)
  * Query: limit, offset
  */
-app.get('/api/monitor/messages', (req, res) => {
+app.get('/api/monitor/messages', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 500;
         const offset = parseInt(req.query.offset) || 0;
-        const result = database.getMessagesByFilter({ limit, offset });
+        const result = await database.getMessagesByFilter({ limit, offset });
         // Adaptar formato para el monitor
         const messages = (result.messages || []).map(m => ({
             timestamp: m.timestamp,
@@ -780,14 +780,14 @@ app.get('/api/monitor/messages', (req, res) => {
 });
 
 /**
- * GET /api/monitor/history - Agregados simples por fecha y por sesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n
+ * GET /api/monitor/history - Agregados simples por fecha y por sesión
  */
-app.get('/api/monitor/history', (req, res) => {
+app.get('/api/monitor/history', async (req, res) => {
     try {
         // Leer agregados persistentes desde la BD para no depender del buffer en memoria
         const period = req.query.period || 'day';
         const range = req.query.range || 'today';
-        const data = database.getAnalytics({ period, range, top: 10 });
+        const data = await database.getAnalytics({ period, range, top: 10 });
 
         const byDate = (data.timeline || []).map(t => {
             const total = Number(t.total || 0);
@@ -1050,12 +1050,12 @@ app.post('/api/settings/session-timeout', (req, res) => {
  *   - limit: número máximo de resultados (default: 50)
  *   - status: 'pending', 'sent', 'all' (default: 'pending')
  */
-app.get('/api/queue/messages', (req, res) => {
+app.get('/api/queue/messages', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const status = req.query.status || 'pending';
-        const messages = database.getQueuedMessages(limit, status);
-        const stats = database.getQueueStats();
+        const messages = await database.getQueuedMessages(limit, status);
+        const stats = await database.getQueueStats();
         
         res.json({
             success: true,
@@ -1074,9 +1074,9 @@ app.get('/api/queue/messages', (req, res) => {
 /**
  * POST /api/queue/mark-all-sent - Marca todos los mensajes pendientes como enviados manualmente
  */
-app.post('/api/queue/mark-all-sent', (req, res) => {
+app.post('/api/queue/mark-all-sent', async (req, res) => {
     try {
-        const count = database.markAllPendingAsSent();
+        const count = await database.markAllPendingAsSent();
         res.json({
             success: true,
             message: `${count} mensajes marcados como enviados manualmente`,
@@ -1095,9 +1095,9 @@ app.post('/api/queue/mark-all-sent', (req, res) => {
 /**
  * GET /api/messages/phones - Obtiene números únicos
  */
-app.get('/api/messages/phones', (req, res) => {
+app.get('/api/messages/phones', async (req, res) => {
     try {
-        const phones = database.getUniquePhoneNumbers();
+        const phones = await database.getUniquePhoneNumbers();
         res.json({
             success: true,
             phones
@@ -1113,9 +1113,9 @@ app.get('/api/messages/phones', (req, res) => {
 /**
  * GET /api/messages/sessions - Obtiene sesiones únicas
  */
-app.get('/api/messages/sessions', (req, res) => {
+app.get('/api/messages/sessions', async (req, res) => {
     try {
-        const sessions = database.getUniqueSessions();
+        const sessions = await database.getUniqueSessions();
         res.json({
             success: true,
             sessions
@@ -1131,11 +1131,11 @@ app.get('/api/messages/sessions', (req, res) => {
 /**
  * GET /api/messages/search - Busca mensajes con filtros
  */
-app.get('/api/messages/search', (req, res) => {
+app.get('/api/messages/search', async (req, res) => {
     try {
         const { phone, session, startDate, endDate, limit, offset } = req.query;
         
-        const result = database.getMessagesByFilter({
+        const result = await database.getMessagesByFilter({
             phoneNumber: phone,
             session,
             startDate,
