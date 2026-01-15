@@ -20,6 +20,15 @@ async function loadSessionTimeoutConfig() {
     }
 }
 
+// Actualizar timeout y reiniciar timer (para cuando se cambia desde configuración)
+async function updateSessionTimeout() {
+    await loadSessionTimeoutConfig();
+    // Si hay una sesión activa, reiniciar el timer con el nuevo valor
+    if (!document.getElementById('mainApp').classList.contains('hidden')) {
+        startSessionTimer();
+    }
+}
+
 async function login() {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;

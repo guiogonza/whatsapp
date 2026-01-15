@@ -1590,6 +1590,10 @@ async function saveSessionTimeoutSettings() {
         
         if (data.success) {
             alert(`✅ Tiempo de sesión configurado a ${selectedSessionTimeout} minutos`);
+            // Actualizar el timeout inmediatamente en la sesión actual
+            if (typeof updateSessionTimeout === 'function') {
+                await updateSessionTimeout();
+            }
         } else {
             alert(`❌ Error: ${data.error}`);
         }
