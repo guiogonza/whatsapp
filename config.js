@@ -28,7 +28,7 @@ module.exports = {
     
     // Tiempo de sesión (en minutos)
     // Opciones: 5, 10, 20, 30 minutos
-    SESSION_TIMEOUT_MINUTES: parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 10
+    SESSION_TIMEOUT_MINUTES: parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 10,
     
     // Notificaciones
     NOTIFICATION_NUMBER: process.env.NOTIFICATION_NUMBER || '573183499539',

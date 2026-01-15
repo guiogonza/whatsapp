@@ -141,14 +141,15 @@ function sendSessionsStatusNotification() {
         } else {
             msg += "*Sesiones Activas:*\n";
             active.forEach((s, i) => {
-                const info = sessionsObj[s.name]?.info || {};
+                const sessionObj = sessionsObj[s.name] || {};
+                const info = sessionObj.info || {};
                 const label = info.pushname ? ` (${info.pushname})` : '';
                 const phoneNumber = info.me?.id?.split('@')[0] || info.me?.user || 'N/A';
-                const consolidados = s.consolidatedCount || 0;
-                const recibidos = s.messagesReceivedCount || 0;
-                const enviados = s.messagesSentCount || 0;
-                const proxyInfo = s.proxyHost ? `${s.proxyHost}:${s.proxyPort}` : 'Sin proxy';
-                const location = s.proxyCountry && s.proxyCity ? `${s.proxyCity}, ${s.proxyCountry}` : 'N/A';
+                const consolidados = sessionObj.consolidatedCount || 0;
+                const recibidos = sessionObj.messagesReceivedCount || 0;
+                const enviados = sessionObj.messagesSentCount || 0;
+                const proxyInfo = sessionObj.proxyHost ? `${sessionObj.proxyHost}:${sessionObj.proxyPort}` : 'Sin proxy';
+                const location = sessionObj.proxyCountry && sessionObj.proxyCity ? `${sessionObj.proxyCity}, ${sessionObj.proxyCountry}` : 'N/A';
                 
                 msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
                 msg += `   ${EMOJI.PHONE} ${phoneNumber}\n`;
