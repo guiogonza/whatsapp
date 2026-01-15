@@ -21,7 +21,8 @@ const config = require('./config');
 // Gestor de sesiones con Baileys
 const sessionManager = require('./sessionManager-baileys');
 
-const database = require('./database');
+// Base de datos PostgreSQL
+const database = require('./database-postgres');
 
 // Utilidad simple para formatear nÃºmeros de telÃ©fono
 const formatPhoneNumber = (phone) => {
@@ -1497,6 +1498,45 @@ app.get('/health', (req, res) => {
         : 'WARNING';
     
     // Campos adicionales para compatibilidad con frontend analytics.js
+
+// ======================== DATABASE STATUS ========================
+
+/**
+ * GET /api/database/status - Obtener estado detallado de la base de datos
+ */
+app.get('/api/database/status', async (req, res) => {
+    try {
+        const status = await database.getDatabaseStatus();
+        res.json({ success: true, ...status });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            connected: false,
+            error: error.message 
+        });
+    }
+});
+
+// ======================== HEALTH CHECK ========================
+
+app.get('/health', (req, res) => {
+    const sessions = sessionManager.getAllSessions();
+    const activeSessions = sessionManager.getActiveSessions();
+    
+    const sessionList = Object.entries(sessions).map(([name, session]) => ({
+        name,
+        state: session.state,
+        phoneNumber: session.phoneNumber,
+        uptime: Date.now() - session.startTime.getTime()
+    }));
+    
+    const rotationInfo = sessionManager.getRotationInfo();
+    
+    const systemStatus = activeSessions.length === 0 ? 'CRITICAL' 
+        : activeSessions.length >= 2 ? 'HEALTHY' 
+        : 'WARNING';
+    
+    // Campos adicionales para compatibilidad con frontend analytics.js
     const availableSessions = sessionList.filter(s => s.state === config.SESSION_STATES.READY).map(s => s.name);
     const rotationInfoCompat = {
         current_session: rotationInfo.currentSession,
@@ -1562,10 +1602,10 @@ function stopMonitoring() {
  */
 async function initialize() {
     try {
-        console.log('\nÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚ÂšÃƒÂ‚Ã‚Â€ Iniciando WhatsApp Bot Server con Baileys...\n');
+        console.log('\n🚀 Iniciando WhatsApp Bot Server con Baileys...\n');
         
-        // Inicializar base de datos
-        await database.init();
+        // Inicializar base de datos PostgreSQL
+        await database.initDatabase();
 
         // Cargar sesiones existentes
         await sessionManager.loadSessionsFromDisk();

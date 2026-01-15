@@ -30,6 +30,14 @@ module.exports = {
     // Opciones: 5, 10, 20, 30 minutos
     SESSION_TIMEOUT_MINUTES: parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 10,
     
+    // Base de datos PostgreSQL
+    DATABASE_URL: process.env.DATABASE_URL || 'postgresql://whatsapp:whatsapp_secure_2026@postgres:5432/whatsapp_analytics',
+    POSTGRES_HOST: process.env.POSTGRES_HOST || 'postgres',
+    POSTGRES_PORT: parseInt(process.env.POSTGRES_PORT) || 5432,
+    POSTGRES_DB: process.env.POSTGRES_DB || 'whatsapp_analytics',
+    POSTGRES_USER: process.env.POSTGRES_USER || 'whatsapp',
+    POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD || 'whatsapp_secure_2026',
+    
     // Notificaciones
     NOTIFICATION_NUMBER: process.env.NOTIFICATION_NUMBER || '573183499539',
     NOTIFICATION_INTERVAL_MINUTES: parseInt(process.env.NOTIFICATION_INTERVAL_MINUTES, 10) || 30,
