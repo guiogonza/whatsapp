@@ -449,6 +449,318 @@ async function closeDatabase() {
     }
 }
 
+/**
+ * Obtener lista de números únicos a los que se han enviado mensajes
+ */
+async function getUniquePhoneNumbers() {
+    if (!pool || !isConnected) return [];
+    
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT phone_number, 
+                   COUNT(*) as message_count,
+                   MAX(timestamp) as last_message
+            FROM messages 
+            GROUP BY phone_number 
+            ORDER BY message_count DESC, last_message DESC
+            LIMIT 500
+        `);
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error obteniendo números únicos:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Obtener lista de sesiones únicas para filtrado
+ */
+async function getUniqueSessions() {
+    if (!pool || !isConnected) return [];
+    
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT session, 
+                   COUNT(*) as message_count,
+                   MAX(timestamp) as last_message
+            FROM messages 
+            WHERE session IS NOT NULL AND session != ''
+            GROUP BY session 
+            ORDER BY message_count DESC, last_message DESC
+        `);
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error obteniendo sesiones únicas:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Obtener mensajes filtrados por número y rango de fechas
+ */
+async function getMessagesByFilter(options = {}) {
+    if (!pool || !isConnected) return { messages: [], total: 0 };
+    
+    const { phoneNumber, session, startDate, endDate, limit = 50, offset = 0 } = options;
+    
+    let conditions = [];
+    let params = [];
+    let paramCount = 0;
+    
+    if (phoneNumber) {
+        paramCount++;
+        conditions.push(`phone_number = $${paramCount}`);
+        params.push(phoneNumber);
+    }
+    if (session) {
+        paramCount++;
+        conditions.push(`session = $${paramCount}`);
+        params.push(session);
+    }
+    if (startDate) {
+        paramCount++;
+        conditions.push(`timestamp >= $${paramCount}`);
+        params.push(`${startDate}T00:00:00`);
+    }
+    if (endDate) {
+        paramCount++;
+        conditions.push(`timestamp <= $${paramCount}`);
+        params.push(`${endDate}T23:59:59`);
+    }
+    
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    
+    try {
+        // Obtener total
+        const countResult = await pool.query(
+            `SELECT COUNT(*) as total FROM messages ${whereClause}`,
+            params
+        );
+        const total = parseInt(countResult.rows[0].total);
+        
+        // Obtener mensajes paginados
+        const messagesResult = await pool.query(
+            `SELECT id, timestamp, session, phone_number, message_preview, char_count, status, error_message
+             FROM messages 
+             ${whereClause}
+             ORDER BY timestamp DESC
+             LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+            [...params, limit, offset]
+        );
+        
+        return {
+            messages: messagesResult.rows,
+            total,
+            limit,
+            offset
+        };
+    } catch (error) {
+        console.error('❌ Error obteniendo mensajes filtrados:', error.message);
+        return { messages: [], total: 0, limit, offset };
+    }
+}
+
+/**
+ * Obtener conteo de mensajes enviados hoy por sesión
+ */
+async function getTodayMessagesBySession() {
+    if (!pool || !isConnected) return {};
+    
+    try {
+        // Obtener fecha de hoy en zona horaria Colombia
+        const todayStart = getColombiaTimestamp().split('T')[0] + 'T00:00:00';
+        const todayEnd = getColombiaTimestamp().split('T')[0] + 'T23:59:59';
+        
+        const result = await pool.query(`
+            SELECT session, COUNT(*) as count
+            FROM messages 
+            WHERE status = 'sent' 
+            AND timestamp >= $1 
+            AND timestamp <= $2
+            GROUP BY session
+        `, [todayStart, todayEnd]);
+        
+        const sessionCounts = {};
+        result.rows.forEach(row => {
+            sessionCounts[row.session] = parseInt(row.count);
+        });
+        
+        return sessionCounts;
+    } catch (error) {
+        console.error('❌ Error obteniendo mensajes de hoy por sesión:', error.message);
+        return {};
+    }
+}
+
+/**
+ * Estadísticas de la cola (solo mensajes pendientes - sin enviar)
+ */
+async function getQueueStats() {
+    if (!pool || !isConnected) return { total: 0, pendingNumbers: 0, totalChars: 0, sentToday: 0 };
+    
+    try {
+        // Total y caracteres de mensajes pendientes
+        const totalResult = await pool.query(
+            `SELECT COUNT(*) as total, COALESCE(SUM(char_count), 0) as chars 
+             FROM outgoing_queue WHERE sent_at IS NULL`
+        );
+        
+        // Números únicos pendientes
+        const numbersResult = await pool.query(
+            `SELECT COUNT(DISTINCT phone_number) as cnt FROM outgoing_queue WHERE sent_at IS NULL`
+        );
+        
+        // Mensajes enviados hoy
+        const today = getColombiaTimestamp().split('T')[0];
+        const sentTodayResult = await pool.query(
+            `SELECT COUNT(*) as cnt FROM outgoing_queue 
+             WHERE sent_at IS NOT NULL AND sent_at::text LIKE $1`,
+            [today + '%']
+        );
+        
+        return {
+            total: parseInt(totalResult.rows[0].total),
+            pendingNumbers: parseInt(numbersResult.rows[0].cnt),
+            totalChars: parseInt(totalResult.rows[0].chars),
+            sentToday: parseInt(sentTodayResult.rows[0].cnt)
+        };
+    } catch (error) {
+        console.error('❌ Error obteniendo estadísticas de cola:', error.message);
+        return { total: 0, pendingNumbers: 0, totalChars: 0, sentToday: 0 };
+    }
+}
+
+/**
+ * Obtener números encolados únicos
+ */
+async function getQueuedNumbers() {
+    if (!pool || !isConnected) return [];
+    
+    try {
+        const result = await pool.query(`
+            SELECT phone_number, COUNT(*) as message_count, SUM(char_count) as total_chars
+            FROM outgoing_queue 
+            WHERE sent_at IS NULL
+            GROUP BY phone_number
+            ORDER BY message_count DESC
+        `);
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error obteniendo números en cola:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Obtener mensajes para un número específico
+ */
+async function getMessagesForNumber(phoneNumber) {
+    if (!pool || !isConnected) return [];
+    
+    try {
+        const result = await pool.query(
+            `SELECT * FROM outgoing_queue 
+             WHERE phone_number = $1 AND sent_at IS NULL
+             ORDER BY arrived_at ASC`,
+            [phoneNumber]
+        );
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error obteniendo mensajes para número:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Marcar mensajes como enviados
+ */
+async function markMessagesSent(messageIds, sendType = 'auto') {
+    if (!pool || !isConnected || !messageIds || messageIds.length === 0) return;
+    
+    try {
+        const timestamp = getColombiaTimestamp();
+        await pool.query(
+            `UPDATE outgoing_queue 
+             SET sent_at = $1, send_type = $2
+             WHERE id = ANY($3)`,
+            [timestamp, sendType, messageIds]
+        );
+    } catch (error) {
+        console.error('❌ Error marcando mensajes como enviados:', error.message);
+    }
+}
+
+/**
+ * Marcar todos los pendientes como enviados
+ */
+async function markAllPendingAsSent() {
+    if (!pool || !isConnected) return 0;
+    
+    try {
+        const result = await pool.query(
+            `UPDATE outgoing_queue 
+             SET sent_at = $1 
+             WHERE sent_at IS NULL
+             RETURNING id`,
+            [getColombiaTimestamp()]
+        );
+        return result.rowCount;
+    } catch (error) {
+        console.error('❌ Error marcando todos como enviados:', error.message);
+        return 0;
+    }
+}
+
+/**
+ * Limpiar cola para un número
+ */
+async function clearQueueForNumber(phoneNumber) {
+    if (!pool || !isConnected) return 0;
+    
+    try {
+        const result = await pool.query(
+            `DELETE FROM outgoing_queue WHERE phone_number = $1 AND sent_at IS NULL`,
+            [phoneNumber]
+        );
+        return result.rowCount;
+    } catch (error) {
+        console.error('❌ Error limpiando cola:', error.message);
+        return 0;
+    }
+}
+
+/**
+ * Obtener mensajes encolados con paginación
+ */
+async function getQueuedMessages(limit = 50, status = 'pending') {
+    if (!pool || !isConnected) return [];
+    
+    try {
+        let query;
+        if (status === 'pending') {
+            query = `SELECT * FROM outgoing_queue 
+                     WHERE sent_at IS NULL 
+                     ORDER BY arrived_at ASC 
+                     LIMIT $1`;
+        } else if (status === 'sent') {
+            query = `SELECT * FROM outgoing_queue 
+                     WHERE sent_at IS NOT NULL 
+                     ORDER BY sent_at DESC 
+                     LIMIT $1`;
+        } else {
+            query = `SELECT * FROM outgoing_queue 
+                     ORDER BY arrived_at DESC 
+                     LIMIT $1`;
+        }
+        
+        const result = await pool.query(query, [limit]);
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error obteniendo mensajes encolados:', error.message);
+        return [];
+    }
+}
+
 // Exportar funciones
 module.exports = {
     initDatabase,
@@ -463,5 +775,21 @@ module.exports = {
     getMessagesByPhone,
     getDatabaseStatus,
     closeDatabase,
-    getColombiaTimestamp
+    getColombiaTimestamp,
+    // Nuevas funciones para compatibilidad con monitor
+    getUniquePhoneNumbers,
+    getUniqueSessions,
+    getMessagesByFilter,
+    getTodayMessagesBySession,
+    getQueueStats,
+    getQueuedNumbers,
+    getMessagesForNumber,
+    markMessagesSent,
+    markAllPendingAsSent,
+    clearQueueForNumber,
+    getQueuedMessages,
+    // Aliases para compatibilidad
+    init: initDatabase,
+    close: closeDatabase,
+    getDbStats: getStats
 };
