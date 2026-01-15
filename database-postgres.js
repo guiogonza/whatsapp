@@ -162,7 +162,7 @@ async function logMessage(session, phoneNumber, message, status, errorMessage = 
 async function enqueueMessage(phoneNumber, message, sendType = 'auto') {
     if (!pool || !isConnected) {
         console.error('❌ Base de datos no conectada');
-        return null;
+        return { success: false, error: 'Base de datos no conectada' };
     }
 
     const charCount = (message || '').length;
@@ -171,13 +171,27 @@ async function enqueueMessage(phoneNumber, message, sendType = 'auto') {
         const result = await pool.query(
             `INSERT INTO outgoing_queue (phone_number, message, char_count, arrived_at, send_type)
              VALUES ($1, $2, $3, $4, $5)
-             RETURNING id`,
+             RETURNING id, arrived_at`,
             [phoneNumber, message, charCount, getColombiaTimestamp(), sendType]
         );
-        return result.rows[0].id;
+        
+        // Obtener estadísticas de la cola
+        const statsResult = await pool.query(`
+            SELECT COUNT(*) as total, COUNT(DISTINCT phone_number) as pending_numbers
+            FROM outgoing_queue WHERE sent_at IS NULL
+        `);
+        
+        return { 
+            success: true, 
+            id: result.rows[0].id,
+            charCount: charCount,
+            arrivedAt: result.rows[0].arrived_at,
+            total: parseInt(statsResult.rows[0].total) || 0,
+            pendingNumbers: parseInt(statsResult.rows[0].pending_numbers) || 0
+        };
     } catch (error) {
         console.error('❌ Error encolando mensaje:', error.message);
-        return null;
+        return { success: false, error: error.message };
     }
 }
 
