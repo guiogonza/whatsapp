@@ -534,7 +534,7 @@ app.post('/api/messages/send', async (req, res) => {
         }
         
         // SIEMPRE consolidar - sin opcion de bypass
-        const result = sessionManager.addToConsolidation(phoneNumber, message);
+        const result = await sessionManager.addToConsolidation(phoneNumber, message);
         if (result.success) {
             res.json({ 
                 success: true, 
@@ -568,7 +568,7 @@ app.post('/api/session/send-message', async (req, res) => {
         }
 
         // SIEMPRE consolidar - sin opcion de bypass
-        const result = sessionManager.addToConsolidation(phoneNumber, message);
+        const result = await sessionManager.addToConsolidation(phoneNumber, message);
         if (result.success) {
             res.json({ 
                 success: true, 
@@ -676,7 +676,7 @@ app.post('/api/messages/send-bulk', async (req, res) => {
             const phoneNumber = contact.phoneNumber || contact.phone || contact;
             if (!phoneNumber) continue;
             
-            const result = sessionManager.addToConsolidation(phoneNumber, message);
+            const result = await sessionManager.addToConsolidation(phoneNumber, message);
             results.push({
                 phoneNumber,
                 success: result.success,
@@ -726,10 +726,10 @@ app.get('/api/messages/recent', (req, res) => {
 /**
  * GET /api/messages/consolidation - Estado actual de la consolidaciÃ³n de mensajes
  */
-app.get('/api/messages/consolidation', (req, res) => {
+app.get('/api/messages/consolidation', async (req, res) => {
     try {
-        const status = sessionManager.getConsolidationStatus();
-        const batchSettings = sessionManager.getBatchSettings();
+        const status = await sessionManager.getConsolidationStatus();
+        const batchSettings = await sessionManager.getBatchSettings();
         res.json({
             success: true,
             consolidationDelayMinutes: batchSettings.interval,
@@ -892,9 +892,9 @@ app.get('/analytics', async (req, res) => {
  * GET /api/settings/consolidation - Obtiene configuracion de consolidacion
  * GET /api/settings/batch - (alias mantenido por compatibilidad)
  */
-app.get(['/api/settings/consolidation', '/api/settings/batch'], (req, res) => {
+app.get(['/api/settings/consolidation', '/api/settings/batch'], async (req, res) => {
     try {
-        const settings = sessionManager.getBatchSettings();
+        const settings = await sessionManager.getBatchSettings();
         res.json({
             success: true,
             settings
