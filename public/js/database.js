@@ -107,6 +107,8 @@ function renderDatabaseConnected(data) {
         </div>
     `;
     
+    console.log('✅ innerHTML asignado, contenido:', statusContent.innerHTML.substring(0, 100));
+    
     // Renderizar tablas
     renderDatabaseTables(data.tables);
 }
