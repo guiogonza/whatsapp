@@ -299,31 +299,33 @@ async function getStats() {
  * Obtener estadísticas de analytics por rango de fechas
  */
 async function getAnalyticsByDateRange(startDate, endDate, topN = 10) {
-    if (!pool || !isConnected) return { timeline: [], top: [] };
+    if (!pool || !isConnected) return { timeline: [], top_numbers: [], sessions_stats: [], db_stats: {} };
     
     try {
-        // Timeline por fecha
+        // Timeline por fecha - usar alias en español para compatibilidad
         const timelineResult = await pool.query(
             `SELECT 
-                DATE(timestamp) as date,
-                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent,
-                COUNT(CASE WHEN status = 'error' THEN 1 END) as failed,
-                COUNT(CASE WHEN status = 'queued' THEN 1 END) as queued
+                DATE(timestamp) as periodo,
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
+                COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
+                COUNT(CASE WHEN status = 'queued' THEN 1 END) as en_cola
              FROM messages
              WHERE DATE(timestamp) BETWEEN $1 AND $2
              GROUP BY DATE(timestamp)
-             ORDER BY date ASC`,
+             ORDER BY periodo ASC`,
             [startDate, endDate]
         );
 
-        // Top números
+        // Top números - usar aliases compatibles
         const topResult = await pool.query(
             `SELECT 
                 phone_number,
                 COUNT(*) as total,
-                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent,
-                COUNT(CASE WHEN status = 'error' THEN 1 END) as failed,
-                SUM(char_count) as total_chars,
+                COALESCE(SUM(char_count), 0) as total_chars,
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
+                COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
+                COUNT(CASE WHEN status = 'queued' THEN 1 END) as en_cola,
                 MIN(timestamp) as first_message,
                 MAX(timestamp) as last_message
              FROM messages
@@ -334,13 +336,32 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10) {
             [startDate, endDate, topN]
         );
 
+        // Estadísticas por sesión
+        const sessionsResult = await pool.query(
+            `SELECT 
+                session,
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
+                COUNT(CASE WHEN status = 'error' THEN 1 END) as errores
+             FROM messages
+             WHERE DATE(timestamp) BETWEEN $1 AND $2
+             GROUP BY session
+             ORDER BY total DESC`,
+            [startDate, endDate]
+        );
+
+        // Estadísticas generales
+        const dbStats = await getStats();
+
         return {
             timeline: timelineResult.rows,
-            top: topResult.rows
+            top_numbers: topResult.rows,
+            sessions_stats: sessionsResult.rows,
+            db_stats: dbStats
         };
     } catch (error) {
         console.error('❌ Error obteniendo analytics:', error.message);
-        return { timeline: [], top: [] };
+        return { timeline: [], top_numbers: [], sessions_stats: [], db_stats: {} };
     }
 }
 
