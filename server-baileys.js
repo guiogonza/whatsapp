@@ -688,6 +688,41 @@ app.get('/api/cloud/stats', async (req, res) => {
 });
 
 /**
+ * POST /api/cloud/enable - Habilitar Cloud API (marcar cuenta como lista)
+ */
+app.post('/api/cloud/enable', (req, res) => {
+    try {
+        const cloudApi = require('./lib/session/whatsapp-cloud-api');
+        cloudApi.setAccountReady(true);
+        res.json({ 
+            success: true, 
+            message: 'Cloud API habilitada. Los mensajes ahora se enviarán por Cloud API.',
+            stats: cloudApi.getStats()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/cloud/disable - Deshabilitar Cloud API (marcar cuenta como no lista)
+ */
+app.post('/api/cloud/disable', (req, res) => {
+    try {
+        const cloudApi = require('./lib/session/whatsapp-cloud-api');
+        const { reason } = req.body;
+        cloudApi.setAccountReady(false, reason || 'Deshabilitada manualmente');
+        res.json({ 
+            success: true, 
+            message: 'Cloud API deshabilitada. Los mensajes irán solo por Baileys o quedarán en cola.',
+            stats: cloudApi.getStats()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/sessions/rotation/rotate - Fuerza la rotación de sesión
  */
 app.post('/api/sessions/rotation/rotate', (req, res) => {
@@ -697,7 +732,7 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
         
         res.json({
             success: true,
-            message: 'RotaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n realizada exitosamente',
+            message: 'Rotación realizada exitosamente',
             rotation: info
         });
     } catch (error) {

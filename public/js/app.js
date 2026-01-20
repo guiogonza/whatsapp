@@ -149,22 +149,120 @@ async function loadCloudApiStats() {
             
             // Estado de Cloud API
             const statusEl = document.getElementById('cloudApiStatus');
+            const accountStatusEl = document.getElementById('cloudApiAccountStatus');
+            const accountErrorEl = document.getElementById('cloudApiAccountError');
+            const errorTextEl = document.getElementById('cloudApiErrorText');
+            const btnEnableEl = document.getElementById('btnEnableCloud');
+            const btnDisableEl = document.getElementById('btnDisableCloud');
             const hourUsage = data.cloudApi?.messagesThisHour || 0;
             const hourLimit = data.cloudApi?.hourlyLimit || 500;
             
-            if (hourUsage >= hourLimit) {
-                statusEl.className = 'bg-red-400 text-red-900 px-3 py-1 rounded-full text-xs font-bold';
-                statusEl.textContent = '⚠️ LÍMITE';
-            } else if (hourUsage >= hourLimit * 0.8) {
-                statusEl.className = 'bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold';
-                statusEl.textContent = '⚠️ 80%+';
+            // Verificar estado de la cuenta
+            const accountReady = data.cloudApi?.accountReady !== false;
+            const accountError = data.cloudApi?.accountError;
+            
+            if (!accountReady) {
+                // Cuenta no está lista
+                statusEl.classList.add('hidden');
+                accountStatusEl.classList.remove('hidden');
+                accountStatusEl.textContent = '⏳ CUENTA PENDIENTE';
+                accountStatusEl.className = 'bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold';
+                
+                // Mostrar error si existe
+                if (accountError) {
+                    accountErrorEl.classList.remove('hidden');
+                    errorTextEl.textContent = accountError;
+                } else {
+                    accountErrorEl.classList.add('hidden');
+                }
+                
+                // Mostrar botón de habilitar
+                btnEnableEl.classList.remove('hidden');
+                btnDisableEl.classList.add('hidden');
             } else {
-                statusEl.className = 'bg-green-400 text-green-900 px-3 py-1 rounded-full text-xs font-bold';
-                statusEl.textContent = '● ACTIVA';
+                // Cuenta está lista
+                accountStatusEl.classList.add('hidden');
+                accountErrorEl.classList.add('hidden');
+                statusEl.classList.remove('hidden');
+                
+                // Mostrar botón de deshabilitar
+                btnEnableEl.classList.add('hidden');
+                btnDisableEl.classList.remove('hidden');
+                
+                if (hourUsage >= hourLimit) {
+                    statusEl.className = 'bg-red-400 text-red-900 px-3 py-1 rounded-full text-xs font-bold';
+                    statusEl.textContent = '⚠️ LÍMITE';
+                } else if (hourUsage >= hourLimit * 0.8) {
+                    statusEl.className = 'bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold';
+                    statusEl.textContent = '⚠️ 80%+';
+                } else {
+                    statusEl.className = 'bg-green-400 text-green-900 px-3 py-1 rounded-full text-xs font-bold';
+                    statusEl.textContent = '● ACTIVA';
+                }
             }
         }
     } catch (error) {
         console.error('Error cargando stats Cloud API:', error);
+    }
+}
+
+// Habilitar Cloud API
+async function enableCloudApi() {
+    try {
+        const btn = document.getElementById('btnEnableCloud');
+        btn.disabled = true;
+        btn.textContent = '⏳ Habilitando...';
+        
+        const response = await fetch(`${API_URL}/api/cloud/enable`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCloudApiStats();
+            alert('✅ Cloud API habilitada correctamente');
+        } else {
+            throw new Error(data.error || 'Error al habilitar');
+        }
+    } catch (error) {
+        console.error('Error habilitando Cloud API:', error);
+        alert('❌ Error: ' + error.message);
+    } finally {
+        const btn = document.getElementById('btnEnableCloud');
+        btn.disabled = false;
+        btn.textContent = '✓ Habilitar Cloud API';
+    }
+}
+
+// Deshabilitar Cloud API
+async function disableCloudApi() {
+    if (!confirm('¿Seguro que deseas deshabilitar Cloud API? Los mensajes irán solo por Baileys o quedarán en cola.')) {
+        return;
+    }
+    
+    try {
+        const btn = document.getElementById('btnDisableCloud');
+        btn.disabled = true;
+        btn.textContent = '⏳ Deshabilitando...';
+        
+        const response = await fetch(`${API_URL}/api/cloud/disable`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'Deshabilitada manualmente desde panel' })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCloudApiStats();
+            alert('✅ Cloud API deshabilitada. Los mensajes ahora van solo por Baileys.');
+        } else {
+            throw new Error(data.error || 'Error al deshabilitar');
+        }
+    } catch (error) {
+        console.error('Error deshabilitando Cloud API:', error);
+        alert('❌ Error: ' + error.message);
+    } finally {
+        const btn = document.getElementById('btnDisableCloud');
+        btn.disabled = false;
+        btn.textContent = '✕ Deshabilitar';
     }
 }
 
