@@ -133,14 +133,53 @@
                     </div>
                 </div>
                 
+                <!-- Cloud API Stats Card -->
+                <div id="cloudApiCard" class="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg shadow-lg p-6 mb-6 text-white">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl">☁️</span>
+                            <div>
+                                <h3 class="text-lg font-bold">WhatsApp Cloud API</h3>
+                                <p class="text-blue-100 text-sm">Meta Business API Oficial</p>
+                            </div>
+                        </div>
+                        <span id="cloudApiStatus" class="bg-green-400 text-green-900 px-3 py-1 rounded-full text-xs font-bold">● ACTIVA</span>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white/20 rounded-lg p-3 text-center">
+                            <div id="cloudApiToday" class="text-2xl font-bold">0</div>
+                            <div class="text-xs text-blue-100">Hoy</div>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-3 text-center">
+                            <div id="cloudApiHour" class="text-2xl font-bold">0</div>
+                            <div class="text-xs text-blue-100">Última hora</div>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-3 text-center">
+                            <div id="cloudApiTotal" class="text-2xl font-bold">0</div>
+                            <div class="text-xs text-blue-100">Total</div>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-3 text-center">
+                            <div id="cloudApiPercentage" class="text-2xl font-bold">50%</div>
+                            <div class="text-xs text-blue-100">Distribución</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-white/20">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-blue-100">📞 Número: <span id="cloudApiPhone" class="font-mono">-</span></span>
+                            <span id="cloudApiHybridStatus" class="text-blue-100">Modo: -</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4">➕ Crear Nueva Sesión</h3>
+                    <h3 class="text-lg font-semibold mb-4">➕ Crear Nueva Sesión Baileys</h3>
                     <div class="flex gap-4">
                         <input type="text" id="sessionName" placeholder="Nombre de la sesión (ej: MiEmpresa)" class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none">
                         <button onclick="createSession()" id="createSessionBtn" class="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors">Crear Sesión</button>
                     </div>
                     <p id="createSessionStatus" class="mt-2 text-sm"></p>
                 </div>
+                <h3 class="text-lg font-semibold mb-4 text-gray-700">📱 Sesiones Baileys</h3>
                 <div id="sessionsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div class="col-span-full text-center p-8">
                         <div class="spinner mx-auto mb-4"></div>

@@ -122,6 +122,52 @@ async function loadSessions() {
     }
 }
 
+async function loadCloudApiStats() {
+    try {
+        const response = await fetch(`${API_URL}/api/cloud/stats`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Actualizar estadísticas
+            document.getElementById('cloudApiToday').textContent = data.database?.today || 0;
+            document.getElementById('cloudApiHour').textContent = data.database?.thisHour || 0;
+            document.getElementById('cloudApiTotal').textContent = data.database?.total || 0;
+            document.getElementById('cloudApiPercentage').textContent = `${data.percentage || 50}%`;
+            
+            // Número de teléfono
+            if (data.phoneNumber) {
+                document.getElementById('cloudApiPhone').textContent = data.phoneNumber;
+            }
+            
+            // Estado del modo híbrido
+            const hybridEl = document.getElementById('cloudApiHybridStatus');
+            if (data.hybridMode) {
+                hybridEl.textContent = `🔀 Modo Híbrido (${data.percentage}% Cloud)`;
+            } else {
+                hybridEl.textContent = '📱 Solo Baileys';
+            }
+            
+            // Estado de Cloud API
+            const statusEl = document.getElementById('cloudApiStatus');
+            const hourUsage = data.cloudApi?.messagesThisHour || 0;
+            const hourLimit = data.cloudApi?.hourlyLimit || 500;
+            
+            if (hourUsage >= hourLimit) {
+                statusEl.className = 'bg-red-400 text-red-900 px-3 py-1 rounded-full text-xs font-bold';
+                statusEl.textContent = '⚠️ LÍMITE';
+            } else if (hourUsage >= hourLimit * 0.8) {
+                statusEl.className = 'bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold';
+                statusEl.textContent = '⚠️ 80%+';
+            } else {
+                statusEl.className = 'bg-green-400 text-green-900 px-3 py-1 rounded-full text-xs font-bold';
+                statusEl.textContent = '● ACTIVA';
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando stats Cloud API:', error);
+    }
+}
+
 async function rotateSessionManually() {
     const btn = document.getElementById('rotateBtn');
     const originalText = btn.innerHTML;
@@ -192,9 +238,11 @@ function startRotationUpdates() {
     if (rotationUpdateInterval) clearInterval(rotationUpdateInterval);
     updateRotationInfo();
     loadSessions();
+    loadCloudApiStats();
     rotationUpdateInterval = setInterval(() => {
         updateRotationInfo();
         loadSessions();
+        loadCloudApiStats();
     }, 30000);
 }
 
