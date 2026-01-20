@@ -723,6 +723,25 @@ app.post('/api/cloud/disable', (req, res) => {
 });
 
 /**
+ * POST /api/sessions/cleanup - Ejecuta el limpiador de sesiones estancadas manualmente
+ */
+app.post('/api/sessions/cleanup', async (req, res) => {
+    try {
+        const cleaned = await sessionManager.runStaleSessionCleaner();
+        res.json({
+            success: true,
+            message: `Limpiador ejecutado. ${cleaned} sesiones eliminadas.`,
+            sessionsRemoved: cleaned
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * POST /api/sessions/rotation/rotate - Fuerza la rotación de sesión
  */
 app.post('/api/sessions/rotation/rotate', (req, res) => {
