@@ -58,6 +58,45 @@ module.exports = {
     // Consolidación de mensajes
     // Intervalo en minutos para procesar y enviar mensajes consolidados
     CONSOLIDATION_INTERVAL_MINUTES: parseInt(process.env.CONSOLIDATION_INTERVAL_MINUTES) || 3,
+    
+    // Anti-ban: Límites de mensajes por sesión por hora
+    // Para 3000 msgs/día con 10 sesiones = 20 msgs/hora/sesión
+    // Para 3000 msgs/día con 15 sesiones = 13 msgs/hora/sesión (más seguro)
+    MAX_MESSAGES_PER_SESSION_PER_HOUR: parseInt(process.env.MAX_MESSAGES_PER_SESSION_PER_HOUR) || 20,
+    
+    // Anti-ban: Delay mínimo y máximo entre mensajes (en segundos)
+    // Con 20 msgs/hora = 1 cada 3 min = delay 60-120s es suficiente
+    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 45,
+    MAX_DELAY_SECONDS: parseInt(process.env.MAX_DELAY_SECONDS) || 90,
+    
+    // Anti-ban: Horas de "descanso" donde no se envían mensajes (formato 24h)
+    // 16 horas activas: 7am a 11pm
+    QUIET_HOURS_START: parseInt(process.env.QUIET_HOURS_START) || 23,
+    QUIET_HOURS_END: parseInt(process.env.QUIET_HOURS_END) || 7,
+    
+    // ============================================
+    // WhatsApp Cloud API (Business) - HÍBRIDO
+    // ============================================
+    // Token de acceso permanente de Meta Business
+    WHATSAPP_CLOUD_TOKEN: process.env.WHATSAPP_CLOUD_TOKEN || '',
+    // ID del número de teléfono de Business
+    WHATSAPP_CLOUD_PHONE_ID: process.env.WHATSAPP_CLOUD_PHONE_ID || '',
+    // Versión de la API de Graph
+    WHATSAPP_CLOUD_API_VERSION: process.env.WHATSAPP_CLOUD_API_VERSION || 'v18.0',
+    // Límite de mensajes por hora via Cloud API
+    WHATSAPP_CLOUD_MAX_PER_HOUR: parseInt(process.env.WHATSAPP_CLOUD_MAX_PER_HOUR) || 500,
+    // Porcentaje de mensajes que van por Cloud API (0-100)
+    // 50 = 50% Cloud API, 50% Baileys (sesiones personales)
+    WHATSAPP_CLOUD_PERCENTAGE: parseInt(process.env.WHATSAPP_CLOUD_PERCENTAGE) || 50,
+    // Habilitar modo híbrido (Cloud API + Baileys)
+    HYBRID_MODE_ENABLED: process.env.HYBRID_MODE_ENABLED !== 'false',
+    
+    // ============================================
+    // Webhook para recibir mensajes
+    // ============================================
+    // Token de verificación para el webhook (debe coincidir con el configurado en Meta)
+    WEBHOOK_VERIFY_TOKEN: process.env.WEBHOOK_VERIFY_TOKEN || 'rastrear_webhook_2026',
+    
     // Icono que aparece al inicio de cada mensaje consolidado
     MESSAGE_CONSOLIDATION_ICON: '\uD83D\uDCCD',  // 📍 usando Unicode escape
     

@@ -115,6 +115,30 @@ async function createTables() {
             CREATE INDEX IF NOT EXISTS idx_queue_phone ON outgoing_queue(phone_number);
         `);
 
+        // Tabla para mensajes recibidos via webhook (Cloud API)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS webhook_messages (
+                id SERIAL PRIMARY KEY,
+                message_id VARCHAR(200) UNIQUE,
+                from_number VARCHAR(50) NOT NULL,
+                from_name VARCHAR(200),
+                message_type VARCHAR(50),
+                text_content TEXT,
+                media_id VARCHAR(200),
+                timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                phone_number_id VARCHAR(100),
+                raw_data JSONB,
+                processed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
+        // Índices para webhook_messages
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_webhook_from ON webhook_messages(from_number);
+            CREATE INDEX IF NOT EXISTS idx_webhook_timestamp ON webhook_messages(timestamp DESC);
+        `);
+
         await client.query('COMMIT');
         console.log('✅ Tablas de PostgreSQL creadas/verificadas');
         

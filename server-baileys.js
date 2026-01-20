@@ -23,6 +23,9 @@ const sessionManager = require('./sessionManager-baileys');
 
 const database = require('./database-postgres');
 
+// Webhook para WhatsApp Cloud API
+const webhook = require('./lib/session/webhook');
+
 // Utilidad simple para formatear nÃºmeros de telÃ©fono
 const formatPhoneNumber = (phone) => {
     if (!phone) return null;
@@ -494,7 +497,198 @@ app.get('/api/proxy/status', (req, res) => {
 });
 
 /**
- * POST /api/sessions/rotation/rotate - Fuerza la rotaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n de sesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n
+ * GET /api/hybrid/status - Estado del modo híbrido (Cloud API + Baileys)
+ */
+app.get('/api/hybrid/status', (req, res) => {
+    try {
+        const hybridStatus = sessionManager.getHybridStatus();
+        
+        res.json({
+            success: true,
+            hybrid: hybridStatus
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ======================== WEBHOOK WHATSAPP CLOUD API ========================
+
+/**
+ * GET /webhook - Verificación del webhook por Meta (ruta principal)
+ */
+app.get('/webhook', (req, res) => {
+    webhook.verifyWebhook(req, res);
+});
+
+/**
+ * POST /webhook - Recibe notificaciones de Meta (mensajes, estados)
+ */
+app.post('/webhook', (req, res) => {
+    webhook.handleWebhook(req, res);
+});
+
+/**
+ * GET /webhook/whatsapp - Verificación del webhook por Meta (ruta alternativa)
+ */
+app.get('/webhook/whatsapp', (req, res) => {
+    webhook.verifyWebhook(req, res);
+});
+
+/**
+ * POST /webhook/whatsapp - Recibe notificaciones de Meta (mensajes, estados)
+ */
+app.post('/webhook/whatsapp', (req, res) => {
+    webhook.handleWebhook(req, res);
+});
+
+/**
+ * GET /api/webhook/messages - Obtiene mensajes recibidos via webhook
+ */
+app.get('/api/webhook/messages', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const messages = await webhook.getReceivedMessagesFromDB(limit);
+        
+        res.json({
+            success: true,
+            count: messages.length,
+            messages
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/webhook/config - Obtiene configuración del webhook
+ */
+app.get('/api/webhook/config', (req, res) => {
+    res.json({
+        success: true,
+        webhookUrl: '/webhook/whatsapp',
+        verifyToken: webhook.getVerifyToken(),
+        instructions: {
+            step1: 'Ve a developers.facebook.com > tu app > WhatsApp > Configuración',
+            step2: 'En "Webhook", haz clic en "Configurar webhook"',
+            step3: 'URL de devolución: https://TU_DOMINIO/webhook/whatsapp',
+            step4: 'Token de verificación: ' + webhook.getVerifyToken(),
+            step5: 'Suscríbete a: messages, message_status'
+        }
+    });
+});
+
+/**
+ * POST /api/cloud/send - Enviar mensaje via WhatsApp Cloud API
+ */
+app.post('/api/cloud/send', async (req, res) => {
+    try {
+        const { to, type, message, template } = req.body;
+        
+        if (!to) {
+            return res.status(400).json({ success: false, error: 'Número de destino requerido' });
+        }
+        
+        const cloudApi = require('./lib/session/whatsapp-cloud-api');
+        let result;
+        
+        if (type === 'template') {
+            result = await cloudApi.sendTemplateMessage(to, template || 'hello_world');
+        } else {
+            result = await cloudApi.sendTextMessage(to, message);
+        }
+        
+        if (result.success) {
+            // Guardar en BD
+            const db = require('./database-postgres');
+            try {
+                await db.query(`
+                    INSERT INTO webhook_messages (wa_message_id, from_number, to_number, message_type, message_body, direction, status, timestamp)
+                    VALUES ($1, $2, $3, $4, $5, 'outgoing', 'sent', NOW())
+                `, [result.messageId, config.WHATSAPP_CLOUD_PHONE_ID, to, type || 'text', message || `[Template: ${template || 'hello_world'}]`]);
+            } catch (dbErr) {
+                console.error('Error guardando mensaje saliente:', dbErr);
+            }
+        }
+        
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/cloud/stats - Estadísticas de WhatsApp Cloud API
+ */
+app.get('/api/cloud/stats', async (req, res) => {
+    try {
+        const cloudApi = require('./lib/session/whatsapp-cloud-api');
+        const stats = cloudApi.getStats();
+        
+        // Obtener conteo de mensajes enviados desde la BD
+        const db = require('./database-postgres');
+        let dbStats = { total: 0, today: 0, thisHour: 0 };
+        
+        try {
+            // Total de mensajes enviados por Cloud API
+            const totalResult = await db.query(`
+                SELECT COUNT(*) as count FROM message_logs 
+                WHERE session_name = 'cloud-api' AND status = 'sent'
+            `);
+            dbStats.total = parseInt(totalResult.rows[0]?.count || 0);
+            
+            // Mensajes de hoy
+            const todayResult = await db.query(`
+                SELECT COUNT(*) as count FROM message_logs 
+                WHERE session_name = 'cloud-api' AND status = 'sent' 
+                AND created_at >= CURRENT_DATE
+            `);
+            dbStats.today = parseInt(todayResult.rows[0]?.count || 0);
+            
+            // Mensajes de la última hora
+            const hourResult = await db.query(`
+                SELECT COUNT(*) as count FROM message_logs 
+                WHERE session_name = 'cloud-api' AND status = 'sent' 
+                AND created_at >= NOW() - INTERVAL '1 hour'
+            `);
+            dbStats.thisHour = parseInt(hourResult.rows[0]?.count || 0);
+            
+            // Mensajes por día (últimos 7 días)
+            const dailyResult = await db.query(`
+                SELECT DATE(created_at) as date, COUNT(*) as count 
+                FROM message_logs 
+                WHERE session_name = 'cloud-api' AND status = 'sent' 
+                AND created_at >= NOW() - INTERVAL '7 days'
+                GROUP BY DATE(created_at) 
+                ORDER BY date DESC
+            `);
+            dbStats.daily = dailyResult.rows;
+            
+        } catch (dbErr) {
+            console.error('Error obteniendo estadísticas de BD:', dbErr);
+        }
+        
+        res.json({
+            success: true,
+            cloudApi: stats,
+            database: dbStats,
+            phoneNumber: config.WHATSAPP_CLOUD_PHONE_ID,
+            hybridMode: config.HYBRID_MODE_ENABLED,
+            percentage: config.WHATSAPP_CLOUD_PERCENTAGE || 50
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/sessions/rotation/rotate - Fuerza la rotación de sesión
  */
 app.post('/api/sessions/rotation/rotate', (req, res) => {
     try {
@@ -517,6 +711,29 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
 // ======================== RUTAS - MENSAJES ========================
 
 /**
+ * Limpia el formato del mensaje de GPS (quita timezone feo)
+ */
+function cleanGPSMessage(message) {
+    if (!message) return message;
+    
+    // Patrón: [Mon Jan 19 2026 15:54:21 GMT-0500 (Colombia Standard Time)]
+    // Convertir a: 19-01-2026 15:54:21
+    const gpsPattern = /\[?\w{3}\s+(\w{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{2}:\d{2}:\d{2})\s*GMT[^\]]*(?:\([^)]*\))?\]?/gi;
+    
+    const months = {
+        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+        'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+        'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+    };
+    
+    return message.replace(gpsPattern, (match, month, day, year, time) => {
+        const mm = months[month] || month;
+        const dd = day.padStart(2, '0');
+        return `${dd}-${mm}-${year} ${time}`;
+    });
+}
+
+/**
  * POST /api/messages/send - Envia un mensaje de texto
  * Por defecto consolida mensajes del mismo numero antes de enviar
  * Opciones:
@@ -533,8 +750,11 @@ app.post('/api/messages/send', async (req, res) => {
             });
         }
         
+        // Limpiar formato de mensaje GPS
+        const cleanedMessage = cleanGPSMessage(message);
+        
         // SIEMPRE consolidar - sin opcion de bypass
-        const result = await sessionManager.addToConsolidation(phoneNumber, message);
+        const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
             res.json({ 
                 success: true, 
@@ -567,8 +787,11 @@ app.post('/api/session/send-message', async (req, res) => {
             });
         }
 
+        // Limpiar formato de mensaje GPS
+        const cleanedMessage = cleanGPSMessage(message);
+
         // SIEMPRE consolidar - sin opcion de bypass
-        const result = await sessionManager.addToConsolidation(phoneNumber, message);
+        const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
             res.json({ 
                 success: true, 

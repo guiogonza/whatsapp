@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📱 WhatsApp Cloud API - Centro de Mensajes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #25D366;
+            --primary-dark: #128C7E;
+            --secondary: #075E54;
+            --bg-dark: #111B21;
+            --bg-card: #1F2C33;
+            --bg-message: #005C4B;
+            --bg-received: #202C33;
+            --text-primary: #E9EDEF;
+            --text-secondary: #8696A0;
+            --border-color: #2A3942;
+            --success: #00A884;
+            --warning: #F7C948;
+            --error: #EA4335;
+            --info: #34B7F1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--primary-dark) 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-icon {
+            width: 56px;
+            height: 56px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 168, 132, 0.2);
+            border: 1px solid var(--success);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-badge.connected {
+            color: var(--success);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-card .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        .stat-card .icon.blue { background: rgba(52, 183, 241, 0.15); color: var(--info); }
+        .stat-card .icon.green { background: rgba(0, 168, 132, 0.15); color: var(--success); }
+        .stat-card .icon.yellow { background: rgba(247, 201, 72, 0.15); color: var(--warning); }
+        .stat-card .icon.purple { background: rgba(138, 43, 226, 0.15); color: #8A2BE2; }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        /* Main Content Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Messages Panel */
+        .panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-header h2 i {
+            color: var(--primary);
+        }
+
+        .refresh-btn {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .refresh-btn.loading i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .messages-container {
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .message-item {
+            background: var(--bg-received);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--primary);
+            transition: transform 0.2s;
+        }
+
+        .message-item:hover {
+            transform: translateX(4px);
+        }
+
+        .message-item.outgoing {
+            border-left-color: var(--info);
+            background: var(--bg-message);
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .message-from {
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .message-from i {
+            color: var(--primary);
+        }
+
+        .message-time {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .message-body {
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .message-meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .meta-tag {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: var(--bg-dark);
+            color: var(--text-secondary);
+        }
+
+        .meta-tag.status-delivered {
+            background: rgba(0, 168, 132, 0.15);
+            color: var(--success);
+        }
+
+        .meta-tag.status-read {
+            background: rgba(52, 183, 241, 0.15);
+            color: var(--info);
+        }
+
+        .meta-tag.status-sent {
+            background: rgba(134, 150, 160, 0.15);
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        /* Send Message Panel */
+        .send-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .send-form {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .send-btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border: none;
+            color: white;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(37, 211, 102, 0.3);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Config Info */
+        .config-section {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-dark);
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 13px;
+        }
+
+        .config-item .label {
+            color: var(--text-secondary);
+        }
+
+        .config-item .value {
+            color: var(--text-primary);
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            background: var(--bg-card);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--error); }
+        .toast.info { border-left: 3px solid var(--info); }
+
+        .toast i {
+            font-size: 20px;
+        }
+
+        .toast.success i { color: var(--success); }
+        .toast.error i { color: var(--error); }
+        .toast.info i { color: var(--info); }
+
+        /* Auto-refresh indicator */
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            accent-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="header-icon">📱</div>
+                <div>
+                    <h1>WhatsApp Cloud API</h1>
+                    <p>Centro de Mensajes - Rastrear.com.co</p>
+                </div>
+            </div>
+            <div class="status-badge connected" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span>Conectado</span>
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon blue"><i class="fas fa-cloud"></i></div>
+                <div class="value" id="cloudApiToday">0</div>
+                <div class="label">☁️ Cloud API (Hoy)</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon green"><i class="fas fa-mobile-alt"></i></div>
+                <div class="value" id="baileysToday">0</div>
+                <div class="label">📱 Baileys (Hoy)</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon yellow"><i class="fas fa-inbox"></i></div>
+                <div class="value" id="totalReceived">0</div>
+                <div class="label">Recibidos (Webhook)</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon purple"><i class="fas fa-chart-line"></i></div>
+                <div class="value" id="totalAllTime">0</div>
+                <div class="label">Total Histórico</div>
+            </div>
+        </div>
+
+        <!-- Cloud API Stats Panel -->
+        <div class="panel" style="margin-bottom: 24px;">
+            <div class="panel-header">
+                <h2><i class="fas fa-chart-bar"></i> Estadísticas de Envío</h2>
+                <button class="refresh-btn" onclick="loadCloudStats()">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
+            <div style="padding: 20px;">
+                <div class="stats-grid" style="margin-bottom: 0;">
+                    <div class="stat-card" style="background: linear-gradient(135deg, #075E54 0%, #128C7E 100%); border: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="label" style="color: rgba(255,255,255,0.7);">Cloud API - Esta Hora</div>
+                                <div class="value" id="cloudHourly" style="color: white;">0 / 500</div>
+                            </div>
+                            <div style="font-size: 32px;">☁️</div>
+                        </div>
+                        <div style="margin-top: 12px; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px;">
+                            <div id="cloudHourlyBar" style="height: 100%; width: 0%; background: #25D366; border-radius: 3px; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #1e3a5f 0%, #34567a 100%); border: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="label" style="color: rgba(255,255,255,0.7);">Baileys - Sesiones Activas</div>
+                                <div class="value" id="baileysSessions" style="color: white;">0</div>
+                            </div>
+                            <div style="font-size: 32px;">📱</div>
+                        </div>
+                        <div id="sessionsInfo" style="margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.6);"></div>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #4a1a6b 0%, #6b3a8c 100%); border: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="label" style="color: rgba(255,255,255,0.7);">Modo Híbrido</div>
+                                <div class="value" id="hybridStatus" style="color: white; font-size: 18px;">Activado</div>
+                            </div>
+                            <div style="font-size: 32px;">⚡</div>
+                        </div>
+                        <div id="hybridInfo" style="margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.6);">50% Cloud / 50% Baileys</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Messages Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-comments"></i> Mensajes Recibidos</h2>
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <label class="auto-refresh">
+                            <input type="checkbox" id="autoRefresh" checked>
+                            Auto-actualizar (10s)
+                        </label>
+                        <button class="refresh-btn" id="refreshBtn" onclick="loadMessages()">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+                <div class="messages-container" id="messagesContainer">
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <h3>Sin mensajes aún</h3>
+                        <p>Los mensajes entrantes aparecerán aquí</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Send Message Panel -->
+            <div class="panel send-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-paper-plane"></i> Enviar Mensaje</h2>
+                </div>
+                <form class="send-form" id="sendForm" onsubmit="sendMessage(event)">
+                    <div class="form-group">
+                        <label>Número de destino</label>
+                        <input type="text" id="toNumber" placeholder="573001234567" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de mensaje</label>
+                        <select id="messageType" onchange="toggleMessageFields()">
+                            <option value="template">📋 Plantilla (hello_world)</option>
+                            <option value="text">💬 Texto libre</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="textMessageGroup" style="display: none;">
+                        <label>Mensaje</label>
+                        <textarea id="messageText" placeholder="Escribe tu mensaje aquí..."></textarea>
+                    </div>
+                    <button type="submit" class="send-btn" id="sendBtn">
+                        <i class="fas fa-paper-plane"></i> Enviar Mensaje
+                    </button>
+                </form>
+                
+                <div class="config-section">
+                    <h3 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">
+                        <i class="fas fa-cog"></i> Configuración
+                    </h3>
+                    <div class="config-item">
+                        <span class="label">Número WhatsApp</span>
+                        <span class="value">+57 315 9359890</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="label">Phone ID</span>
+                        <span class="value">874921449047975</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="label">Webhook URL</span>
+                        <span class="value">/webhook</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage">Mensaje enviado</span>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let refreshInterval;
+
+        // Load messages on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMessages();
+            loadCloudStats();
+            loadHealthStats();
+            setupAutoRefresh();
+        });
+
+        async function loadCloudStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/cloud/stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Cloud API stats
+                    const cloudApi = data.cloudApi || {};
+                    const db = data.database || {};
+                    
+                    document.getElementById('cloudApiToday').textContent = db.today || 0;
+                    document.getElementById('cloudHourly').textContent = `${cloudApi.hourlyCount || 0} / ${cloudApi.hourlyLimit || 500}`;
+                    
+                    const hourlyPercent = ((cloudApi.hourlyCount || 0) / (cloudApi.hourlyLimit || 500)) * 100;
+                    document.getElementById('cloudHourlyBar').style.width = `${Math.min(hourlyPercent, 100)}%`;
+                    
+                    document.getElementById('totalAllTime').textContent = db.total || 0;
+                    
+                    // Hybrid mode
+                    const hybridEnabled = data.hybridMode;
+                    document.getElementById('hybridStatus').textContent = hybridEnabled ? 'Activado' : 'Solo Baileys';
+                    document.getElementById('hybridInfo').textContent = hybridEnabled 
+                        ? `${data.percentage || 50}% Cloud / ${100 - (data.percentage || 50)}% Baileys`
+                        : 'Cloud API no configurada';
+                }
+            } catch (error) {
+                console.error('Error loading cloud stats:', error);
+            }
+        }
+
+        async function loadHealthStats() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (data.sessions) {
+                    const activeSessions = data.sessions.active || 0;
+                    document.getElementById('baileysSessions').textContent = activeSessions;
+                    
+                    const sessionList = data.sessions.list || [];
+                    const activeNames = sessionList
+                        .filter(s => s.state === 'READY')
+                        .map(s => s.name)
+                        .join(', ');
+                    document.getElementById('sessionsInfo').textContent = activeNames || 'Ninguna activa';
+                }
+                
+                // Obtener stats de Baileys
+                const logsResponse = await fetch(`${API_BASE}/api/message-logs?limit=1000`);
+                const logsData = await logsResponse.json();
+                
+                if (logsData.success && logsData.logs) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const baileysToday = logsData.logs.filter(log => 
+                        log.session_name !== 'cloud-api' && 
+                        log.status === 'sent' &&
+                        log.created_at?.startsWith(today)
+                    ).length;
+                    document.getElementById('baileysToday').textContent = baileysToday;
+                }
+            } catch (error) {
+                console.error('Error loading health stats:', error);
+            }
+        }
+
+        function setupAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            const startRefresh = () => {
+                if (checkbox.checked) {
+                    refreshInterval = setInterval(() => {
+                        loadMessages();
+                        loadCloudStats();
+                        loadHealthStats();
+                    }, 10000);
+                }
+            };
+            
+            const stopRefresh = () => {
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                }
+            };
+            
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    startRefresh();
+                } else {
+                    stopRefresh();
+                }
+            });
+            
+            startRefresh();
+        }
+
+        async function loadMessages() {
+            const btn = document.getElementById('refreshBtn');
+            btn.classList.add('loading');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/webhook/messages?limit=50`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderMessages(data.messages);
+                    updateStats(data.messages);
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                showToast('Error al cargar mensajes', 'error');
+            } finally {
+                btn.classList.remove('loading');
+            }
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('messagesContainer');
+            
+            if (!messages || messages.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <h3>Sin mensajes aún</h3>
+                        <p>Los mensajes entrantes aparecerán aquí</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = messages.map(msg => `
+                <div class="message-item ${msg.direction === 'outgoing' ? 'outgoing' : ''}">
+                    <div class="message-header">
+                        <span class="message-from">
+                            <i class="fas ${msg.direction === 'outgoing' ? 'fa-arrow-right' : 'fa-arrow-left'}"></i>
+                            ${msg.direction === 'outgoing' ? 'Enviado a: ' : 'De: '}${formatPhone(msg.from_number || msg.to_number)}
+                        </span>
+                        <span class="message-time">${formatDate(msg.timestamp || msg.created_at)}</span>
+                    </div>
+                    <div class="message-body">${escapeHtml(msg.message_body || msg.body || 'Sin contenido')}</div>
+                    <div class="message-meta">
+                        <span class="meta-tag">${msg.message_type || 'text'}</span>
+                        ${msg.status ? `<span class="meta-tag status-${msg.status}">${msg.status}</span>` : ''}
+                        <span class="meta-tag">${msg.wa_message_id ? msg.wa_message_id.substring(0, 20) + '...' : 'N/A'}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats(messages) {
+            const received = messages.filter(m => m.direction !== 'outgoing').length;
+            const sent = messages.filter(m => m.direction === 'outgoing').length;
+            
+            document.getElementById('totalReceived').textContent = received;
+        }
+
+        function toggleMessageFields() {
+            const type = document.getElementById('messageType').value;
+            const textGroup = document.getElementById('textMessageGroup');
+            textGroup.style.display = type === 'text' ? 'block' : 'none';
+        }
+
+        async function sendMessage(event) {
+            event.preventDefault();
+            
+            const btn = document.getElementById('sendBtn');
+            const toNumber = document.getElementById('toNumber').value.replace(/\D/g, '');
+            const messageType = document.getElementById('messageType').value;
+            const messageText = document.getElementById('messageText').value;
+            
+            if (!toNumber) {
+                showToast('Ingresa un número de destino', 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+            
+            try {
+                let body;
+                if (messageType === 'template') {
+                    body = {
+                        to: toNumber,
+                        type: 'template',
+                        template: 'hello_world'
+                    };
+                } else {
+                    body = {
+                        to: toNumber,
+                        type: 'text',
+                        message: messageText
+                    };
+                }
+                
+                const response = await fetch(`${API_BASE}/api/cloud/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('¡Mensaje enviado correctamente!', 'success');
+                    document.getElementById('sendForm').reset();
+                    setTimeout(loadMessages, 1000);
+                } else {
+                    showToast(data.error || 'Error al enviar', 'error');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                showToast('Error de conexión', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Mensaje';
+            }
+        }
+
+        function formatPhone(phone) {
+            if (!phone) return 'Desconocido';
+            // Format Colombian numbers
+            if (phone.startsWith('57') && phone.length === 12) {
+                return `+${phone.slice(0, 2)} ${phone.slice(2, 5)} ${phone.slice(5, 8)} ${phone.slice(8)}`;
+            }
+            return phone;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Ahora';
+            if (diff < 3600000) return `Hace ${Math.floor(diff / 60000)} min`;
+            if (diff < 86400000) return `Hace ${Math.floor(diff / 3600000)} horas`;
+            
+            return date.toLocaleDateString('es-CO', { 
+                day: '2-digit', 
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const icon = toast.querySelector('i');
+            
+            toast.className = `toast ${type}`;
+            toastMessage.textContent = message;
+            
+            if (type === 'success') icon.className = 'fas fa-check-circle';
+            else if (type === 'error') icon.className = 'fas fa-exclamation-circle';
+            else icon.className = 'fas fa-info-circle';
+            
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
