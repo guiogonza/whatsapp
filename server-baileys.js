@@ -156,7 +156,9 @@ function sendSessionsStatusNotification() {
                 
                 msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
                 msg += `   ${EMOJI.PHONE} ${phoneNumber}\n`;
-                msg += `   📦 Consolidados: ${consolidados} | 📥 Recibidos: ${recibidos} | 📤 Enviados: ${enviados}\n`;
+                msg += `   📦 Consolidados: ${consolidados}\n`;
+                msg += `   📥 Recibidos: ${recibidos}\n`;
+                msg += `   📤 Enviados: ${enviados}\n`;
                 msg += `   🌐 IP: ${proxyInfo}\n`;
                 msg += `   📍 Ubicación: ${location}\n\n`;
             });
