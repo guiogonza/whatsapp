@@ -77,7 +77,8 @@ function showSection(sectionId) {
         analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' },
         conversation: { title: 'Conversación IA Anti-Ban', subtitle: 'Genera actividad natural entre sesiones' },
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' },
-        database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' }
+        database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' },
+        webhooks: { title: 'Centro de Mensajes', subtitle: 'Mensajes entrantes de WhatsApp Cloud API' }
     };
     
     document.getElementById('sectionTitle').textContent = titles[sectionId].title;
