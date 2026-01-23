@@ -832,15 +832,15 @@ async function getSessionStats() {
     
     try {
         // Obtener contadores por sesión
-        // - sent_count: mensajes enviados (incluyendo consolidados)
+        // - sent_count: mensajes enviados
         // - received_count: mensajes recibidos
-        // - consolidated_count: envíos consolidados (is_consolidated = true)
+        // - consolidated_count: igual a sent_count (todos los envíos cuentan como consolidados)
         const result = await pool.query(`
             SELECT 
                 session,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
                 COUNT(CASE WHEN status = 'received' THEN 1 END) as received_count,
-                COUNT(CASE WHEN status = 'sent' AND is_consolidated = true THEN 1 END) as consolidated_count
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as consolidated_count
             FROM messages
             WHERE session NOT IN ('consolidation', 'queue')
             GROUP BY session
