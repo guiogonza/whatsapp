@@ -1,49 +1,47 @@
 #!/bin/bash
-# Script de backup automático de la base de datos de analytics
+# Script de backup automático de PostgreSQL
 # Crea backups incrementales con timestamp y limpia backups antiguos
 
 BACKUP_DIR="/opt/whatsapp-bot/backups"
-SOURCE_DB="/opt/whatsapp-bot/data/analytics.db"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/analytics_$TIMESTAMP.db"
+BACKUP_FILE="$BACKUP_DIR/postgres_$TIMESTAMP.sql"
+
+# Configuración PostgreSQL
+PG_CONTAINER="wpp-postgres"
+PG_USER="whatsapp"
+PG_DB="whatsapp_analytics"
 
 # Crear directorio de backups si no existe
 mkdir -p "$BACKUP_DIR"
 
-# Verificar que la base de datos existe y tiene contenido
-if [ ! -f "$SOURCE_DB" ]; then
-    echo "❌ Error: Base de datos no encontrada en $SOURCE_DB"
+# Verificar que el contenedor de PostgreSQL está corriendo
+if ! docker ps --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
+    echo "❌ Error: Contenedor PostgreSQL ($PG_CONTAINER) no está corriendo"
     exit 1
 fi
 
-DB_SIZE=$(stat -f%z "$SOURCE_DB" 2>/dev/null || stat -c%s "$SOURCE_DB" 2>/dev/null)
-if [ "$DB_SIZE" -lt 10000 ]; then
-    echo "⚠️ Advertencia: Base de datos muy pequeña ($DB_SIZE bytes), posible corrupción"
-fi
+# Crear backup con pg_dump
+docker exec $PG_CONTAINER pg_dump -U $PG_USER $PG_DB > "$BACKUP_FILE"
 
-# Crear backup
-cp "$SOURCE_DB" "$BACKUP_FILE"
-
-if [ $? -eq 0 ]; then
+if [ $? -eq 0 ] && [ -s "$BACKUP_FILE" ]; then
     echo "✅ Backup creado: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
     
-    # Comprimir backup si es mayor a 1MB
-    if [ "$DB_SIZE" -gt 1048576 ]; then
-        gzip "$BACKUP_FILE"
-        echo "📦 Backup comprimido: ${BACKUP_FILE}.gz"
-        BACKUP_FILE="${BACKUP_FILE}.gz"
-    fi
+    # Comprimir backup
+    gzip "$BACKUP_FILE"
+    echo "📦 Backup comprimido: ${BACKUP_FILE}.gz"
+    BACKUP_FILE="${BACKUP_FILE}.gz"
     
     # Mantener solo los últimos 30 backups
-    cd "$BACKUP_DIR" && ls -t analytics_*.db* | tail -n +31 | xargs -r rm
-    echo "🧹 Limpieza completada. Backups actuales: $(ls -1 analytics_*.db* 2>/dev/null | wc -l)"
+    cd "$BACKUP_DIR" && ls -t postgres_*.sql.gz 2>/dev/null | tail -n +31 | xargs -r rm
+    echo "🧹 Limpieza completada. Backups actuales: $(ls -1 postgres_*.sql.gz 2>/dev/null | wc -l)"
 else
     echo "❌ Error creando backup"
+    rm -f "$BACKUP_FILE"
     exit 1
 fi
 
 # Mostrar estadísticas del backup
-RECORD_COUNT=$(sqlite3 "$SOURCE_DB" "SELECT COUNT(*) FROM messages" 2>/dev/null)
+RECORD_COUNT=$(docker exec $PG_CONTAINER psql -U $PG_USER -d $PG_DB -t -c "SELECT COUNT(*) FROM messages" 2>/dev/null | tr -d ' ')
 if [ ! -z "$RECORD_COUNT" ]; then
     echo "📊 Registros en BD: $RECORD_COUNT"
 fi

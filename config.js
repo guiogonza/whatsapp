@@ -60,14 +60,14 @@ module.exports = {
     CONSOLIDATION_INTERVAL_MINUTES: parseInt(process.env.CONSOLIDATION_INTERVAL_MINUTES) || 3,
     
     // Anti-ban: Límites de mensajes por sesión por hora
-    // Para 3000 msgs/día con 10 sesiones = 20 msgs/hora/sesión
-    // Para 3000 msgs/día con 15 sesiones = 13 msgs/hora/sesión (más seguro)
-    MAX_MESSAGES_PER_SESSION_PER_HOUR: parseInt(process.env.MAX_MESSAGES_PER_SESSION_PER_HOUR) || 20,
+    // Para 3600 msgs/día con 10 sesiones = 60 msgs/hora/sesión
+    // Para 3600 msgs/día con 15 sesiones = 40 msgs/hora/sesión (más seguro)
+    MAX_MESSAGES_PER_SESSION_PER_HOUR: parseInt(process.env.MAX_MESSAGES_PER_SESSION_PER_HOUR) || 60,
     
     // Anti-ban: Delay mínimo y máximo entre mensajes (en segundos)
-    // Con 20 msgs/hora = 1 cada 3 min = delay 60-120s es suficiente
-    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 45,
-    MAX_DELAY_SECONDS: parseInt(process.env.MAX_DELAY_SECONDS) || 90,
+    // Con 60 msgs/hora = 1 cada 1 min = delay 30-60s es suficiente
+    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 30,
+    MAX_DELAY_SECONDS: parseInt(process.env.MAX_DELAY_SECONDS) || 60,
     
     // Anti-ban: Horas de "descanso" donde no se envían mensajes (formato 24h)
     // 16 horas activas: 7am a 11pm

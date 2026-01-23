@@ -26,15 +26,10 @@ const database = require('./database-postgres');
 // Webhook para WhatsApp Cloud API
 const webhook = require('./lib/session/webhook');
 
-// Utilidad simple para formatear nÃºmeros de telÃ©fono
-const formatPhoneNumber = (phone) => {
-    if (!phone) return null;
-    let cleaned = phone.replace(/\D/g, '');
-    if (!cleaned.startsWith('57')) cleaned = '57' + cleaned;
-    return cleaned + '@s.whatsapp.net';
-};
+// Utilidades centralizadas
+const { formatPhoneNumber } = require('./lib/session/utils');
 
-// InicializaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n de Express
+// Inicialización de Express
 const app = express();
 const server = http.createServer(app);
 const upload = multer();
@@ -640,23 +635,23 @@ app.get('/api/cloud/stats', async (req, res) => {
         try {
             // Total de mensajes enviados por Cloud API
             const totalResult = await db.query(`
-                SELECT COUNT(*) as count FROM message_logs 
-                WHERE session_name = 'cloud-api' AND status = 'sent'
+                SELECT COUNT(*) as count FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent'
             `);
             dbStats.total = parseInt(totalResult.rows[0]?.count || 0);
             
             // Mensajes de hoy
             const todayResult = await db.query(`
-                SELECT COUNT(*) as count FROM message_logs 
-                WHERE session_name = 'cloud-api' AND status = 'sent' 
+                SELECT COUNT(*) as count FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent' 
                 AND created_at >= CURRENT_DATE
             `);
             dbStats.today = parseInt(todayResult.rows[0]?.count || 0);
             
             // Mensajes de la última hora
             const hourResult = await db.query(`
-                SELECT COUNT(*) as count FROM message_logs 
-                WHERE session_name = 'cloud-api' AND status = 'sent' 
+                SELECT COUNT(*) as count FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent' 
                 AND created_at >= NOW() - INTERVAL '1 hour'
             `);
             dbStats.thisHour = parseInt(hourResult.rows[0]?.count || 0);
@@ -664,8 +659,8 @@ app.get('/api/cloud/stats', async (req, res) => {
             // Mensajes por día (últimos 7 días)
             const dailyResult = await db.query(`
                 SELECT DATE(created_at) as date, COUNT(*) as count 
-                FROM message_logs 
-                WHERE session_name = 'cloud-api' AND status = 'sent' 
+                FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent' 
                 AND created_at >= NOW() - INTERVAL '7 days'
                 GROUP BY DATE(created_at) 
                 ORDER BY date DESC
