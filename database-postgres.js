@@ -836,13 +836,13 @@ async function getQueuedMessages(limit = 50, status = 'pending') {
 
 /**
  * Obtener estadísticas por sesión desde la BD
- * Devuelve contadores de mensajes enviados, recibidos y consolidados por sesión
+ * Devuelve contadores de mensajes enviados, recibidos y consolidados por sesión (solo día actual)
  */
 async function getSessionStats() {
     if (!pool || !isConnected) return {};
     
     try {
-        // Obtener contadores por sesión
+        // Obtener contadores por sesión del día actual (hora Colombia)
         // - sent_count: suma de msg_count (total de mensajes individuales enviados)
         // - received_count: mensajes recibidos
         // - consolidated_count: cantidad de operaciones de envío (filas con status='sent')
@@ -854,6 +854,7 @@ async function getSessionStats() {
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as consolidated_count
             FROM messages
             WHERE session NOT IN ('consolidation', 'queue')
+              AND DATE(timestamp AT TIME ZONE 'America/Bogota') = DATE(NOW() AT TIME ZONE 'America/Bogota')
             GROUP BY session
         `);
         
