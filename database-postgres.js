@@ -874,6 +874,16 @@ async function getSessionStats() {
     }
 }
 
+/**
+ * Ejecutar query SQL directa (para uso avanzado)
+ */
+async function query(sql, params = []) {
+    if (!pool || !isConnected) {
+        throw new Error('Base de datos no conectada');
+    }
+    return await pool.query(sql, params);
+}
+
 // Exportar funciones
 module.exports = {
     initDatabase,
@@ -889,6 +899,7 @@ module.exports = {
     getDatabaseStatus,
     closeDatabase,
     getColombiaTimestamp,
+    query,
     // Nuevas funciones para compatibilidad con monitor
     getUniquePhoneNumbers,
     getUniqueSessions,
