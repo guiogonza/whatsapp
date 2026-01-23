@@ -81,8 +81,19 @@ async function createTables() {
                 status VARCHAR(20) NOT NULL CHECK (status IN ('sent', 'error', 'queued', 'received')),
                 error_message TEXT,
                 is_consolidated BOOLEAN DEFAULT FALSE,
+                msg_count INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        `);
+
+        // Agregar columna msg_count si no existe (para migraciones)
+        await client.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'messages' AND column_name = 'msg_count') THEN
+                    ALTER TABLE messages ADD COLUMN msg_count INTEGER DEFAULT 1;
+                END IF;
+            END $$;
         `);
 
         // Índices para mensajes
@@ -174,9 +185,9 @@ async function logMessage(session, phoneNumber, message, status, errorMessage = 
 
     try {
         await pool.query(
-            `INSERT INTO messages (timestamp, session, phone_number, message_preview, char_count, status, error_message, is_consolidated)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [getColombiaTimestamp(), session, phoneNumber, messageText.substring(0, 500), charCount, finalStatus, errorMessage, isConsolidated]
+            `INSERT INTO messages (timestamp, session, phone_number, message_preview, char_count, status, error_message, is_consolidated, msg_count)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [getColombiaTimestamp(), session, phoneNumber, messageText.substring(0, 500), charCount, finalStatus, errorMessage, isConsolidated, msgCount]
         );
     } catch (error) {
         console.error('❌ Error registrando mensaje:', error.message);
@@ -832,13 +843,13 @@ async function getSessionStats() {
     
     try {
         // Obtener contadores por sesión
-        // - sent_count: mensajes enviados
+        // - sent_count: suma de msg_count (total de mensajes individuales enviados)
         // - received_count: mensajes recibidos
-        // - consolidated_count: igual a sent_count (todos los envíos cuentan como consolidados)
+        // - consolidated_count: cantidad de operaciones de envío (filas con status='sent')
         const result = await pool.query(`
             SELECT 
                 session,
-                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
+                COALESCE(SUM(CASE WHEN status = 'sent' THEN COALESCE(msg_count, 1) END), 0) as sent_count,
                 COUNT(CASE WHEN status = 'received' THEN 1 END) as received_count,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as consolidated_count
             FROM messages
