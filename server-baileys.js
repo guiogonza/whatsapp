@@ -1129,11 +1129,14 @@ app.get('/api/analytics/stats', async (req, res) => {
  */
 app.get('/api/analytics/messages', async (req, res) => {
     try {
-        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
-        const options = { period, range, top: parseInt(top) };
+        const { period = 'day', range = 'today', top = 10, start_date, end_date, session, limit } = req.query;
+        const options = { period, range, top: parseInt(top), limit: parseInt(limit) || 50 };
         if (period === 'custom' && start_date && end_date) {
             options.startDate = start_date;
             options.endDate = end_date;
+        }
+        if (session) {
+            options.session = session;
         }
         const data = await database.getAnalytics(options);
         res.json({ success: true, ...data });
@@ -1147,11 +1150,14 @@ app.get('/api/analytics/messages', async (req, res) => {
  */
 app.get('/analytics', async (req, res) => {
     try {
-        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
-        const options = { period, range, top: parseInt(top) };
+        const { period = 'day', range = 'today', top = 10, start_date, end_date, session, limit } = req.query;
+        const options = { period, range, top: parseInt(top), limit: parseInt(limit) || 50 };
         if (period === 'custom' && start_date && end_date) {
             options.startDate = start_date;
             options.endDate = end_date;
+        }
+        if (session) {
+            options.session = session;
         }
         const data = await database.getAnalytics(options);
         res.json(data);

@@ -102,7 +102,11 @@ async function createTables() {
             CREATE INDEX IF NOT EXISTS idx_messages_phone ON messages(phone_number);
             CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
             CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session);
-            CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(DATE(timestamp));
+        `);
+        
+        // Índice para fecha - usar cast a date sin timezone
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_messages_date ON messages((timestamp::date));
         `);
 
         // Tabla de cola de mensajes salientes
@@ -290,7 +294,7 @@ async function getPendingMessages(limit = 100) {
  * Obtener analytics (función adaptadora para compatibilidad con frontend)
  */
 async function getAnalytics(options = {}) {
-    const { period = 'day', range = 'today', top = 10, startDate, endDate } = options;
+    const { period = 'day', range = 'today', top = 10, startDate, endDate, session, limit = 50 } = options;
     
     let start, end;
     const now = new Date();
@@ -321,7 +325,7 @@ async function getAnalytics(options = {}) {
         }
     }
     
-    return await getAnalyticsByDateRange(start, end, top);
+    return await getAnalyticsByDateRange(start, end, top, session, limit);
 }
 
 /**
@@ -350,10 +354,14 @@ async function getStats() {
 /**
  * Obtener estadísticas de analytics por rango de fechas
  */
-async function getAnalyticsByDateRange(startDate, endDate, topN = 10) {
+async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFilter = null, limit = 50) {
     if (!pool || !isConnected) return { timeline: [], top_numbers: [], sessions_stats: [], db_stats: {} };
     
     try {
+        // Construir condición de sesión
+        const sessionCondition = sessionFilter ? ' AND session = $3' : '';
+        const baseParams = sessionFilter ? [startDate, endDate, sessionFilter] : [startDate, endDate];
+        
         // Timeline por fecha - usar alias en español para compatibilidad
         const timelineResult = await pool.query(
             `SELECT 
@@ -363,13 +371,16 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10) {
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
                 COUNT(CASE WHEN status = 'queued' THEN 1 END) as en_cola
              FROM messages
-             WHERE DATE(timestamp) BETWEEN $1 AND $2
+             WHERE DATE(timestamp) BETWEEN $1 AND $2${sessionCondition}
              GROUP BY DATE(timestamp)
              ORDER BY periodo ASC`,
-            [startDate, endDate]
+            baseParams
         );
 
         // Top números - usar aliases compatibles
+        const topParams = sessionFilter 
+            ? [startDate, endDate, sessionFilter, topN] 
+            : [startDate, endDate, topN];
         const topResult = await pool.query(
             `SELECT 
                 phone_number,
@@ -381,11 +392,11 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10) {
                 MIN(timestamp) as first_message,
                 MAX(timestamp) as last_message
              FROM messages
-             WHERE DATE(timestamp) BETWEEN $1 AND $2
+             WHERE DATE(timestamp) BETWEEN $1 AND $2${sessionCondition}
              GROUP BY phone_number
              ORDER BY total DESC
-             LIMIT $3`,
-            [startDate, endDate, topN]
+             LIMIT $${sessionFilter ? 4 : 3}`,
+            topParams
         );
 
         // Estadísticas por sesión
@@ -396,24 +407,57 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10) {
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as errores
              FROM messages
-             WHERE DATE(timestamp) BETWEEN $1 AND $2
+             WHERE DATE(timestamp) BETWEEN $1 AND $2${sessionCondition}
              GROUP BY session
              ORDER BY total DESC`,
-            [startDate, endDate]
+            baseParams
         );
 
-        // Estadísticas generales
-        const dbStats = await getStats();
+        // Estadísticas generales (con filtro de sesión si aplica)
+        const dbStats = sessionFilter 
+            ? await getStatsBySession(sessionFilter)
+            : await getStats();
 
         return {
             timeline: timelineResult.rows,
             top_numbers: topResult.rows,
             sessions_stats: sessionsResult.rows,
-            db_stats: dbStats
+            db_stats: dbStats,
+            filters: {
+                session: sessionFilter || 'all',
+                startDate,
+                endDate,
+                topN,
+                limit
+            }
         };
     } catch (error) {
         console.error('❌ Error obteniendo analytics:', error.message);
         return { timeline: [], top_numbers: [], sessions_stats: [], db_stats: {} };
+    }
+}
+
+/**
+ * Obtener estadísticas por sesión específica
+ */
+async function getStatsBySession(sessionName) {
+    if (!pool || !isConnected) return {};
+    
+    try {
+        const result = await pool.query(`
+            SELECT 
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent,
+                COUNT(CASE WHEN status = 'error' THEN 1 END) as failed,
+                COUNT(CASE WHEN status = 'queued' THEN 1 END) as queued
+            FROM messages
+            WHERE session = $1
+        `, [sessionName]);
+        
+        return result.rows[0];
+    } catch (error) {
+        console.error('❌ Error obteniendo estadísticas por sesión:', error.message);
+        return {};
     }
 }
 

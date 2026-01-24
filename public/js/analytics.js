@@ -16,6 +16,7 @@ let analyticsSelectedMessages = { total: 0, offset: 0, limit: 50 }; // Estado de
 // Variables para ordenamiento de tabla analytics
 let analyticsSortColumn = 'total';
 let analyticsSortDirection = 'desc';
+let analyticsAvailableSessions = []; // Lista de sesiones para filtro
 
 function escapeHtml(value) {
     return String(value || '')
@@ -103,12 +104,55 @@ function initAnalytics() {
         refreshAnalytics();
     });
     
+    // Nuevos event listeners para filtros adicionales
+    document.getElementById('analyticsSessionFilter').addEventListener('change', () => {
+        updateAnalyticsSessionFilterInfo();
+        refreshAnalytics();
+    });
+    document.getElementById('analyticsTableLimit').addEventListener('change', refreshAnalytics);
+    
+    // Cargar lista de sesiones disponibles
+    loadAnalyticsSessions();
+    
     updateAnalyticsRangeOptions();
     refreshAnalytics();
     
     // Auto-refresh cada 30 segundos
     if (analyticsRefreshInterval) clearInterval(analyticsRefreshInterval);
     analyticsRefreshInterval = setInterval(refreshAnalytics, 30000);
+}
+
+// Cargar sesiones disponibles para el filtro
+async function loadAnalyticsSessions() {
+    try {
+        const res = await fetch(`${API_URL}/sessions`);
+        if (res.ok) {
+            const data = await res.json();
+            const sessions = data.sessions || [];
+            const select = document.getElementById('analyticsSessionFilter');
+            
+            // Mantener opción "Todas"
+            select.innerHTML = '<option value="">Todas las sesiones</option>';
+            
+            // Agregar sesiones activas
+            sessions.forEach(session => {
+                const option = document.createElement('option');
+                option.value = session.name;
+                option.textContent = `${session.name} (${session.status})`;
+                select.appendChild(option);
+            });
+            
+            analyticsAvailableSessions = sessions.map(s => s.name);
+        }
+    } catch (e) {
+        console.error('Error cargando sesiones:', e);
+    }
+}
+
+// Actualizar info del filtro de sesión
+function updateAnalyticsSessionFilterInfo() {
+    const session = document.getElementById('analyticsSessionFilter').value;
+    document.getElementById('analyticsCurrentSessionFilter').textContent = session || 'Todas';
 }
 
 // Función auxiliar para obtener número de semana
@@ -270,6 +314,8 @@ function getAnalyticsDateRange() {
 async function fetchAnalyticsData() {
     const period = document.getElementById('analyticsPeriod').value;
     const topN = document.getElementById('analyticsTopNChart')?.value || document.getElementById('analyticsTopN').value;
+    const sessionFilter = document.getElementById('analyticsSessionFilter')?.value || '';
+    const tableLimit = document.getElementById('analyticsTableLimit')?.value || 50;
     const statusBadge = document.getElementById('analyticsStatusBadge');
     
     try {
@@ -278,8 +324,14 @@ async function fetchAnalyticsData() {
             period: 'custom', 
             start_date: startDate, 
             end_date: endDate, 
-            top: topN 
+            top: topN,
+            limit: tableLimit
         });
+        
+        // Añadir filtro de sesión si está seleccionado
+        if (sessionFilter) {
+            params.append('session', sessionFilter);
+        }
         
         statusBadge.textContent = 'Cargando...';
         statusBadge.className = 'px-2 py-1 text-xs rounded-full bg-yellow-200 text-yellow-800';
