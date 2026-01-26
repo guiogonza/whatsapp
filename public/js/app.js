@@ -8,6 +8,7 @@ let monitorAutoRefresh = true;
 let monitorRefreshInterval = null;
 let monitorMessages = [];
 const MAX_MONITOR_MESSAGES = 50;
+let countdownInterval = null; // Intervalo para actualizar cuentas regresivas
 
 // Variables para ordenamiento de tablas
 let searchSortColumn = 'timestamp';
@@ -15,6 +16,49 @@ let searchSortDirection = 'desc';
 let searchCurrentData = [];
 
 // ======================== UTILIDADES ========================
+
+/**
+ * Formatea milisegundos en formato MM:SS para cuenta regresiva
+ */
+function formatCountdown(ms) {
+    if (ms <= 0) return '00:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Actualiza todas las cuentas regresivas en la página
+ */
+function updateCountdowns() {
+    const countdownElements = document.querySelectorAll('.countdown-timer');
+    countdownElements.forEach(el => {
+        let resetMs = parseInt(el.dataset.resetMs, 10);
+        if (resetMs > 0) {
+            resetMs -= 1000; // Restar 1 segundo
+            el.dataset.resetMs = resetMs;
+            el.textContent = formatCountdown(resetMs);
+            
+            // Si llegó a 0, cambiar estilo
+            if (resetMs <= 0) {
+                el.textContent = '¡Disponible!';
+                el.classList.add('text-green-600');
+                el.classList.remove('text-orange-600');
+            }
+        }
+    });
+}
+
+/**
+ * Inicia el intervalo de actualización de cuentas regresivas
+ */
+function startCountdownInterval() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+    countdownInterval = setInterval(updateCountdowns, 1000);
+}
 
 /**
  * Convierte código de país a emoji de bandera
@@ -338,6 +382,7 @@ function startRotationUpdates() {
     updateRotationInfo();
     loadSessions();
     loadCloudApiStats();
+    startCountdownInterval(); // Iniciar cuentas regresivas
     rotationUpdateInterval = setInterval(() => {
         updateRotationInfo();
         loadSessions();
@@ -450,6 +495,7 @@ function createSessionCard(session) {
                     <p>📦 Consolidados: <span class="font-bold text-purple-600">${session.consolidatedCount || 0}</span></p>
                     <p class="mt-1">📥 Recibidos: <span class="font-bold text-green-600">${session.messagesReceivedCount || 0}</span> | 📤 Enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
                     <p class="mt-1">⏱️ Esta hora: <span class="font-bold ${session.hourlyLimitReached ? 'text-orange-600' : 'text-green-600'}">${session.hourlyCount || 0}/${session.hourlyLimit || 60}</span> ${session.hourlyLimitReached ? '🚫' : '✅'}</p>
+                    ${session.hourlyLimitReached && session.resetTimeMs > 0 ? `<p class="mt-1 text-orange-600 font-bold">⏳ Disponible en: <span class="countdown-timer" data-reset-ms="${session.resetTimeMs}">${formatCountdown(session.resetTimeMs)}</span></p>` : ''}
                     <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span></p>
                     <p class="mt-1">📍 Ubicación: <span class="font-semibold">${session.proxyInfo?.city || 'Desconocido'}, ${session.proxyInfo?.country || 'Desconocido'}</span> ${session.proxyInfo?.countryCode ? getFlagEmoji(session.proxyInfo.countryCode) : ''}</p>
                 </div>
