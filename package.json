@@ -4,10 +4,8 @@
   "main": "server-baileys.js",
   "scripts": {
     "start": "node server-baileys.js",
-    "start:old": "node server.js",
     "start:baileys": "node server-baileys.js",
-    "dev": "nodemon server-baileys.js",
-    "dev:old": "nodemon server.js"
+    "dev": "nodemon server-baileys.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc.9",

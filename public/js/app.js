@@ -412,7 +412,11 @@ function createSessionCard(session) {
         'DISCONNECTED': '❌ Desconectado',
         'ERROR': '⚠️ Error'
     };
-    const colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
+    // Si alcanzó límite horario, cambiar colores
+    let colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
+    if (session.hourlyLimitReached && session.state === 'READY') {
+        colorClass = 'border-orange-500 bg-orange-50';
+    }
     const stateLabel = labels[session.state] || session.state;
     const isActiveSession = session.name === currentRotationSession && session.state === 'READY';
     
@@ -431,9 +435,10 @@ function createSessionCard(session) {
             <div class="border-l-4 ${colorClass} p-6">
                 <div class="flex justify-between items-start mb-3">
                     <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
                             <h3 class="text-lg font-bold">${session.name}</h3>
                             ${isActiveSession ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
+                            ${session.hourlyLimitReached ? '<span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">⏸️ LÍMITE</span>' : ''}
                         </div>
                         <span class="text-sm">${stateLabel}</span>
                     </div>
@@ -444,6 +449,7 @@ function createSessionCard(session) {
                 <div class="mt-3 text-xs text-gray-500">
                     <p>📦 Consolidados: <span class="font-bold text-purple-600">${session.consolidatedCount || 0}</span></p>
                     <p class="mt-1">📥 Recibidos: <span class="font-bold text-green-600">${session.messagesReceivedCount || 0}</span> | 📤 Enviados: <span class="font-bold text-blue-600">${session.messagesSentCount || 0}</span></p>
+                    <p class="mt-1">⏱️ Esta hora: <span class="font-bold ${session.hourlyLimitReached ? 'text-orange-600' : 'text-green-600'}">${session.hourlyCount || 0}/${session.hourlyLimit || 60}</span> ${session.hourlyLimitReached ? '🚫' : '✅'}</p>
                     <p class="mt-1">🌐 IP: <span class="font-mono ${session.proxyInfo?.ip ? 'text-green-600 font-bold' : ''}">${session.proxyInfo?.ip || networkInfo.publicIP || 'N/A'}</span></p>
                     <p class="mt-1">📍 Ubicación: <span class="font-semibold">${session.proxyInfo?.city || 'Desconocido'}, ${session.proxyInfo?.country || 'Desconocido'}</span> ${session.proxyInfo?.countryCode ? getFlagEmoji(session.proxyInfo.countryCode) : ''}</p>
                 </div>

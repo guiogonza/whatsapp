@@ -5,24 +5,12 @@
 
 const { Pool } = require('pg');
 const config = require('./config');
+const { getColombiaTimestamp } = require('./lib/session/utils');
 
 let pool = null;
 let isConnected = false;
 
-/**
- * Obtiene la fecha/hora actual en zona horaria de Colombia (GMT-5)
- */
-function getColombiaTimestamp() {
-    return new Date().toLocaleString('sv-SE', { 
-        timeZone: 'America/Bogota',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    }).replace(' ', 'T');
-}
+
 
 /**
  * Inicializar conexión a PostgreSQL
@@ -102,11 +90,6 @@ async function createTables() {
             CREATE INDEX IF NOT EXISTS idx_messages_phone ON messages(phone_number);
             CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
             CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session);
-        `);
-        
-        // Índice para fecha - usar cast a date sin timezone
-        await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_messages_date ON messages((timestamp::date));
         `);
 
         // Tabla de cola de mensajes salientes

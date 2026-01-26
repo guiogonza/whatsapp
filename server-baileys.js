@@ -28,6 +28,7 @@ const webhook = require('./lib/session/webhook');
 
 // Utilidades centralizadas
 const { formatPhoneNumber } = require('./lib/session/utils');
+const { checkProxyAvailable } = require('./lib/session/proxy');
 
 // Inicialización de Express
 const app = express();
@@ -71,14 +72,14 @@ app.use(express.static(config.PUBLIC_PATH, {
  */
 function clearConsole() {
     if (!config.CONSOLE_CLEAR_ENABLED) return;
-    
+
     const minutesSinceLastClear = (Date.now() - lastClearTime.getTime()) / 1000 / 60;
-    
+
     if (minutesSinceLastClear >= config.CONSOLE_CLEAR_INTERVAL) {
         console.clear();
         console.log(`ÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â§ÃƒÂ‚Ã‚Â¹ Consola limpiada (${consoleLogCount} logs desde ÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Âºltima limpieza)`);
         console.log(`ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂÃƒÂ‚Ã‚Â° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
-        
+
         consoleLogCount = 0;
         lastClearTime = new Date();
     }
@@ -90,19 +91,19 @@ function clearConsole() {
 async function monitorSessions() {
     const sessions = sessionManager.getAllSessions();
     const activeSessions = sessionManager.getActiveSessions();
-    
+
     console.log('\nÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â“ÃƒÂ‚Ã‚ÂŠ === MONITOR DE SESIONES ===');
     console.log(`ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂÃƒÂ‚Ã‚Â° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
     console.log(`ÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â“ÃƒÂ‚Ã‚Â± Total sesiones: ${Object.keys(sessions).length}`);
     console.log(`ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Sesiones activas: ${activeSessions.length}`);
-    
+
     for (const [name, session] of Object.entries(sessions)) {
         const uptimeMinutes = Math.floor((Date.now() - session.startTime.getTime()) / 1000 / 60);
         const status = session.state === config.SESSION_STATES.READY ? 'ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â…' : 'ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂÃƒÂ‚Ã‚ÂŒ';
-        
+
         console.log(`${status} ${name}: ${session.state} | TelÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â©fono: ${session.phoneNumber || 'N/A'} | Uptime: ${uptimeMinutes}m | Mensajes: ${session.messages?.length || 0}`);
     }
-    
+
     const rotationInfo = sessionManager.getRotationInfo();
     console.log(`\nÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â”ÃƒÂ‚Ã‚Â„ SesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n actual: ${rotationInfo.currentSession || 'N/A'}`);
     console.log(`ÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â“ÃƒÂ‚Ã‚ÂŠ Balanceo: ${rotationInfo.balancingMode}`);
@@ -131,8 +132,8 @@ function sendSessionsStatusNotification() {
 
         const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
         let msg = `${EMOJI.CHART} *REPORTE DE SESIONES*\n\n` +
-                  `${EMOJI.CLOCK} ${nowStr}\n\n` +
-                  `${EMOJI.GRAPH} Total: ${total} | ${EMOJI.CHECK} Activas: ${active.length} | ${EMOJI.WARNING} Inactivas: ${inactive.length}\n\n`;
+            `${EMOJI.CLOCK} ${nowStr}\n\n` +
+            `${EMOJI.GRAPH} Total: ${total} | ${EMOJI.CHECK} Activas: ${active.length} | ${EMOJI.WARNING} Inactivas: ${inactive.length}\n\n`;
 
         if (active.length === 0) {
             msg += "*Sesiones Activas:*\n- Sin sesiones activas\n";
@@ -148,7 +149,7 @@ function sendSessionsStatusNotification() {
                 const enviados = sessionObj.messagesSentCount || 0;
                 const proxyInfo = sessionObj.proxyHost ? `${sessionObj.proxyHost}:${sessionObj.proxyPort}` : 'Sin proxy';
                 const location = sessionObj.proxyCountry && sessionObj.proxyCity ? `${sessionObj.proxyCity}, ${sessionObj.proxyCountry}` : 'N/A';
-                
+
                 msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
                 msg += `   ${EMOJI.PHONE} ${phoneNumber}\n`;
                 msg += `   📦 Consolidados: ${consolidados}\n`;
@@ -187,43 +188,7 @@ let lastIPCheck = 0;
 const IP_CACHE_DURATION = 30 * 1000; // 30 segundos para detectar cambios rápidamente
 const net = require('net');
 
-/**
- * Verifica si el proxy SOCKS5 está disponible
- */
-async function checkProxyAvailable(proxyUrl) {
-    if (!proxyUrl) return false;
-    
-    try {
-        const proxyMatch = proxyUrl.match(/socks5?:\/\/([^:]+):(\d+)/);
-        if (!proxyMatch) return false;
-        
-        const [, host, port] = proxyMatch;
-        
-        return new Promise((resolve) => {
-            const socket = new net.Socket();
-            socket.setTimeout(3000);
-            
-            socket.on('connect', () => {
-                socket.destroy();
-                resolve(true);
-            });
-            
-            socket.on('timeout', () => {
-                socket.destroy();
-                resolve(false);
-            });
-            
-            socket.on('error', () => {
-                socket.destroy();
-                resolve(false);
-            });
-            
-            socket.connect(parseInt(port), host);
-        });
-    } catch (error) {
-        return false;
-    }
-}
+
 
 async function getPublicIP() {
     const now = Date.now();
@@ -235,7 +200,7 @@ async function getPublicIP() {
         const PROXY_URL = process.env.ALL_PROXY || process.env.SOCKS_PROXY || null;
         let agent = null;
         let usingProxy = false;
-        
+
         // Verificar si el proxy está disponible antes de usarlo
         if (PROXY_URL) {
             const proxyAvailable = await checkProxyAvailable(PROXY_URL);
@@ -248,7 +213,7 @@ async function getPublicIP() {
                 console.log('⚠️ Proxy no disponible, obteniendo IP directa del VPS');
             }
         }
-        
+
         const ip = await new Promise((resolve, reject) => {
             const options = { agent };
             https.get('https://api.ipify.org', options, (res) => {
@@ -287,18 +252,18 @@ app.get('/api/sessions', async (req, res) => {
         const sessions = sessionManager.getSessionsStatus();
         const allSessions = sessionManager.getAllSessions();
         const { getAllSessionProxyIPs } = require('./lib/session/proxy');
-        
+
         // Obtener IPs de proxies para cada sesión
         const proxyIPs = await getAllSessionProxyIPs();
-        
+
         // Obtener estadísticas de la BD para cada sesión
         const dbSessionStats = await database.getSessionStats();
-        
+
         // Agregar conteo de mensajes enviados desde inicio de sesión y IP del proxy a cada sesión
         const sessionsWithInfo = sessions.map(session => {
             const fullSession = allSessions[session.name];
             const dbStats = dbSessionStats[session.name] || { sentCount: 0, receivedCount: 0, consolidatedCount: 0 };
-            
+
             return {
                 ...session,
                 // Usar valores de BD (históricos) en lugar de solo memoria
@@ -308,7 +273,7 @@ app.get('/api/sessions', async (req, res) => {
                 proxyInfo: proxyIPs[session.name] || { ip: null, proxyUrl: null, location: 'VPS Directo', country: 'VPS', city: 'Directo', countryCode: '' }
             };
         });
-        
+
         const { ip: publicIP, usingProxy } = await getPublicIP();
         res.json({
             success: true,
@@ -334,16 +299,16 @@ app.get('/api/sessions', async (req, res) => {
 app.post('/api/sessions/create', async (req, res) => {
     try {
         const { name } = req.body;
-        
+
         if (!name) {
             return res.status(400).json({
                 success: false,
                 error: 'El nombre de la sesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n es requerido'
             });
         }
-        
+
         const session = await sessionManager.createSession(name);
-        
+
         res.json({
             success: true,
             session: {
@@ -366,14 +331,14 @@ app.get('/api/sessions/:name/qr', async (req, res) => {
     try {
         const { name } = req.params;
         const qrCode = await sessionManager.getQRCode(name);
-        
+
         if (!qrCode) {
             return res.status(404).json({
                 success: false,
                 error: 'QR no disponible'
             });
         }
-        
+
         res.json({
             success: true,
             qr: qrCode
@@ -393,14 +358,14 @@ app.get('/api/sessions/:name/status', (req, res) => {
     try {
         const { name } = req.params;
         const session = sessionManager.getSession(name);
-        
+
         if (!session) {
             return res.status(404).json({
                 success: false,
                 error: 'SesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n no encontrada'
             });
         }
-        
+
         res.json({
             success: true,
             session: {
@@ -428,7 +393,7 @@ app.delete('/api/sessions/:name', async (req, res) => {
     try {
         const { name } = req.params;
         const { deleteData } = req.query;
-        
+
         // Intentar cerrar la sesion (puede no existir en memoria si el servidor se reinicio)
         const sessionClosed = await sessionManager.closeSession(name);
 
@@ -477,7 +442,7 @@ app.get('/api/proxy/status', (req, res) => {
     try {
         const proxyStatus = sessionManager.getProxyStatus();
         const assignments = sessionManager.getSessionProxyAssignments();
-        
+
         res.json({
             success: true,
             proxy: {
@@ -499,7 +464,7 @@ app.get('/api/proxy/status', (req, res) => {
 app.get('/api/hybrid/status', (req, res) => {
     try {
         const hybridStatus = sessionManager.getHybridStatus();
-        
+
         res.json({
             success: true,
             hybrid: hybridStatus
@@ -549,7 +514,7 @@ app.get('/api/webhook/messages', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const messages = await webhook.getReceivedMessagesFromDB(limit);
-        
+
         res.json({
             success: true,
             count: messages.length,
@@ -587,20 +552,20 @@ app.get('/api/webhook/config', (req, res) => {
 app.post('/api/cloud/send', async (req, res) => {
     try {
         const { to, type, message, template } = req.body;
-        
+
         if (!to) {
             return res.status(400).json({ success: false, error: 'Número de destino requerido' });
         }
-        
+
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         let result;
-        
+
         if (type === 'template') {
             result = await cloudApi.sendTemplateMessage(to, template || 'hello_world');
         } else {
             result = await cloudApi.sendTextMessage(to, message);
         }
-        
+
         if (result.success) {
             // Guardar en BD
             const db = require('./database-postgres');
@@ -613,7 +578,7 @@ app.post('/api/cloud/send', async (req, res) => {
                 console.error('Error guardando mensaje saliente:', dbErr);
             }
         }
-        
+
         res.json(result);
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -627,11 +592,11 @@ app.get('/api/cloud/stats', async (req, res) => {
     try {
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         const stats = cloudApi.getStats();
-        
+
         // Obtener conteo de mensajes enviados desde la BD
         const db = require('./database-postgres');
         let dbStats = { total: 0, today: 0, thisHour: 0 };
-        
+
         try {
             // Total de mensajes enviados por Cloud API
             const totalResult = await db.query(`
@@ -639,7 +604,7 @@ app.get('/api/cloud/stats', async (req, res) => {
                 WHERE session = 'cloud-api' AND status = 'sent'
             `);
             dbStats.total = parseInt(totalResult.rows[0]?.count || 0);
-            
+
             // Mensajes de hoy
             const todayResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
@@ -647,7 +612,7 @@ app.get('/api/cloud/stats', async (req, res) => {
                 AND created_at >= CURRENT_DATE
             `);
             dbStats.today = parseInt(todayResult.rows[0]?.count || 0);
-            
+
             // Mensajes de la última hora
             const hourResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
@@ -655,7 +620,7 @@ app.get('/api/cloud/stats', async (req, res) => {
                 AND created_at >= NOW() - INTERVAL '1 hour'
             `);
             dbStats.thisHour = parseInt(hourResult.rows[0]?.count || 0);
-            
+
             // Mensajes por día (últimos 7 días)
             const dailyResult = await db.query(`
                 SELECT DATE(created_at) as date, COUNT(*) as count 
@@ -666,11 +631,11 @@ app.get('/api/cloud/stats', async (req, res) => {
                 ORDER BY date DESC
             `);
             dbStats.daily = dailyResult.rows;
-            
+
         } catch (dbErr) {
             console.error('Error obteniendo estadísticas de BD:', dbErr);
         }
-        
+
         res.json({
             success: true,
             cloudApi: stats,
@@ -691,8 +656,8 @@ app.post('/api/cloud/enable', (req, res) => {
     try {
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         cloudApi.setAccountReady(true);
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: 'Cloud API habilitada. Los mensajes ahora se enviarán por Cloud API.',
             stats: cloudApi.getStats()
         });
@@ -709,8 +674,8 @@ app.post('/api/cloud/disable', (req, res) => {
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         const { reason } = req.body;
         cloudApi.setAccountReady(false, reason || 'Deshabilitada manualmente');
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: 'Cloud API deshabilitada. Los mensajes irán solo por Baileys o quedarán en cola.',
             stats: cloudApi.getStats()
         });
@@ -745,7 +710,7 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
     try {
         sessionManager.rotateSession();
         const info = sessionManager.getRotationInfo();
-        
+
         res.json({
             success: true,
             message: 'Rotación realizada exitosamente',
@@ -766,17 +731,17 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
  */
 function cleanGPSMessage(message) {
     if (!message) return message;
-    
+
     // Patrón: [Mon Jan 19 2026 15:54:21 GMT-0500 (Colombia Standard Time)]
     // Convertir a: 19-01-2026 15:54:21
     const gpsPattern = /\[?\w{3}\s+(\w{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{2}:\d{2}:\d{2})\s*GMT[^\]]*(?:\([^)]*\))?\]?/gi;
-    
+
     const months = {
         'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
         'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
         'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
     };
-    
+
     return message.replace(gpsPattern, (match, month, day, year, time) => {
         const mm = months[month] || month;
         const dd = day.padStart(2, '0');
@@ -793,25 +758,25 @@ function cleanGPSMessage(message) {
 app.post('/api/messages/send', async (req, res) => {
     try {
         const { phoneNumber, message } = req.body;
-        
+
         if (!phoneNumber || !message) {
             return res.status(400).json({
                 success: false,
                 error: 'phoneNumber y message son requeridos'
             });
         }
-        
+
         // Limpiar formato de mensaje GPS
         const cleanedMessage = cleanGPSMessage(message);
-        
+
         // SIEMPRE consolidar - sin opcion de bypass
         const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
-            res.json({ 
-                success: true, 
-                consolidated: true, 
+            res.json({
+                success: true,
+                consolidated: true,
                 message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
-                details: result 
+                details: result
             });
         } else {
             res.status(500).json({ success: false, error: result.error });
@@ -844,11 +809,11 @@ app.post('/api/session/send-message', async (req, res) => {
         // SIEMPRE consolidar - sin opcion de bypass
         const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
-            res.json({ 
-                success: true, 
-                consolidated: true, 
+            res.json({
+                success: true,
+                consolidated: true,
                 message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
-                details: result 
+                details: result
             });
         } else {
             res.status(500).json({ success: false, error: result.error });
@@ -921,35 +886,35 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
 app.post('/api/messages/send-bulk', async (req, res) => {
     try {
         const { contacts, message } = req.body;
-        
+
         if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
             return res.status(400).json({
                 success: false,
                 error: 'Se requiere un array de contactos'
             });
         }
-        
+
         if (!message) {
             return res.status(400).json({
                 success: false,
                 error: 'El mensaje es requerido'
             });
         }
-        
+
         if (contacts.length > config.MAX_BULK_CONTACTS) {
             return res.status(400).json({
                 success: false,
                 error: `Maximo ${config.MAX_BULK_CONTACTS} contactos por envio`
             });
         }
-        
+
         const results = [];
-        
+
         // SIEMPRE consolidar - sin opcion de bypass
         for (const contact of contacts) {
             const phoneNumber = contact.phoneNumber || contact.phone || contact;
             if (!phoneNumber) continue;
-            
+
             const result = await sessionManager.addToConsolidation(phoneNumber, message);
             results.push({
                 phoneNumber,
@@ -958,7 +923,7 @@ app.post('/api/messages/send-bulk', async (req, res) => {
                 pendingCount: result.pendingCount
             });
         }
-        
+
         const successCount = results.filter(r => r.success).length;
         res.json({
             success: true,
@@ -984,7 +949,7 @@ app.get('/api/messages/recent', (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const messages = sessionManager.getRecentMessages(limit);
-        
+
         res.json({
             success: true,
             messages
@@ -1194,16 +1159,16 @@ app.get(['/api/settings/consolidation', '/api/settings/batch'], async (req, res)
 app.post(['/api/settings/consolidation', '/api/settings/batch'], (req, res) => {
     try {
         const { interval } = req.body;
-        
+
         if (!interval) {
             return res.status(400).json({
                 success: false,
                 error: 'interval es requerido'
             });
         }
-        
+
         const result = sessionManager.setBatchInterval(interval);
-        
+
         if (result.success) {
             res.json({
                 success: true,
@@ -1247,25 +1212,25 @@ app.get('/api/settings/notification-interval', (req, res) => {
 app.post('/api/settings/notification-interval', (req, res) => {
     try {
         const { interval } = req.body;
-        
+
         if (!interval || ![1, 5, 30, 60].includes(interval)) {
             return res.status(400).json({
                 success: false,
                 error: 'Intervalo debe ser 1, 5, 30 o 60 minutos'
             });
         }
-        
+
         // Actualizar configuraciÃ³n
         config.NOTIFICATION_INTERVAL_MINUTES = interval;
-        
+
         // Reiniciar intervalo de notificaciones
         if (notificationInterval) {
             clearInterval(notificationInterval);
         }
         notificationInterval = setInterval(sendSessionsStatusNotification, interval * 60000);
-        
+
         console.log(`âœ… Intervalo de notificaciones actualizado a ${interval} minutos`);
-        
+
         res.json({
             success: true,
             message: `Notificaciones configuradas cada ${interval} minutos`,
@@ -1302,19 +1267,19 @@ app.get('/api/settings/session-timeout', (req, res) => {
 app.post('/api/settings/session-timeout', (req, res) => {
     try {
         const { timeout } = req.body;
-        
+
         if (!timeout || ![5, 10, 20, 30].includes(timeout)) {
             return res.status(400).json({
                 success: false,
                 error: 'Tiempo de sesión debe ser 5, 10, 20 o 30 minutos'
             });
         }
-        
+
         // Actualizar configuración
         config.SESSION_TIMEOUT_MINUTES = timeout;
-        
+
         console.log(`✅ Tiempo de sesión actualizado a ${timeout} minutos`);
-        
+
         res.json({
             success: true,
             message: `Tiempo de sesión configurado a ${timeout} minutos`,
@@ -1342,7 +1307,7 @@ app.get('/api/queue/messages', async (req, res) => {
         const status = req.query.status || 'pending';
         const messages = await database.getQueuedMessages(limit, status);
         const stats = await database.getQueueStats();
-        
+
         res.json({
             success: true,
             stats,
@@ -1420,7 +1385,7 @@ app.get('/api/messages/sessions', async (req, res) => {
 app.get('/api/messages/search', async (req, res) => {
     try {
         const { phone, session, startDate, endDate, limit, offset } = req.query;
-        
+
         const result = await database.getMessagesByFilter({
             phoneNumber: phone,
             session,
@@ -1429,7 +1394,7 @@ app.get('/api/messages/search', async (req, res) => {
             limit: parseInt(limit) || 50,
             offset: parseInt(offset) || 0
         });
-        
+
         res.json({
             success: true,
             ...result
@@ -1456,7 +1421,7 @@ async function generateAIResponse(conversationHistory, style = 'casual') {
         funny: 'Responde de manera graciosa y divertida, usando humor ligero.',
         short: 'Responde de manera breve y concisa, máximo 1-2 oraciones.'
     };
-    
+
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -1480,14 +1445,14 @@ async function generateAIResponse(conversationHistory, style = 'casual') {
                 temperature: 0.8
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.error) {
             console.error('Error OpenAI:', data.error);
             throw new Error(data.error.message);
         }
-        
+
         return data.choices[0].message.content.trim();
     } catch (error) {
         console.error('Error generando respuesta IA:', error.message);
@@ -1512,7 +1477,7 @@ async function generateAIResponse(conversationHistory, style = 'casual') {
 app.post('/api/conversation/start', async (req, res) => {
     try {
         const { sessions: sessionNames, topic, messageCount = 5, delay = 15, style = 'casual' } = req.body;
-        
+
         // Verificar que la API key esté configurada
         if (!OPENAI_API_KEY) {
             return res.status(500).json({
@@ -1520,34 +1485,34 @@ app.post('/api/conversation/start', async (req, res) => {
                 error: 'OPENAI_API_KEY no está configurada. Agrégala al archivo .env'
             });
         }
-        
+
         if (!sessionNames || sessionNames.length < 2) {
             return res.status(400).json({
                 success: false,
                 error: 'Se requieren al menos 2 sesiones'
             });
         }
-        
+
         if (!topic) {
             return res.status(400).json({
                 success: false,
                 error: 'Se requiere un tema de conversación'
             });
         }
-        
+
         // Verificar que las sesiones existan y estén activas
         const allSessions = sessionManager.getAllSessions();
-        const validSessions = sessionNames.filter(name => 
+        const validSessions = sessionNames.filter(name =>
             allSessions[name] && allSessions[name].state === config.SESSION_STATES.READY
         );
-        
+
         if (validSessions.length < 2) {
             return res.status(400).json({
                 success: false,
                 error: 'Se necesitan al menos 2 sesiones activas'
             });
         }
-        
+
         // Obtener números de teléfono de las sesiones
         const sessionPhones = {};
         for (const name of validSessions) {
@@ -1556,53 +1521,53 @@ app.post('/api/conversation/start', async (req, res) => {
                 sessionPhones[name] = session.phoneNumber;
             }
         }
-        
+
         if (Object.keys(sessionPhones).length < 2) {
             return res.status(400).json({
                 success: false,
                 error: 'Las sesiones no tienen números de teléfono configurados'
             });
         }
-        
+
         // Registrar los números de las sesiones para evitar auto-respuesta
         sessionManager.setActiveConversationPhones(Object.values(sessionPhones));
-        
+
         const messages = [];
         const conversationHistory = [];
         let totalMessagesSent = 0;
-        
+
         // Primera sesión envía el tema inicial
         const sessionList = Object.keys(sessionPhones);
         let currentSenderIndex = 0;
-        
+
         console.log(`\n🤖 Iniciando conversación IA entre ${sessionList.length} sesiones`);
         console.log(`📝 Tema: "${topic}"`);
         console.log(`💬 Mensajes por sesión: ${messageCount}`);
-        
+
         // Mensaje inicial
         let currentMessage = topic;
-        
+
         // Total de mensajes a enviar (messageCount por cada sesión)
         const totalMessages = messageCount * sessionList.length;
-        
+
         for (let i = 0; i < totalMessages; i++) {
             const senderName = sessionList[currentSenderIndex];
             const receiverIndex = (currentSenderIndex + 1) % sessionList.length;
             const receiverName = sessionList[receiverIndex];
-            
+
             const senderPhone = sessionPhones[senderName];
             const receiverPhone = sessionPhones[receiverName];
             const senderSession = allSessions[senderName];
-            
+
             try {
                 // Enviar mensaje
                 const formattedReceiver = receiverPhone + '@s.whatsapp.net';
                 await senderSession.socket.sendMessage(formattedReceiver, {
                     text: currentMessage
                 });
-                
+
                 console.log(`✅ ${senderName} → ${receiverName}: ${currentMessage.substring(0, 50)}...`);
-                
+
                 messages.push({
                     from: senderName,
                     to: receiverName,
@@ -1610,25 +1575,25 @@ app.post('/api/conversation/start', async (req, res) => {
                     direction: 'sent',
                     timestamp: new Date().toISOString()
                 });
-                
+
                 conversationHistory.push({
                     text: currentMessage,
                     isMe: currentSenderIndex === 0
                 });
-                
+
                 totalMessagesSent++;
-                
+
                 // Esperar antes del siguiente mensaje
                 if (i < totalMessages - 1) {
                     await new Promise(resolve => setTimeout(resolve, delay * 1000));
-                    
+
                     // Generar respuesta con IA
                     currentMessage = await generateAIResponse(conversationHistory, style);
                 }
-                
+
                 // Rotar al siguiente sender
                 currentSenderIndex = receiverIndex;
-                
+
             } catch (error) {
                 console.error(`❌ Error enviando mensaje: ${error.message}`);
                 messages.push({
@@ -1640,18 +1605,18 @@ app.post('/api/conversation/start', async (req, res) => {
                 });
             }
         }
-        
+
         // Limpiar los números de conversación activa
         sessionManager.clearActiveConversationPhones();
-        
+
         console.log(`🏁 Conversación completada: ${totalMessagesSent} mensajes enviados\n`);
-        
+
         res.json({
             success: true,
             totalMessages: totalMessagesSent,
             messages
         });
-        
+
     } catch (error) {
         sessionManager.clearActiveConversationPhones();
         console.error('Error en conversación IA:', error);
@@ -1673,7 +1638,7 @@ app.get('/api/openai/balance', async (req, res) => {
                 error: 'OPENAI_API_KEY no está configurada'
             });
         }
-        
+
         // Intentar obtener información de billing/subscription
         try {
             const billingResponse = await fetch('https://api.openai.com/v1/dashboard/billing/subscription', {
@@ -1682,15 +1647,15 @@ app.get('/api/openai/balance', async (req, res) => {
                     'Authorization': `Bearer ${OPENAI_API_KEY}`
                 }
             });
-            
+
             if (billingResponse.ok) {
                 const billingData = await billingResponse.json();
-                
+
                 // Intentar obtener también el uso del mes actual
                 const now = new Date();
                 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                
+
                 const usageResponse = await fetch(
                     `https://api.openai.com/v1/dashboard/billing/usage?start_date=${startOfMonth.toISOString().split('T')[0]}&end_date=${endOfMonth.toISOString().split('T')[0]}`,
                     {
@@ -1700,12 +1665,12 @@ app.get('/api/openai/balance', async (req, res) => {
                         }
                     }
                 );
-                
+
                 let usageData = null;
                 if (usageResponse.ok) {
                     usageData = await usageResponse.json();
                 }
-                
+
                 return res.json({
                     success: true,
                     apiConfigured: true,
@@ -1717,7 +1682,7 @@ app.get('/api/openai/balance', async (req, res) => {
         } catch (billingError) {
             console.log('No se pudo obtener información de billing:', billingError.message);
         }
-        
+
         // Fallback: intentar obtener créditos disponibles (para cuentas con créditos de prueba)
         try {
             const creditResponse = await fetch('https://api.openai.com/v1/dashboard/billing/credit_grants', {
@@ -1726,7 +1691,7 @@ app.get('/api/openai/balance', async (req, res) => {
                     'Authorization': `Bearer ${OPENAI_API_KEY}`
                 }
             });
-            
+
             if (creditResponse.ok) {
                 const creditData = await creditResponse.json();
                 return res.json({
@@ -1739,7 +1704,7 @@ app.get('/api/openai/balance', async (req, res) => {
         } catch (creditError) {
             console.log('No se pudo obtener información de créditos:', creditError.message);
         }
-        
+
         // Si no se puede obtener información detallada, devolver información básica
         res.json({
             success: true,
@@ -1749,10 +1714,10 @@ app.get('/api/openai/balance', async (req, res) => {
             note: 'Para ver el saldo y uso detallado, visita el dashboard de OpenAI',
             dashboardUrl: 'https://platform.openai.com/usage'
         });
-        
+
     } catch (error) {
         console.error('Error obteniendo balance OpenAI:', error.message);
-        
+
         res.json({
             success: true,
             apiConfigured: !!OPENAI_API_KEY,
@@ -1773,10 +1738,10 @@ app.get('/api/database/status', async (req, res) => {
         const status = await database.getDatabaseStatus();
         res.json({ success: true, ...status });
     } catch (error) {
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             connected: false,
-            error: error.message 
+            error: error.message
         });
     }
 });
@@ -1786,20 +1751,20 @@ app.get('/api/database/status', async (req, res) => {
 app.get('/health', (req, res) => {
     const sessions = sessionManager.getAllSessions();
     const activeSessions = sessionManager.getActiveSessions();
-    
+
     const sessionList = Object.entries(sessions).map(([name, session]) => ({
         name,
         state: session.state,
         phoneNumber: session.phoneNumber,
         uptime: Date.now() - session.startTime.getTime()
     }));
-    
+
     const rotationInfo = sessionManager.getRotationInfo();
-    
-    const systemStatus = activeSessions.length === 0 ? 'CRITICAL' 
-        : activeSessions.length >= 2 ? 'HEALTHY' 
-        : 'WARNING';
-    
+
+    const systemStatus = activeSessions.length === 0 ? 'CRITICAL'
+        : activeSessions.length >= 2 ? 'HEALTHY'
+            : 'WARNING';
+
     // Campos adicionales para compatibilidad con frontend analytics.js
     const availableSessions = sessionList.filter(s => s.state === config.SESSION_STATES.READY).map(s => s.name);
     const rotationInfoCompat = {
@@ -1839,13 +1804,13 @@ function startMonitoring() {
     if (config.CONSOLE_CLEAR_ENABLED) {
         consoleClearInterval = setInterval(clearConsole, 60000);
     }
-    
+
     // Monitoreo de sesiones
     sessionMonitorInterval = setInterval(monitorSessions, config.SESSION_MONITOR_INTERVAL * 60000);
 
     // Notificaciones de estado de sesiones
     notificationInterval = setInterval(sendSessionsStatusNotification, config.NOTIFICATION_INTERVAL_MINUTES * 60000);
-    
+
     console.log('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Monitoreo iniciado');
 }
 
@@ -1857,7 +1822,7 @@ function stopMonitoring() {
     if (sessionMonitorInterval) clearInterval(sessionMonitorInterval);
     if (notificationInterval) clearInterval(notificationInterval);
     sessionManager.stopSessionRotation();
-    
+
     console.log('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂÃƒÂ‚Ã‚Â¹ÃƒÂƒÃ‚Â¯ÃƒÂ‚Ã‚Â¸ÃƒÂ‚Ã‚Â Monitoreo detenido');
 }
 
@@ -1867,32 +1832,32 @@ function stopMonitoring() {
 async function initialize() {
     try {
         console.log('\nÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚ÂšÃƒÂ‚Ã‚Â€ Iniciando WhatsApp Bot Server con Baileys...\n');
-        
+
         // Inicializar base de datos
         // Inicializar base de datos PostgreSQL
         await database.initDatabase();
 
         // Cargar sesiones existentes
         await sessionManager.loadSessionsFromDisk();
-        
+
         // Iniciar servidor HTTP
         server.listen(config.PORT, () => {
             console.log(`ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Servidor escuchando en puerto ${config.PORT}`);
             console.log(`ÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚ÂŒÃƒÂ‚Ã‚Â http://localhost:${config.PORT}`);
             console.log(`ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂÃƒÂ‚Ã‚Â° ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`);
         });
-        
+
         // Iniciar monitoreo
         startMonitoring();
-        
+
         // Iniciar rotaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n de sesiones
         sessionManager.startSessionRotation();
-        
+
         // Iniciar procesador de consolidación de mensajes (persistente en BD)
         sessionManager.startConsolidationProcessor();
 
         console.log('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Sistema iniciado correctamente\n');
-        
+
     } catch (error) {
         console.error('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂÃƒÂ‚Ã‚ÂŒ Error iniciando servidor:', error);
         process.exit(1);
@@ -1903,25 +1868,25 @@ async function initialize() {
 process.on('SIGINT', async () => {
     console.log('\n\nÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â›ÃƒÂ‚Ã‚Â‘ Recibida seÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â±al SIGINT, cerrando servidor...');
     stopMonitoring();
-    
+
     // Cerrar todas las sesiones
     const sessions = sessionManager.getAllSessions();
     for (const name of Object.keys(sessions)) {
         await sessionManager.closeSession(name, false);
     }
-    
+
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
     console.log('\n\nÃƒÂƒÃ‚Â°ÃƒÂ‚Ã‚ÂŸÃƒÂ‚Ã‚Â›ÃƒÂ‚Ã‚Â‘ Recibida seÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â±al SIGTERM, cerrando servidor...');
     stopMonitoring();
-    
+
     const sessions = sessionManager.getAllSessions();
     for (const name of Object.keys(sessions)) {
         await sessionManager.closeSession(name, false);
     }
-    
+
     process.exit(0);
 });
 
