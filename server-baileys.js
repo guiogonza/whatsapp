@@ -286,6 +286,7 @@ app.get('/api/sessions', async (req, res) => {
                 messagesSentCount: dbStats.sentCount,
                 messagesReceivedCount: dbStats.receivedCount,
                 consolidatedCount: dbStats.consolidatedCount,
+                adapterType: session.adapterType || 'baileys-standard',
                 proxyInfo: proxyIPs[session.name] || { ip: null, proxyUrl: null, location: 'VPS Directo', country: 'VPS', city: 'Directo', countryCode: '' }
             };
         });

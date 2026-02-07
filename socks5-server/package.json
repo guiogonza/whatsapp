@@ -1,9 +1,0 @@
-{
-  "name": "socks5-proxy-server",
-  "version": "1.0.0",
-  "description": "Servidor SOCKS5 para redirigir tráfico del VPS a través de esta PC",
-  "main": "socks5-server.js",
-  "scripts": {
-    "start": "node socks5-server.js"
-  }
-}

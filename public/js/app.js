@@ -457,6 +457,12 @@ function createSessionCard(session) {
         'DISCONNECTED': '❌ Desconectado',
         'ERROR': '⚠️ Error'
     };
+    const adapterLabels = {
+        'baileys-standard': { label: 'Baileys', color: 'bg-blue-100 text-blue-800', icon: '🔵' },
+        'baileys-stealth': { label: 'Stealth', color: 'bg-purple-100 text-purple-800', icon: '🟣' },
+        'whatsapp-web-js': { label: 'WWJS', color: 'bg-green-100 text-green-800', icon: '🟢' }
+    };
+    const adapterInfo = adapterLabels[session.adapterType] || { label: session.adapterType || 'Desconocido', color: 'bg-gray-100 text-gray-800', icon: '⚪' };
     // Si alcanzó límite horario, cambiar colores
     let colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
     if (session.hourlyLimitReached && session.state === 'READY') {
@@ -482,6 +488,7 @@ function createSessionCard(session) {
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1 flex-wrap">
                             <h3 class="text-lg font-bold">${session.name}</h3>
+                            <span class="${adapterInfo.color} text-xs px-2 py-0.5 rounded-full font-semibold">${adapterInfo.icon} ${adapterInfo.label}</span>
                             ${isActiveSession ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
                             ${session.hourlyLimitReached ? '<span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">⏸️ LÍMITE</span>' : ''}
                         </div>
@@ -734,6 +741,12 @@ async function refreshMonitorStats() {
             };
             const colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
             const stateLabel = labels[session.state] || session.state;
+            const adapterLabels = {
+                'baileys-standard': { label: 'Baileys', color: 'bg-blue-100 text-blue-800', icon: '🔵' },
+                'baileys-stealth': { label: 'Stealth', color: 'bg-purple-100 text-purple-800', icon: '🟣' },
+                'whatsapp-web-js': { label: 'WWJS', color: 'bg-green-100 text-green-800', icon: '🟢' }
+            };
+            const adapterInfo = adapterLabels[session.adapterType] || { label: session.adapterType || '?', color: 'bg-gray-100 text-gray-800', icon: '⚪' };
             
             return `
                 <div class="session-card bg-white rounded-lg shadow-lg overflow-hidden ${isActive ? 'ring-2 ring-purple-500 heartbeat-active' : ''}">
@@ -742,6 +755,7 @@ async function refreshMonitorStats() {
                             <div class="flex-1">
                                 <div class="flex items-center gap-2 mb-1">
                                     <h3 class="text-lg font-bold">${session.name}</h3>
+                                    <span class="${adapterInfo.color} text-xs px-2 py-0.5 rounded-full font-semibold">${adapterInfo.icon} ${adapterInfo.label}</span>
                                     ${isActive ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
                                 </div>
                                 <span class="text-sm">${stateLabel}</span>
