@@ -47,10 +47,26 @@ let notificationInterval = null;
 
 app.use(express.json({ limit: '16mb' }));
 app.use(cors({
-    origin: '*',
+    origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }));
+
+// Middleware de autenticación API (opcional, activar con API_KEY en .env)
+const API_KEY = process.env.API_KEY || '';
+function authenticateAPI(req, res, next) {
+    // Rutas públicas: health, webhook, archivos estáticos
+    if (req.path === '/health' || req.path.startsWith('/webhook') || !req.path.startsWith('/api/')) {
+        return next();
+    }
+    if (!API_KEY) return next(); // Sin API_KEY = sin autenticación requerida
+    const providedKey = req.headers['x-api-key'] || req.query.apiKey;
+    if (providedKey !== API_KEY) {
+        return res.status(401).json({ success: false, error: 'API key requerida o inválida' });
+    }
+    next();
+}
+app.use(authenticateAPI);
 
 // Configurar charset UTF-8 para archivos estáticos
 app.use(express.static(config.PUBLIC_PATH, {
@@ -418,7 +434,22 @@ app.delete('/api/sessions/:name', async (req, res) => {
 });
 
 /**
- * GET /api/sessions/rotation/info - InformaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n de rotaciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n de sesiones
+ * GET /api/adapters/info - Informacion de los adaptadores multi-libreria
+ */
+app.get('/api/adapters/info', (req, res) => {
+    try {
+        const adapterFactory = require('./lib/session/adapters');
+        res.json({
+            success: true,
+            adapters: adapterFactory.getAdaptersInfo()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/sessions/rotation/info - Informacion de rotacion de sesiones
  */
 app.get('/api/sessions/rotation/info', (req, res) => {
     try {
@@ -1894,21 +1925,4 @@ process.on('SIGTERM', async () => {
 initialize();
 
 module.exports = app;
-
-// ======================== ANALYTICS (compatibilidad) ========================
-// Endpoint ÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Âºnico "/analytics" esperado por public/js/analytics.js
-app.get('/analytics', async (req, res) => {
-    try {
-        const { period = 'day', range = 'today', top = 10, start_date, end_date } = req.query;
-        const options = { period, range, top: parseInt(top) };
-        if (period === 'custom' && start_date && end_date) {
-            options.startDate = start_date;
-            options.endDate = end_date;
-        }
-        const data = await database.getAnalytics(options);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 

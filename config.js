@@ -14,6 +14,11 @@ module.exports = {
     CONSOLE_CLEAR_ENABLED: process.env.CONSOLE_CLEAR_ENABLED === 'true',
     CONSOLE_CLEAR_INTERVAL: parseInt(process.env.CONSOLE_CLEAR_INTERVAL_MINUTES) || 5,
     
+    // Adaptadores multi-librería para sesiones WhatsApp
+    // Opciones: 'baileys-standard', 'baileys-stealth', 'whatsapp-web-js'
+    // Se rotan automáticamente al crear nuevas sesiones para diversificar fingerprints
+    ENABLED_ADAPTERS: (process.env.ENABLED_ADAPTERS || 'baileys-standard,baileys-stealth').split(',').map(a => a.trim()).filter(a => a),
+    
     // Rotación de sesiones para envío de mensajes
     // DESHABILITADO: Usar balanceo round-robin automático en cada mensaje
     SESSION_ROTATION_INTERVAL: 0, // 0 = deshabilitado (siempre round-robin)
