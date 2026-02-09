@@ -70,8 +70,8 @@ module.exports = {
     MAX_MESSAGES_PER_SESSION_PER_HOUR: parseInt(process.env.MAX_MESSAGES_PER_SESSION_PER_HOUR) || 60,
     
     // Anti-ban: Delay mínimo y máximo entre mensajes (en segundos)
-    // Con 60 msgs/hora = 1 cada 1 min = delay 30-60s es suficiente
-    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 30,
+    // Con 60 msgs/hora = 1 cada 1 min = delay 60s entre rondas
+    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 60,
     MAX_DELAY_SECONDS: parseInt(process.env.MAX_DELAY_SECONDS) || 60,
     
     // Anti-ban: Horas de "descanso" donde no se envían mensajes (formato 24h)
