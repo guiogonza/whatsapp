@@ -2164,25 +2164,13 @@ async function loadOpenAIBalance() {
 
     async function updateGPSwoxQR() {
         try {
-            const response = await fetch(`${API_URL}/api/sessions/gpswox-session/qr`);
-            const text = await response.text();
+            const response = await fetch(`${API_URL}/api/sessions/gpswox-session/qr?format=json`);
+            const data = await response.json();
             
-            // Si es HTML, extraer la imagen del src
-            if (text.includes('<!DOCTYPE html>')) {
-                const match = text.match(/src="([^"]+)"/);
-                if (match && match[1]) {
-                    document.getElementById('gpswoxQRImage').src = match[1];
-                }
+            if (data.success && data.qr) {
+                document.getElementById('gpswoxQRImage').src = data.qr;
             } else {
-                // Si es JSON
-                try {
-                    const data = JSON.parse(text);
-                    if (data.success && data.qr) {
-                        document.getElementById('gpswoxQRImage').src = data.qr;
-                    }
-                } catch (e) {
-                    console.error('Error parsing QR response:', e);
-                }
+                console.error('No QR available:', data.error);
             }
         } catch (error) {
             console.error('Error fetching QR:', error);

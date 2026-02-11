@@ -343,12 +343,29 @@ app.post('/api/sessions/create', async (req, res) => {
 
 /**
  * GET /api/sessions/:name/qr - Obtiene el cÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³digo QR de una sesiÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n
+ * Query params: ?format=json para obtener JSON en lugar de HTML
  */
 app.get('/api/sessions/:name/qr', async (req, res) => {
     try {
         const { name } = req.params;
+        const { format } = req.query;
         const qrCode = await sessionManager.getQRCode(name);
 
+        // Si se solicita formato JSON
+        if (format === 'json') {
+            if (!qrCode) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'QR no disponible'
+                });
+            }
+            return res.json({
+                success: true,
+                qr: qrCode
+            });
+        }
+
+        // Formato HTML (por defecto)
         if (!qrCode) {
             return res.status(404).send(`
                 <!DOCTYPE html>
