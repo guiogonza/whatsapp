@@ -419,7 +419,11 @@ function updateNetworkInfo() {
 
 function updateSessionsList() {
     const container = document.getElementById('sessionsList');
-    if (sessions.length === 0) {
+    
+    // Filtrar gpswox-session de la lista (solo se muestra en el checkbox dedicado)
+    const displaySessions = sessions.filter(s => s.name !== 'gpswox-session');
+    
+    if (displaySessions.length === 0) {
         container.innerHTML = `
             <div class="col-span-full text-center p-8 bg-white rounded-lg shadow">
                 <div class="text-6xl mb-4">📱</div>
@@ -428,7 +432,7 @@ function updateSessionsList() {
         return;
     }
     
-    const sortedSessions = [...sessions].sort((a, b) => {
+    const sortedSessions = [...displaySessions].sort((a, b) => {
         const statePriority = { 'READY': 1, 'LOADING': 2, 'WAITING_FOR_QR': 3, 'DISCONNECTED': 4, 'ERROR': 5 };
         const priorityA = statePriority[a.state] || 99;
         const priorityB = statePriority[b.state] || 99;
@@ -2181,9 +2185,9 @@ async function loadOpenAIBalance() {
         try {
             const response = await fetch(`${API_URL}/api/gpswox/session/status`);
             const data = await response.json();
-            return data.exists && data.status ? { 
-                connected: data.status.connected, 
-                phoneNumber: data.status.phoneNumber 
+            return data.exists && data.session ? { 
+                connected: data.session.state === 'READY', 
+                phoneNumber: data.session.phoneNumber 
             } : null;
         } catch (error) {
             console.error('Error checking GPSwox status:', error);
@@ -2196,23 +2200,55 @@ async function loadOpenAIBalance() {
         const checkbox = document.getElementById('gpswoxSessionToggle');
         const statusBadge = document.getElementById('gpswoxStatusBadge');
         const statusMsg = document.getElementById('gpswoxStatusMessage');
+        const qrContainer = document.getElementById('gpswoxQRContainer');
+        
+        if (!checkbox) return; // Si no existe el elemento, salir
         
         try {
             const response = await fetch(`${API_URL}/api/gpswox/session/status`);
             const data = await response.json();
             
-            if (data.exists && data.status) {
+            if (data.exists && data.session) {
                 checkbox.checked = true;
-                if (data.status.connected) {
+                
+                if (data.session.state === 'READY') {
+                    // Sesión conectada
                     statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-200 text-green-800';
                     statusBadge.textContent = '✅ Conectada';
                     statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
-                    statusMsg.textContent = `✅ Conectada como ${data.status.phoneNumber}`;
-                } else {
+                    statusMsg.textContent = `✅ Conectada como ${data.session.phoneNumber}`;
+                    qrContainer.classList.add('hidden');
+                } else if (data.session.state === 'WAITING_FOR_QR') {
+                    // Esperando escanear QR
                     statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-200 text-yellow-800';
-                    statusBadge.textContent = 'Desconectada';
+                    statusBadge.textContent = 'Esperando QR';
                     statusMsg.className = 'mt-3 text-sm font-medium text-yellow-600';
-                    statusMsg.textContent = '⚠️ Sesión existe pero no está conectada';
+                    statusMsg.textContent = '📱 Escanea el código QR para conectar';
+                    
+                    // Mostrar QR y actualizar
+                    qrContainer.classList.remove('hidden');
+                    await updateGPSwoxQR();
+                    gpswoxQRInterval = setInterval(updateGPSwoxQR, 60000);
+                    
+                    // Verificar si se conecta
+                    const statusInterval = setInterval(async () => {
+                        const statusData = await checkGPSwoxStatus();
+                        if (statusData && statusData.connected) {
+                            clearInterval(statusInterval);
+                            clearInterval(gpswoxQRInterval);
+                            qrContainer.classList.add('hidden');
+                            statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-200 text-green-800';
+                            statusBadge.textContent = '✅ Conectada';
+                            statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
+                            statusMsg.textContent = `✅ Conectada como ${statusData.phoneNumber}`;
+                        }
+                    }, 5000);
+                } else {
+                    // Otro estado (desconectada, error, etc.)
+                    statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-red-200 text-red-800';
+                    statusBadge.textContent = 'Desconectada';
+                    statusMsg.className = 'mt-3 text-sm font-medium text-red-600';
+                    statusMsg.textContent = `⚠️ Estado: ${data.session.state}`;
                 }
             }
         } catch (error) {
