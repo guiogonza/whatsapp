@@ -112,6 +112,16 @@ module.exports = {
     // Separados por coma en .env: AI_AUTO_RESPONSE_NUMBERS=573183499539,573001234567
     AI_AUTO_RESPONSE_NUMBERS: (process.env.AI_AUTO_RESPONSE_NUMBERS || '573183499539').split(',').map(n => n.trim()).filter(n => n),
     
+    // ============================================
+    // GPSwox Platform Servers
+    // ============================================
+    // DEV: http://213.199.45.139/
+    // PRD: http://142.132.149.111/
+    GPSWOX_API_BASE_DEV: process.env.GPSWOX_API_BASE_DEV || 'http://213.199.45.139/api',
+    GPSWOX_API_BASE_PRD: process.env.GPSWOX_API_BASE_PRD || 'http://142.132.149.111/api',
+    GPSWOX_API_HASH_PRD: process.env.GPSWOX_API_HASH_PRD || '$2y$10$olDjm0MFRwAAszdePy4H6.W2oXAAx7jht7jPlx3.qxunehfBA6.n2',
+    GPSWOX_API_HASH_DEV: process.env.GPSWOX_API_HASH_DEV || '$2y$10$7bj.tJXGHGydLk4PRxux5ODsXLoMLvcfUnnM6nAF8aq4fXozkpnhq',
+
     // Sesión especial GPSwox
     GPSWOX_SESSION_NAME: process.env.GPSWOX_SESSION_NAME || 'gpswox-session',
     GPSWOX_DEDICATED_MODE: process.env.GPSWOX_DEDICATED_MODE === 'true', // true = solo procesará GPSwox
