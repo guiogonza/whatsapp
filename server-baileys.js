@@ -2186,6 +2186,33 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Favicon
+app.get('/favicon.ico', (req, res) => {
+    res.status(204).end();
+});
+
+/**
+ * GET /api/message-logs - Alias de /api/monitor/messages para webhook-viewer
+ */
+app.get('/api/message-logs', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 500;
+        const offset = parseInt(req.query.offset) || 0;
+        const result = await database.getMessagesByFilter({ limit, offset });
+        const logs = (result.messages || []).map(m => ({
+            id: m.id,
+            session_name: m.session || '',
+            phone_number: m.phone_number || m.destination || '',
+            message_preview: m.message_preview || m.message || '',
+            status: m.status || 'unknown',
+            created_at: m.timestamp || m.created_at || ''
+        }));
+        res.json({ success: true, logs, total: result.total });
+    } catch (error) {
+        res.json({ success: true, logs: [], total: 0 });
+    }
+});
+
 // Ruta principal
 app.get('/', (req, res) => {
     res.sendFile(path.join(config.PUBLIC_PATH, 'index.html'));
