@@ -1278,6 +1278,66 @@ app.post('/api/session/send-file', upload.single('file'), async (req, res) => {
 });
 
 /**
+ * POST /api/send-direct - Envía un mensaje directo sin consolidación
+ * Usa la primera sesión activa disponible o una sesión específica
+ * Pensado para alertas/monitoreo que necesitan envío inmediato
+ */
+app.post('/api/send-direct', async (req, res) => {
+    try {
+        const { phoneNumber, message, sessionName } = req.body;
+
+        if (!phoneNumber || !message) {
+            return res.status(400).json({
+                success: false,
+                error: 'phoneNumber y message son requeridos'
+            });
+        }
+
+        // Buscar sesión activa
+        let session = null;
+        if (sessionName) {
+            session = sessionManager.getSession(sessionName);
+            if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
+                return res.status(400).json({ success: false, error: `Sesión ${sessionName} no disponible` });
+            }
+        } else {
+            // Buscar la primera sesión READY
+            const statuses = sessionManager.getSessionsStatus();
+            for (const s of statuses) {
+                if (s.state === config.SESSION_STATES.READY) {
+                    session = sessionManager.getSession(s.name);
+                    if (session && session.socket) break;
+                    session = null;
+                }
+            }
+            if (!session) {
+                return res.status(503).json({ success: false, error: 'No hay sesiones activas disponibles' });
+            }
+        }
+
+        const formattedNumber = formatPhoneNumber(phoneNumber);
+        if (!formattedNumber) {
+            return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
+        }
+
+        const jid = formattedNumber + '@s.whatsapp.net';
+        await session.socket.sendMessage(jid, { text: message });
+
+        console.log(`📤 Mensaje directo enviado a ${formattedNumber} vía sesión ${session.name}`);
+
+        res.json({
+            success: true,
+            message: 'Mensaje enviado directamente',
+            sessionUsed: session.name,
+            to: formattedNumber
+        });
+    } catch (error) {
+        console.error('❌ Error enviando mensaje directo:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/messages/send-bulk - Envia mensajes masivos (todos van a consolidacion)
  */
 app.post('/api/messages/send-bulk', async (req, res) => {
