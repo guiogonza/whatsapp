@@ -625,10 +625,12 @@ function updateSessionsCount() {
 }
 
 function populateSessionSelects() {
+    // Filtrar sesiones listas Y excluir gpswox-session de envíos masivos
     const readySessions = sessions.filter(s => s.state === 'READY');
+    const readySessionsForMessaging = readySessions.filter(s => s.name !== 'gpswox-session');
     
-    const personalHtml = readySessions.length > 0
-        ? readySessions.map(s => `
+    const personalHtml = readySessionsForMessaging.length > 0
+        ? readySessionsForMessaging.map(s => `
             <label class="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer">
                 <input type="checkbox" name="personalSession" value="${s.name}" class="mr-2 rounded text-blue-500">
                 <span class="flex-1 font-medium">${s.name}</span>
@@ -637,8 +639,8 @@ function populateSessionSelects() {
         : '<p class="text-gray-500 text-sm">No hay sesiones activas</p>';
     document.getElementById('personalSessionCheckboxes').innerHTML = personalHtml;
 
-    const bulkHtml = readySessions.length > 0
-        ? readySessions.map(s => `
+    const bulkHtml = readySessionsForMessaging.length > 0
+        ? readySessionsForMessaging.map(s => `
             <label class="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer">
                 <input type="checkbox" name="bulkSession" value="${s.name}" class="mr-2 rounded text-purple-500">
                 <span class="flex-1 font-medium">${s.name}</span>
@@ -649,7 +651,7 @@ function populateSessionSelects() {
 
     const groupSelect = document.getElementById('groupSessionSelect');
     groupSelect.innerHTML = '<option value="">-- Selecciona una sesión --</option>' +
-        readySessions.map(s => `<option value="${s.name}">${s.name} (${s.userInfo?.wid || ''})</option>`).join('');
+        readySessionsForMessaging.map(s => `<option value="${s.name}">${s.name} (${s.userInfo?.wid || ''})</option>`).join('');
     
     // Agregar sesiones para conversación IA
     populateConversationSessions();
@@ -2089,3 +2091,148 @@ async function loadOpenAIBalance() {
         balanceDiv.className = 'bg-red-50 border border-red-200 rounded-lg p-3 mb-4';
     }
 }
+    // ======================== GPSWOX SESSION MANAGEMENT ========================
+
+    let gpswoxQRInterval = null;
+
+    async function toggleGPSwoxSession() {
+        const checkbox = document.getElementById('gpswoxSessionToggle');
+        const statusMsg = document.getElementById('gpswoxStatusMessage');
+        const statusBadge = document.getElementById('gpswoxStatusBadge');
+        const qrContainer = document.getElementById('gpswoxQRContainer');
+
+        if (checkbox.checked) {
+            // Crear sesión GPSwox
+            statusMsg.className = 'mt-3 text-sm font-medium text-blue-600';
+            statusMsg.textContent = '⏳ Creando sesión GPSwox...';
+            checkbox.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/gpswox/session/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
+                    statusMsg.textContent = '✅ Sesión GPSwox creada exitosamente';
+                    statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-200 text-yellow-800';
+                    statusBadge.textContent = 'Esperando QR';
+                    
+                    // Mostrar QR y comenzar actualización
+                    qrContainer.classList.remove('hidden');
+                    await updateGPSwoxQR();
+                    gpswoxQRInterval = setInterval(updateGPSwoxQR, 60000); // Actualizar cada 60s
+                    
+                    // Verificar estado cada 5 segundos
+                    const statusInterval = setInterval(async () => {
+                        const statusData = await checkGPSwoxStatus();
+                        if (statusData && statusData.connected) {
+                            clearInterval(statusInterval);
+                            clearInterval(gpswoxQRInterval);
+                            qrContainer.classList.add('hidden');
+                            statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-200 text-green-800';
+                            statusBadge.textContent = '✅ Conectada';
+                            statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
+                            statusMsg.textContent = `✅ Conectada como ${statusData.phoneNumber}`;
+                        }
+                    }, 5000);
+                } else {
+                    throw new Error(result.message || 'Error al crear sesión');
+                }
+            } catch (error) {
+                statusMsg.className = 'mt-3 text-sm font-medium text-red-600';
+                statusMsg.textContent = `❌ Error: ${error.message}`;
+                checkbox.checked = false;
+                statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-red-200 text-red-800';
+                statusBadge.textContent = 'Error';
+            } finally {
+                checkbox.disabled = false;
+            }
+        } else {
+            // Desactivar sesión GPSwox (solo ocultar QR, no eliminar)
+            if (gpswoxQRInterval) {
+                clearInterval(gpswoxQRInterval);
+                gpswoxQRInterval = null;
+            }
+            qrContainer.classList.add('hidden');
+            statusMsg.className = 'mt-3 text-sm font-medium text-gray-600';
+            statusMsg.textContent = '';
+        }
+    }
+
+    async function updateGPSwoxQR() {
+        try {
+            const response = await fetch(`${API_URL}/api/sessions/gpswox-session/qr`);
+            const text = await response.text();
+            
+            // Si es HTML, extraer la imagen del src
+            if (text.includes('<!DOCTYPE html>')) {
+                const match = text.match(/src="([^"]+)"/);
+                if (match && match[1]) {
+                    document.getElementById('gpswoxQRImage').src = match[1];
+                }
+            } else {
+                // Si es JSON
+                try {
+                    const data = JSON.parse(text);
+                    if (data.success && data.qr) {
+                        document.getElementById('gpswoxQRImage').src = data.qr;
+                    }
+                } catch (e) {
+                    console.error('Error parsing QR response:', e);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching QR:', error);
+        }
+    }
+
+    async function checkGPSwoxStatus() {
+        try {
+            const response = await fetch(`${API_URL}/api/gpswox/session/status`);
+            const data = await response.json();
+            return data.exists && data.status ? { 
+                connected: data.status.connected, 
+                phoneNumber: data.status.phoneNumber 
+            } : null;
+        } catch (error) {
+            console.error('Error checking GPSwox status:', error);
+            return null;
+        }
+    }
+
+    // Verificar estado inicial de GPSwox al cargar
+    async function initGPSwoxSession() {
+        const checkbox = document.getElementById('gpswoxSessionToggle');
+        const statusBadge = document.getElementById('gpswoxStatusBadge');
+        const statusMsg = document.getElementById('gpswoxStatusMessage');
+        
+        try {
+            const response = await fetch(`${API_URL}/api/gpswox/session/status`);
+            const data = await response.json();
+            
+            if (data.exists && data.status) {
+                checkbox.checked = true;
+                if (data.status.connected) {
+                    statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-200 text-green-800';
+                    statusBadge.textContent = '✅ Conectada';
+                    statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
+                    statusMsg.textContent = `✅ Conectada como ${data.status.phoneNumber}`;
+                } else {
+                    statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-200 text-yellow-800';
+                    statusBadge.textContent = 'Desconectada';
+                    statusMsg.className = 'mt-3 text-sm font-medium text-yellow-600';
+                    statusMsg.textContent = '⚠️ Sesión existe pero no está conectada';
+                }
+            }
+        } catch (error) {
+            console.error('Error initializing GPSwox session:', error);
+        }
+    }
+
+    // Ejecutar al cargar la página
+    if (document.getElementById('gpswoxSessionToggle')) {
+        initGPSwoxSession();
+    }

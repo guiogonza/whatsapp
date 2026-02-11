@@ -350,21 +350,180 @@ app.get('/api/sessions/:name/qr', async (req, res) => {
         const qrCode = await sessionManager.getQRCode(name);
 
         if (!qrCode) {
-            return res.status(404).json({
-                success: false,
-                error: 'QR no disponible'
-            });
+            return res.status(404).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>QR Code - ${name}</title>
+                    <style>
+                        body { 
+                            font-family: Arial, sans-serif; 
+                            display: flex; 
+                            justify-content: center; 
+                            align-items: center; 
+                            min-height: 100vh; 
+                            margin: 0;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        }
+                        .container {
+                            background: white;
+                            padding: 40px;
+                            border-radius: 20px;
+                            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                            text-align: center;
+                        }
+                        h1 { color: #333; margin-bottom: 10px; }
+                        p { color: #666; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>⚠️ QR No Disponible</h1>
+                        <p>La sesión <strong>${name}</strong> no tiene código QR disponible</p>
+                        <p>Intenta recargar la página en unos segundos</p>
+                    </div>
+                </body>
+                </html>
+            `);
         }
 
-        res.json({
-            success: true,
-            qr: qrCode
-        });
+        // Renderizar HTML con la imagen QR
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>QR Code - ${name}</title>
+                <style>
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        display: flex; 
+                        justify-content: center; 
+                        align-items: center; 
+                        min-height: 100vh; 
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    }
+                    .container {
+                        background: white;
+                        padding: 40px;
+                        border-radius: 20px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        text-align: center;
+                        max-width: 500px;
+                    }
+                    h1 { 
+                        color: #333; 
+                        margin-bottom: 10px;
+                        font-size: 28px;
+                    }
+                    .session-name {
+                        color: #667eea;
+                        font-weight: bold;
+                        font-size: 20px;
+                        margin-bottom: 20px;
+                    }
+                    img { 
+                        max-width: 100%; 
+                        height: auto;
+                        border: 3px solid #667eea;
+                        border-radius: 10px;
+                        padding: 10px;
+                        background: white;
+                    }
+                    .instructions {
+                        margin-top: 20px;
+                        padding: 20px;
+                        background: #f8f9fa;
+                        border-radius: 10px;
+                        color: #555;
+                        line-height: 1.6;
+                    }
+                    .instructions ol {
+                        text-align: left;
+                        margin: 10px 0;
+                    }
+                    .refresh-btn {
+                        margin-top: 20px;
+                        padding: 12px 30px;
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        border-radius: 25px;
+                        cursor: pointer;
+                        font-size: 16px;
+                        transition: background 0.3s;
+                    }
+                    .refresh-btn:hover {
+                        background: #764ba2;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>📱 Código QR WhatsApp</h1>
+                    <div class="session-name">${name}</div>
+                    <img src="${qrCode}" alt="QR Code WhatsApp" />
+                    <div class="instructions">
+                        <strong>📋 Instrucciones:</strong>
+                        <ol>
+                            <li>Abre WhatsApp en tu teléfono</li>
+                            <li>Toca Menú o Configuración</li>
+                            <li>Toca Dispositivos vinculados</li>
+                            <li>Toca Vincular un dispositivo</li>
+                            <li>Escanea este código QR</li>
+                        </ol>
+                    </div>
+                    <button class="refresh-btn" onclick="location.reload()">🔄 Actualizar QR</button>
+                </div>
+            </body>
+            </html>
+        `);
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Error - QR Code</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        display: flex; 
+                        justify-content: center; 
+                        align-items: center; 
+                        min-height: 100vh; 
+                        margin: 0;
+                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    }
+                    .container {
+                        background: white;
+                        padding: 40px;
+                        border-radius: 20px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        text-align: center;
+                    }
+                    h1 { color: #f5576c; margin-bottom: 10px; }
+                    p { color: #666; }
+                    code { 
+                        background: #f8f9fa; 
+                        padding: 2px 8px; 
+                        border-radius: 4px;
+                        color: #333;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>❌ Error</h1>
+                    <p>No se pudo obtener el código QR</p>
+                    <p><code>${error.message}</code></p>
+                </div>
+            </body>
+            </html>
+        `);
     }
 });
 
@@ -747,6 +906,195 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
             success: true,
             message: 'Rotación realizada exitosamente',
             rotation: info
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ======================== RUTAS - GPSWOX ========================
+
+// Importar módulo GPSwox
+const gpswoxSession = require('./lib/session/gpswox-session');
+
+/**
+ * POST /api/gpswox/session/create - Crea la sesión dedicada GPSwox
+ */
+app.post('/api/gpswox/session/create', async (req, res) => {
+    try {
+        const sessionName = gpswoxSession.getGPSwoxSessionName();
+        
+        // Verificar si ya existe
+        const existingSession = sessionManager.getSession(sessionName);
+        if (existingSession) {
+            return res.status(400).json({
+                success: false,
+                error: 'La sesión GPSwox ya existe',
+                sessionName: sessionName,
+                state: existingSession.state
+            });
+        }
+
+        // Crear sesión
+        await sessionManager.createSession(sessionName);
+        
+        res.json({
+            success: true,
+            message: 'Sesión GPSwox creada exitosamente',
+            sessionName: sessionName,
+            dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode(),
+            qrEndpoint: `/api/sessions/${sessionName}/qr`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/gpswox/session/status - Obtiene el estado de la sesión GPSwox
+ */
+app.get('/api/gpswox/session/status', (req, res) => {
+    try {
+        const sessionName = gpswoxSession.getGPSwoxSessionName();
+        const session = sessionManager.getSession(sessionName);
+        
+        if (!session) {
+            return res.json({
+                success: true,
+                exists: false,
+                sessionName: sessionName,
+                message: 'La sesión GPSwox no existe. Usa POST /api/gpswox/session/create para crearla.'
+            });
+        }
+
+        res.json({
+            success: true,
+            exists: true,
+            session: {
+                name: sessionName,
+                state: session.state,
+                phoneNumber: session.phoneNumber || null,
+                dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode(),
+                uptime: session.startTime ? Math.floor((Date.now() - session.startTime.getTime()) / 1000 / 60) : 0,
+                messagesReceived: session.messagesReceivedCount || 0,
+                messagesSent: session.messagesSentCount || 0
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/gpswox/conversations - Obtiene estadísticas de conversaciones GPSwox activas
+ */
+app.get('/api/gpswox/conversations', (req, res) => {
+    try {
+        const stats = gpswoxSession.getConversationStats();
+        res.json({
+            success: true,
+            stats: stats
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/gpswox/conversation/:phoneNumber - Obtiene el estado de una conversación específica
+ */
+app.get('/api/gpswox/conversation/:phoneNumber', (req, res) => {
+    try {
+        const { phoneNumber } = req.params;
+        const conversation = gpswoxSession.getConversationState(phoneNumber);
+        
+        if (!conversation) {
+            return res.json({
+                success: false,
+                active: false,
+                message: 'No hay conversación activa para este número'
+            });
+        }
+
+        res.json({
+            success: true,
+            active: true,
+            conversation: {
+                state: conversation.state,
+                email: conversation.data.email,
+                plate: conversation.data.plate,
+                startTime: conversation.startTime,
+                lastActivity: conversation.lastActivity
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/gpswox/conversation/:phoneNumber/start - Inicia una conversación de registro
+ */
+app.post('/api/gpswox/conversation/:phoneNumber/start', (req, res) => {
+    try {
+        const { phoneNumber } = req.params;
+        
+        if (gpswoxSession.hasActiveConversation(phoneNumber)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Ya existe una conversación activa para este número'
+            });
+        }
+
+        gpswoxSession.startConversation(phoneNumber);
+        
+        res.json({
+            success: true,
+            message: 'Conversación iniciada exitosamente',
+            phoneNumber: phoneNumber
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * DELETE /api/gpswox/conversation/:phoneNumber - Finaliza una conversación
+ */
+app.delete('/api/gpswox/conversation/:phoneNumber', (req, res) => {
+    try {
+        const { phoneNumber } = req.params;
+        
+        if (!gpswoxSession.hasActiveConversation(phoneNumber)) {
+            return res.status(404).json({
+                success: false,
+                error: 'No hay conversación activa para este número'
+            });
+        }
+
+        gpswoxSession.endConversation(phoneNumber);
+        
+        res.json({
+            success: true,
+            message: 'Conversación finalizada exitosamente'
         });
     } catch (error) {
         res.status(500).json({

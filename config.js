@@ -112,6 +112,10 @@ module.exports = {
     // Separados por coma en .env: AI_AUTO_RESPONSE_NUMBERS=573183499539,573001234567
     AI_AUTO_RESPONSE_NUMBERS: (process.env.AI_AUTO_RESPONSE_NUMBERS || '573183499539').split(',').map(n => n.trim()).filter(n => n),
     
+    // Sesión especial GPSwox
+    GPSWOX_SESSION_NAME: process.env.GPSWOX_SESSION_NAME || 'gpswox-session',
+    GPSWOX_DEDICATED_MODE: process.env.GPSWOX_DEDICATED_MODE === 'true', // true = solo procesará GPSwox
+    
     // Estados de sesión
     SESSION_STATES: {
         STARTING: 'STARTING',
