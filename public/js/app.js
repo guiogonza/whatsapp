@@ -522,7 +522,7 @@ async function loadQRCode(sessionName) {
     const container = document.getElementById(`qr-container-${sessionName}`);
     if (!container) return;
     try {
-        const response = await fetch(`${API_URL}/api/sessions/${sessionName}/qr`);
+        const response = await fetch(`${API_URL}/api/sessions/${sessionName}/qr?format=json`);
         if (response.ok) {
             const data = await response.json();
             if (data.success && data.qr) {
