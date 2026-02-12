@@ -1065,6 +1065,50 @@ app.get('/api/gpswox/conversation/:phoneNumber', (req, res) => {
 });
 
 /**
+ * GET /api/gpswox/messages - Obtiene los mensajes de GPSwox desde la base de datos
+ */
+app.get('/api/gpswox/messages', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const phoneNumber = req.query.phone || null;
+        
+        const messages = await database.getGPSwoxMessages(limit, phoneNumber);
+        
+        res.json({
+            success: true,
+            messages: messages,
+            count: messages.length
+        });
+    } catch (error) {
+        console.error('Error obteniendo mensajes GPSwox:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/gpswox/stats - Obtiene estadísticas de mensajes GPSwox
+ */
+app.get('/api/gpswox/stats', async (req, res) => {
+    try {
+        const stats = await database.getGPSwoxStats();
+        
+        res.json({
+            success: true,
+            stats: stats
+        });
+    } catch (error) {
+        console.error('Error obteniendo estadísticas GPSwox:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * POST /api/gpswox/conversation/:phoneNumber/start - Inicia una conversación de registro
  */
 app.post('/api/gpswox/conversation/:phoneNumber/start', (req, res) => {

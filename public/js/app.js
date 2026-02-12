@@ -2315,3 +2315,127 @@ async function loadOpenAIBalance() {
     if (document.getElementById('gpswoxSessionToggle')) {
         initGPSwoxSession();
     }
+
+// ======================== MENSAJES GPSWOX ========================
+
+// Configuración
+const GPSWOX_MESSAGES_LIMIT = 200;
+
+/**
+ * Carga los mensajes de GPSwox desde la base de datos
+ */
+async function loadGPSwoxMessages() {
+    try {
+        const phoneFilter = document.getElementById('gpswoxPhoneFilter').value.trim();
+        const url = phoneFilter 
+            ? `${API_URL}/api/gpswox/messages?limit=${GPSWOX_MESSAGES_LIMIT}&phone=${phoneFilter}`
+            : `${API_URL}/api/gpswox/messages?limit=${GPSWOX_MESSAGES_LIMIT}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayGPSwoxMessages(data.messages);
+            await loadGPSwoxStats();
+        } else {
+            showToast('Error cargando mensajes: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error loading GPSwox messages:', error);
+        showToast('Error cargando mensajes de GPSwox', 'error');
+    }
+}
+
+/**
+ * Muestra los mensajes de GPSwox en la tabla
+ */
+function displayGPSwoxMessages(messages) {
+    const tbody = document.getElementById('gpswoxMessagesTable');
+    
+    if (!messages || messages.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">No hay mensajes registrados</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = messages.map(msg => {
+        const date = new Date(msg.timestamp);
+        const formattedDate = date.toLocaleString('es-CO');
+        
+        const directionBadge = msg.direction === 'IN' 
+            ? '<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">⬅️ IN</span>'
+            : '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">➡️ OUT</span>';
+        
+        const stateBadge = getStateBadge(msg.conversation_state);
+        
+        const messagePreview = msg.message.length > 100 
+            ? msg.message.substring(0, 100) + '...'
+            : msg.message;
+        
+        return `
+            <tr class="hover:bg-gray-50 border-b">
+                <td class="px-4 py-2 text-xs text-gray-600">${formattedDate}</td>
+                <td class="px-4 py-2 text-xs font-mono">${msg.phone_number}</td>
+                <td class="px-4 py-2 text-center">${directionBadge}</td>
+                <td class="px-4 py-2 text-xs text-gray-700">${escapeHtml(messagePreview)}</td>
+                <td class="px-4 py-2 text-center">${stateBadge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Retorna un badge HTML según el estado de la conversación
+ */
+function getStateBadge(state) {
+    const badges = {
+        'MENU': '<span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">📋 Menu</span>',
+        'OPTION_1_EMAIL': '<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">📧 Op1-Email</span>',
+        'OPTION_1_PLATE': '<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">🚗 Op1-Placa</span>',
+        'OPTION_2_PLATE': '<span class="bg-cyan-100 text-cyan-800 px-2 py-1 rounded text-xs">📍 Op2-Placa</span>',
+        'OPTION_3_EMAIL': '<span class="bg-teal-100 text-teal-800 px-2 py-1 rounded text-xs">👤 Op3-Email</span>',
+        'COMPLETED': '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">✅ Completado</span>',
+        'ERROR': '<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">❌ Error</span>'
+    };
+    
+    return badges[state] || `<span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">${state}</span>`;
+}
+
+/**
+ * Carga las estadísticas de mensajes GPSwox
+ */
+async function loadGPSwoxStats() {
+    try {
+        const response = await fetch(`${API_URL}/api/gpswox/stats`);
+        const data = await response.json();
+        
+        if (data.success && data.stats) {
+            document.getElementById('gpswoxTotalMessages').textContent = data.stats.total_messages || 0;
+            document.getElementById('gpswoxTotalContacts').textContent = data.stats.unique_contacts || 0;
+            document.getElementById('gpswoxCompleted').textContent = data.stats.completed || 0;
+            document.getElementById('gpswoxErrors').textContent = data.stats.errors || 0;
+        }
+    } catch (error) {
+        console.error('Error loading GPSwox stats:', error);
+    }
+}
+
+/**
+ * Escapa caracteres HTML para prevenir XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Cargar mensajes al mostrar la sección
+document.addEventListener('DOMContentLoaded', () => {
+    // Interceptar el evento de mostrar la sección de GPSwox
+    const originalShowSection = window.showSection;
+    window.showSection = function(sectionName) {
+        originalShowSection(sectionName);
+        if (sectionName === 'gpswox-messages') {
+            loadGPSwoxMessages();
+        }
+    };
+});
