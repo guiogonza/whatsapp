@@ -2140,6 +2140,8 @@ async function loadOpenAIBalance() {
                             statusBadge.textContent = '✅ Conectada';
                             statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
                             statusMsg.textContent = `✅ Conectada como ${statusData.phoneNumber}`;
+                            const closeC = document.getElementById('gpswoxCloseContainer');
+                            if (closeC) closeC.classList.remove('hidden');
                         }
                     }, 5000);
                 } else {
@@ -2195,6 +2197,56 @@ async function loadOpenAIBalance() {
         }
     }
 
+    async function closeGPSwoxSession() {
+        if (!confirm('¿Estás seguro de cerrar y eliminar la sesión GPSwox? Tendrás que escanear un nuevo QR para reconectarla.')) return;
+
+        const statusMsg = document.getElementById('gpswoxStatusMessage');
+        const statusBadge = document.getElementById('gpswoxStatusBadge');
+        const checkbox = document.getElementById('gpswoxSessionToggle');
+        const qrContainer = document.getElementById('gpswoxQRContainer');
+        const closeContainer = document.getElementById('gpswoxCloseContainer');
+        const closeBtn = document.getElementById('gpswoxCloseBtn');
+
+        closeBtn.disabled = true;
+        closeBtn.textContent = '⏳ Cerrando sesión...';
+
+        try {
+            // 1. Eliminar sesión vía API
+            const response = await fetch(`${API_URL}/api/sessions/gpswox-session`, { method: 'DELETE' });
+            const result = await response.json();
+
+            if (result.success) {
+                // 2. Eliminar datos del disco
+                try {
+                    await fetch(`${API_URL}/api/gpswox/session/cleanup`, { method: 'POST' });
+                } catch (e) { /* no-op si no existe el endpoint */ }
+
+                // 3. Actualizar UI
+                checkbox.checked = false;
+                statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
+                statusBadge.textContent = 'Inactiva';
+                statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
+                statusMsg.textContent = '✅ Sesión GPSwox eliminada correctamente. Activa el checkbox para crear una nueva.';
+                qrContainer.classList.add('hidden');
+                closeContainer.classList.add('hidden');
+
+                if (gpswoxQRInterval) {
+                    clearInterval(gpswoxQRInterval);
+                    gpswoxQRInterval = null;
+                }
+            } else {
+                throw new Error(result.message || result.error || 'Error al eliminar sesión');
+            }
+        } catch (error) {
+            statusMsg.className = 'mt-3 text-sm font-medium text-red-600';
+            statusMsg.textContent = `❌ Error: ${error.message}`;
+        } finally {
+            closeBtn.disabled = false;
+            closeBtn.textContent = '🗑️ Cerrar y eliminar sesión GPSwox';
+        }
+    }
+    window.closeGPSwoxSession = closeGPSwoxSession;
+
     // Verificar estado inicial de GPSwox al cargar
     async function initGPSwoxSession() {
         const checkbox = document.getElementById('gpswoxSessionToggle');
@@ -2211,6 +2263,8 @@ async function loadOpenAIBalance() {
             if (data.exists && data.session) {
                 checkbox.checked = true;
                 
+                const closeContainer = document.getElementById('gpswoxCloseContainer');
+
                 if (data.session.state === 'READY') {
                     // Sesión conectada
                     statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-200 text-green-800';
@@ -2218,6 +2272,7 @@ async function loadOpenAIBalance() {
                     statusMsg.className = 'mt-3 text-sm font-medium text-green-600';
                     statusMsg.textContent = `✅ Conectada como ${data.session.phoneNumber}`;
                     qrContainer.classList.add('hidden');
+                    if (closeContainer) closeContainer.classList.remove('hidden');
                 } else if (data.session.state === 'WAITING_FOR_QR') {
                     // Esperando escanear QR
                     statusBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-200 text-yellow-800';
