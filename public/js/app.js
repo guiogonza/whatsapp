@@ -122,7 +122,8 @@ function showSection(sectionId) {
         conversation: { title: 'Conversación IA Anti-Ban', subtitle: 'Genera actividad natural entre sesiones' },
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' },
         database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' },
-        webhooks: { title: 'Centro de Mensajes', subtitle: 'Mensajes entrantes de WhatsApp Cloud API' }
+        webhooks: { title: 'Centro de Mensajes', subtitle: 'Mensajes entrantes de WhatsApp Cloud API' },
+        'gpswox-messages': { title: 'Mensajes GPSwox', subtitle: 'Historial de conversaciones del bot GPSwox' }
     };
     
     document.getElementById('sectionTitle').textContent = titles[sectionId].title;
@@ -139,6 +140,7 @@ function showSection(sectionId) {
         loadSearchSessions();
     }
     if (sectionId === 'conversation') populateConversationSessions();
+    if (sectionId === 'gpswox-messages') loadGPSwoxMessages();
 }
 
 // ======================== SESIONES ========================
@@ -2427,15 +2429,3 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
-
-// Cargar mensajes al mostrar la sección
-document.addEventListener('DOMContentLoaded', () => {
-    // Interceptar el evento de mostrar la sección de GPSwox
-    const originalShowSection = window.showSection;
-    window.showSection = function(sectionName) {
-        originalShowSection(sectionName);
-        if (sectionName === 'gpswox-messages') {
-            loadGPSwoxMessages();
-        }
-    };
-});
