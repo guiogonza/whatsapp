@@ -938,18 +938,29 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
 const gpswoxSession = require('./lib/session/gpswox-session');
 
 /**
- * POST /api/gpswox/session/create - Crea la sesión dedicada GPSwox
+ * POST /api/gpswox/session/create - Crea una sesión dedicada GPSwox
+ * Body opcional: { "sessionName": "gpswox-session-2" }
  */
 app.post('/api/gpswox/session/create', async (req, res) => {
     try {
-        const sessionName = gpswoxSession.getGPSwoxSessionName();
+        const sessionName = req.body.sessionName || gpswoxSession.getGPSwoxSessionName();
+        const allowedNames = gpswoxSession.getGPSwoxSessionNames();
+        
+        // Verificar que el nombre esté en la lista permitida
+        if (!allowedNames.includes(sessionName)) {
+            return res.status(400).json({
+                success: false,
+                error: `Nombre de sesión no permitido. Permitidos: ${allowedNames.join(', ')}`,
+                allowedNames
+            });
+        }
         
         // Verificar si ya existe
         const existingSession = sessionManager.getSession(sessionName);
         if (existingSession) {
             return res.status(400).json({
                 success: false,
-                error: 'La sesión GPSwox ya existe',
+                error: `La sesión GPSwox '${sessionName}' ya existe`,
                 sessionName: sessionName,
                 state: existingSession.state
             });
@@ -960,10 +971,41 @@ app.post('/api/gpswox/session/create', async (req, res) => {
         
         res.json({
             success: true,
-            message: 'Sesión GPSwox creada exitosamente',
+            message: `Sesión GPSwox '${sessionName}' creada exitosamente`,
             sessionName: sessionName,
             dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode(),
             qrEndpoint: `/api/sessions/${sessionName}/qr`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/gpswox/sessions/create-all - Crea todas las sesiones GPSwox configuradas
+ */
+app.post('/api/gpswox/sessions/create-all', async (req, res) => {
+    try {
+        const sessionNames = gpswoxSession.getGPSwoxSessionNames();
+        const results = [];
+        
+        for (const name of sessionNames) {
+            const existing = sessionManager.getSession(name);
+            if (existing) {
+                results.push({ name, status: 'already_exists', state: existing.state });
+            } else {
+                await sessionManager.createSession(name);
+                results.push({ name, status: 'created', qrEndpoint: `/api/sessions/${name}/qr` });
+            }
+        }
+        
+        res.json({
+            success: true,
+            message: `Procesadas ${sessionNames.length} sesiones GPSwox`,
+            sessions: results
         });
     } catch (error) {
         res.status(500).json({

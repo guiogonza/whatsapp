@@ -122,8 +122,9 @@ module.exports = {
     GPSWOX_API_HASH_PRD: process.env.GPSWOX_API_HASH_PRD || '$2y$10$olDjm0MFRwAAszdePy4H6.W2oXAAx7jht7jPlx3.qxunehfBA6.n2',
     GPSWOX_API_HASH_DEV: process.env.GPSWOX_API_HASH_DEV || '$2y$10$7bj.tJXGHGydLk4PRxux5ODsXLoMLvcfUnnM6nAF8aq4fXozkpnhq',
 
-    // Sesión especial GPSwox
+    // Sesión especial GPSwox (múltiples sesiones separadas por coma)
     GPSWOX_SESSION_NAME: process.env.GPSWOX_SESSION_NAME || 'gpswox-session',
+    GPSWOX_SESSION_NAMES: (process.env.GPSWOX_SESSION_NAMES || process.env.GPSWOX_SESSION_NAME || 'gpswox-session').split(',').map(s => s.trim()),
     GPSWOX_DEDICATED_MODE: process.env.GPSWOX_DEDICATED_MODE === 'true', // true = solo procesará GPSwox
     
     // Estados de sesión

@@ -156,6 +156,8 @@ async function createTables() {
                 message TEXT NOT NULL,
                 conversation_state VARCHAR(50),
                 user_data JSONB,
+                connection_ip VARCHAR(45),
+                country VARCHAR(100),
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `);
@@ -165,6 +167,19 @@ async function createTables() {
             CREATE INDEX IF NOT EXISTS idx_gpswox_phone ON gpswox_messages(phone_number);
             CREATE INDEX IF NOT EXISTS idx_gpswox_timestamp ON gpswox_messages(timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_gpswox_direction ON gpswox_messages(direction);
+        `);
+
+        // Agregar columnas connection_ip y country si no existen (para migraciones)
+        await client.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'gpswox_messages' AND column_name = 'connection_ip') THEN
+                    ALTER TABLE gpswox_messages ADD COLUMN connection_ip VARCHAR(45);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'gpswox_messages' AND column_name = 'country') THEN
+                    ALTER TABLE gpswox_messages ADD COLUMN country VARCHAR(100);
+                END IF;
+            END $$;
         `);
 
         await client.query('COMMIT');
@@ -948,8 +963,10 @@ async function query(sql, params = []) {
  * @param {string} message - Texto del mensaje
  * @param {string} conversationState - Estado de la conversación (ej: 'MENU', 'OPTION_1_EMAIL')
  * @param {object} userData - Datos del usuario (email, placa, etc.) opcional
+ * @param {string} connectionIp - IP de conexión del usuario (opcional)
+ * @param {string} country - País del usuario (opcional)
  */
-async function logGPSwoxMessage(phoneNumber, direction, message, conversationState = null, userData = null) {
+async function logGPSwoxMessage(phoneNumber, direction, message, conversationState = null, userData = null, connectionIp = null, country = null) {
     if (!pool || !isConnected) {
         console.error('❌ Base de datos no conectada');
         return;
@@ -960,9 +977,9 @@ async function logGPSwoxMessage(phoneNumber, direction, message, conversationSta
 
     try {
         await pool.query(
-            `INSERT INTO gpswox_messages (timestamp, phone_number, direction, message, conversation_state, user_data)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [getColombiaTimestamp(), cleanPhone, direction, message, conversationState, userData ? JSON.stringify(userData) : null]
+            `INSERT INTO gpswox_messages (timestamp, phone_number, direction, message, conversation_state, user_data, connection_ip, country)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [getColombiaTimestamp(), cleanPhone, direction, message, conversationState, userData ? JSON.stringify(userData) : null, connectionIp, country]
         );
     } catch (error) {
         console.error('❌ Error guardando mensaje GPSwox:', error.message);
@@ -981,7 +998,7 @@ async function getGPSwoxMessages(limit = 100, phoneNumber = null) {
 
     try {
         let query = `
-            SELECT id, timestamp, phone_number, direction, message, conversation_state, user_data, created_at
+            SELECT id, timestamp, phone_number, direction, message, conversation_state, user_data, connection_ip, country, created_at
             FROM gpswox_messages
         `;
         const params = [];
@@ -1033,6 +1050,44 @@ async function getGPSwoxStats() {
     }
 }
 
+/**
+ * Consulta si un número de teléfono tiene una conversación GPSwox activa
+ * (estado diferente a COMPLETED o ERROR, y con actividad reciente en últimas 24 horas)
+ * @param {string} phoneNumber Número de teléfono a consultar
+ * @returns {Promise<boolean>} True si hay conversación activa
+ */
+async function hasActiveGPSwoxConversation(phoneNumber) {
+    if (!pool) {
+        console.warn('⚠️ Pool de BD no disponible para verificar conversación GPSwox');
+        return false;
+    }
+
+    try {
+        // Normalizar número (remover @s.whatsapp.net si existe)
+        const cleanPhone = phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '').split(':')[0];
+        
+        const result = await pool.query(`
+            SELECT conversation_state, timestamp
+            FROM gpswox_messages
+            WHERE phone_number = $1
+              AND conversation_state IS NOT NULL
+              AND conversation_state NOT IN ('COMPLETED', 'ERROR')
+              AND timestamp > NOW() - INTERVAL '24 hours'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        `, [cleanPhone]);
+
+        if (result.rows.length > 0) {
+            console.log(`🔍 Conversación GPSwox activa encontrada en BD: ${cleanPhone} - Estado: ${result.rows[0].conversation_state}`);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('❌ Error consultando conversación GPSwox activa:', error.message);
+        return false;
+    }
+}
+
 // Exportar funciones
 module.exports = {
     initDatabase,
@@ -1050,6 +1105,7 @@ module.exports = {
     logGPSwoxMessage,
     getGPSwoxMessages,
     getGPSwoxStats,
+    hasActiveGPSwoxConversation,
     getColombiaTimestamp,
     query,
     // Nuevas funciones para compatibilidad con monitor

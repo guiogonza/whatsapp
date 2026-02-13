@@ -209,39 +209,99 @@
                     <p id="createSessionStatus" class="mt-2 text-sm"></p>
                 </div>
 
-                <!-- SESIÓN GPSWOX DEDICADA -->
-                <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-6 mb-6 border-2 border-purple-200">
-                    <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0">
-                            <input type="checkbox" id="gpswoxSessionToggle" onchange="toggleGPSwoxSession()" class="w-6 h-6 text-purple-600 rounded focus:ring-purple-500 cursor-pointer">
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex items-center gap-2 mb-2">
-                                <h3 class="text-lg font-semibold text-purple-900">🚗 Sesión GPSwox (Registro de Vehículos)</h3>
-                                <span id="gpswoxStatusBadge" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">
-                                    Inactiva
-                                </span>
+                <!-- SESIONES GPSWOX DEDICADAS -->
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-purple-900">🚗 Sesiones GPSwox (Registro de Vehículos)</h3>
+                    </div>
+                    <p class="text-sm text-gray-700 mb-3">
+                        Sesiones dedicadas exclusivamente para recibir solicitudes de registro de vehículos. 
+                        <strong class="text-purple-700">NO se utilizan para envío de notificaciones masivas.</strong>
+                    </p>
+                    <div id="gpswoxSessionsGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Tarjeta 1: gpswox-session -->
+                        <div id="gpswox-card-gpswox-session" class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-md font-semibold text-purple-900">🚗 GPSwox 1</h4>
+                                <span id="badge-gpswox-session" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactiva</span>
                             </div>
-                            <p class="text-sm text-gray-700 mb-3">
-                                Sesión dedicada exclusivamente para recibir solicitudes de registro de vehículos. 
-                                <strong class="text-purple-700">NO se utiliza para envío de notificaciones masivas.</strong>
-                            </p>
-                            <div class="bg-white rounded-lg p-3 text-xs text-gray-600 space-y-1">
-                                <p>✅ <strong>Función:</strong> Recibe email → Valida usuario → Solicita placa → Asigna vehículo</p>
-                                <p>❌ <strong>NO participa:</strong> En envíos masivos ni notificaciones automáticas</p>
-                                <p>🔒 <strong>Modo:</strong> Dedicado (solo procesa conversaciones de registro)</p>
+                            <div id="info-gpswox-session" class="bg-white rounded-lg p-2 text-xs text-gray-600 space-y-1 mb-3">
+                                <p>✅ <strong>Función:</strong> Menú → Consulta placa → Asigna vehículo</p>
+                                <p>❌ <strong>NO participa:</strong> En envíos masivos</p>
+                                <p>🔒 <strong>Modo:</strong> Dedicado</p>
                             </div>
-                            <div id="gpswoxQRContainer" class="hidden mt-4 text-center">
-                                <p class="text-sm text-gray-600 mb-2">📱 Escanea este código QR con WhatsApp:</p>
-                                <div class="inline-block bg-white p-4 rounded-lg border-2 border-purple-300">
-                                    <img id="gpswoxQRImage" src="" alt="QR Code" class="w-64 h-64">
+                            <div id="qr-container-gpswox-session" class="hidden mt-3 text-center">
+                                <p class="text-sm text-gray-600 mb-2">📱 Escanea el QR:</p>
+                                <div class="inline-block bg-white p-3 rounded-lg border-2 border-purple-300">
+                                    <img id="qr-img-gpswox-session" src="" alt="QR" class="w-48 h-48">
                                 </div>
-                                <p class="text-xs text-gray-500 mt-2">El QR se actualiza cada 60 segundos</p>
+                                <p class="text-xs text-gray-500 mt-1">Se actualiza cada 60s</p>
                             </div>
-                            <p id="gpswoxStatusMessage" class="mt-3 text-sm font-medium"></p>
-                            <div id="gpswoxCloseContainer" class="hidden mt-3">
-                                <button id="gpswoxCloseBtn" onclick="closeGPSwoxSession()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg shadow transition-colors">
-                                    🗑️ Cerrar y eliminar sesión GPSwox
+                            <p id="status-msg-gpswox-session" class="mt-2 text-sm font-medium text-gray-500"></p>
+                            <div class="mt-3 flex gap-2">
+                                <button id="create-btn-gpswox-session" onclick="createGPSwoxByName('gpswox-session')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg shadow transition-colors">
+                                    ▶️ Crear Sesión
+                                </button>
+                                <button id="close-btn-gpswox-session" onclick="closeGPSwoxSessionByName('gpswox-session')" class="hidden px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow transition-colors">
+                                    🗑️ Cerrar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tarjeta 2: gpswox-session-2 -->
+                        <div id="gpswox-card-gpswox-session-2" class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-md font-semibold text-purple-900">🚗 GPSwox 2</h4>
+                                <span id="badge-gpswox-session-2" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactiva</span>
+                            </div>
+                            <div id="info-gpswox-session-2" class="bg-white rounded-lg p-2 text-xs text-gray-600 space-y-1 mb-3">
+                                <p>✅ <strong>Función:</strong> Menú → Consulta placa → Asigna vehículo</p>
+                                <p>❌ <strong>NO participa:</strong> En envíos masivos</p>
+                                <p>🔒 <strong>Modo:</strong> Dedicado</p>
+                            </div>
+                            <div id="qr-container-gpswox-session-2" class="hidden mt-3 text-center">
+                                <p class="text-sm text-gray-600 mb-2">📱 Escanea el QR:</p>
+                                <div class="inline-block bg-white p-3 rounded-lg border-2 border-purple-300">
+                                    <img id="qr-img-gpswox-session-2" src="" alt="QR" class="w-48 h-48">
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Se actualiza cada 60s</p>
+                            </div>
+                            <p id="status-msg-gpswox-session-2" class="mt-2 text-sm font-medium text-gray-500"></p>
+                            <div class="mt-3 flex gap-2">
+                                <button id="create-btn-gpswox-session-2" onclick="createGPSwoxByName('gpswox-session-2')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg shadow transition-colors">
+                                    ▶️ Crear Sesión
+                                </button>
+                                <button id="close-btn-gpswox-session-2" onclick="closeGPSwoxSessionByName('gpswox-session-2')" class="hidden px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow transition-colors">
+                                    🗑️ Cerrar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tarjeta 3: gpswox-session-3 -->
+                        <div id="gpswox-card-gpswox-session-3" class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-md font-semibold text-purple-900">🚗 GPSwox 3</h4>
+                                <span id="badge-gpswox-session-3" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactiva</span>
+                            </div>
+                            <div id="info-gpswox-session-3" class="bg-white rounded-lg p-2 text-xs text-gray-600 space-y-1 mb-3">
+                                <p>✅ <strong>Función:</strong> Menú → Consulta placa → Asigna vehículo</p>
+                                <p>❌ <strong>NO participa:</strong> En envíos masivos</p>
+                                <p>🔒 <strong>Modo:</strong> Dedicado</p>
+                            </div>
+                            <div id="qr-container-gpswox-session-3" class="hidden mt-3 text-center">
+                                <p class="text-sm text-gray-600 mb-2">📱 Escanea el QR:</p>
+                                <div class="inline-block bg-white p-3 rounded-lg border-2 border-purple-300">
+                                    <img id="qr-img-gpswox-session-3" src="" alt="QR" class="w-48 h-48">
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Se actualiza cada 60s</p>
+                            </div>
+                            <p id="status-msg-gpswox-session-3" class="mt-2 text-sm font-medium text-gray-500"></p>
+                            <div class="mt-3 flex gap-2">
+                                <button id="create-btn-gpswox-session-3" onclick="createGPSwoxByName('gpswox-session-3')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg shadow transition-colors">
+                                    ▶️ Crear Sesión
+                                </button>
+                                <button id="close-btn-gpswox-session-3" onclick="closeGPSwoxSessionByName('gpswox-session-3')" class="hidden px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow transition-colors">
+                                    🗑️ Cerrar
                                 </button>
                             </div>
                         </div>
@@ -1126,12 +1186,14 @@
                                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 border-b">Teléfono</th>
                                     <th class="px-4 py-2 text-center text-xs font-medium text-gray-700 border-b">Dirección</th>
                                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 border-b">Mensaje</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 border-b">🌐 IP</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 border-b">🌍 País</th>
                                     <th class="px-4 py-2 text-center text-xs font-medium text-gray-700 border-b">Estado</th>
                                 </tr>
                             </thead>
                             <tbody id="gpswoxMessagesTable">
                                 <tr>
-                                    <td colspan="5" class="text-center py-8">
+                                    <td colspan="7" class="text-center py-8">
                                         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
                                         <div class="text-gray-500 mt-2">Cargando mensajes...</div>
                                     </td>
@@ -1168,9 +1230,9 @@
     </div>
 
     <!-- Scripts externos -->
-    <script src="js/auth.js?v=5"></script>
-    <script src="js/app.js?v=5"></script>
-    <script src="js/analytics.js?v=5"></script>
-    <script src="js/database.js?v=5"></script>
+    <script src="js/auth.js?v=6"></script>
+    <script src="js/app.js?v=6"></script>
+    <script src="js/analytics.js?v=6"></script>
+    <script src="js/database.js?v=6"></script>
 </body>
 </html>

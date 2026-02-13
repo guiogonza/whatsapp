@@ -86,6 +86,34 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+Write-Info "  📄 lib/session/utils.js"
+scp -i $KEY "lib/session/utils.js" "${SERVER}:${REMOTE_DIR}/lib/session/"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "❌ Error copiando utils.js"
+    exit 1
+}
+
+Write-Info "  📄 database-postgres.js"
+scp -i $KEY "database-postgres.js" "${SERVER}:${REMOTE_DIR}/"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "❌ Error copiando database-postgres.js"
+    exit 1
+}
+
+Write-Info "  📄 public/index.html"
+scp -i $KEY "public/index.html" "${SERVER}:${REMOTE_DIR}/public/"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "❌ Error copiando index.html"
+    exit 1
+}
+
+Write-Info "  📄 public/js/app.js"
+scp -i $KEY "public/js/app.js" "${SERVER}:${REMOTE_DIR}/public/js/"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "❌ Error copiando app.js"
+    exit 1
+}
+
 # Documentación
 Write-Info "  📄 Documentación"
 scp -i $KEY "GPSWOX_MODULE.md" "${SERVER}:${REMOTE_DIR}/" 2>$null
@@ -118,7 +146,7 @@ Write-Info ""
 # Reiniciar servicio
 if (-not $SkipRestart) {
     Write-Info "🔄 Reiniciando servicio Docker..."
-    ssh -i $KEY $SERVER "cd ${REMOTE_DIR} && docker-compose restart whatsapp-backend"
+    ssh -i $KEY $SERVER "cd ${REMOTE_DIR} && docker-compose restart wpp-bot"
     
     if ($LASTEXITCODE -eq 0) {
         Write-Success "✅ Servicio reiniciado exitosamente"
