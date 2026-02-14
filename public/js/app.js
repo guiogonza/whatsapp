@@ -2233,7 +2233,7 @@ async function loadOpenAIBalance() {
     }
 
     async function closeGPSwoxSessionByName(name) {
-        if (!confirm(`¿Cerrar y eliminar la sesión ${name}? Tendrás que escanear un nuevo QR.`)) return;
+        if (!confirm(`¿Eliminar completamente la sesión ${name}?\n\nEsto eliminará todos los datos de la sesión y tendrás que escanear un nuevo QR para crearla de nuevo.`)) return;
 
         try {
             const response = await fetch(`${API_URL}/api/sessions/${name}`, { method: 'DELETE' });
