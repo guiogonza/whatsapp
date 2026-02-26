@@ -67,12 +67,12 @@ module.exports = {
     // Anti-ban: Límites de mensajes por sesión por hora
     // Para 3600 msgs/día con 10 sesiones = 60 msgs/hora/sesión
     // Para 3600 msgs/día con 15 sesiones = 40 msgs/hora/sesión (más seguro)
-    MAX_MESSAGES_PER_SESSION_PER_HOUR: parseInt(process.env.MAX_MESSAGES_PER_SESSION_PER_HOUR) || 60,
+    MAX_MESSAGES_PER_SESSION_PER_HOUR: parseInt(process.env.MAX_MESSAGES_PER_SESSION_PER_HOUR) || 240,
     
     // Anti-ban: Delay mínimo y máximo entre mensajes (en segundos)
-    // Con 60 msgs/hora = 1 cada 1 min = delay 60s entre rondas
-    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 60,
-    MAX_DELAY_SECONDS: parseInt(process.env.MAX_DELAY_SECONDS) || 60,
+    // Con 240 msgs/hora = 4 por minuto = delay 15s entre mensajes consolidados
+    MIN_DELAY_SECONDS: parseInt(process.env.MIN_DELAY_SECONDS) || 15,
+    MAX_DELAY_SECONDS: parseInt(process.env.MAX_DELAY_SECONDS) || 15,
     
     // Anti-ban: Horas de "descanso" donde no se envían mensajes (formato 24h)
     // 16 horas activas: 7am a 11pm
