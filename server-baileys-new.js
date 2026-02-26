@@ -48,6 +48,7 @@ const cloudRouter = require('./routes/cloud');
 const systemRouter = require('./routes/system');
 const settingsRouter = require('./routes/settings');
 const databaseRouter = require('./routes/database');
+const analyticsRouter = require('./routes/analytics');
 
 // Inicialización de Express
 const app = express();
@@ -220,6 +221,7 @@ app.use('/api/fx', fxRouter);
 app.use('/api/cloud', cloudRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/database', databaseRouter);
+app.use('/api/analytics', analyticsRouter);
 app.use('/api/network', systemRouter);
 app.use('/api/adapters/info', systemRouter);
 app.use('/api/proxy/status', systemRouter);
