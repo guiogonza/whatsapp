@@ -281,13 +281,6 @@ async function getGPSwoxMessageStats(req, res) {
         });
     }
 }
-            error: error.message,
-            total_messages: 0,
-            total_sessions: 0,
-            total_vehicles: 0
-        });
-    }
-}
 
 module.exports = {
     createGPSwoxSession,
