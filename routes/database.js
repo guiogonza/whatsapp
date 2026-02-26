@@ -86,13 +86,34 @@ router.get('/status', async (req, res) => {
             stats.fx_forwards = 0;
         }
         
+        // Obtener información de tablas
+        let tables = [];
+        try {
+            const tablesResult = await database.query(`
+                SELECT 
+                    c.relname as tablename,
+                    pg_size_pretty(pg_total_relation_size(c.oid)) AS size,
+                    COALESCE(s.n_live_tup, 0) as row_count
+                FROM pg_class c
+                LEFT JOIN pg_stat_user_tables s ON c.relname = s.relname
+                WHERE c.relkind = 'r' 
+                AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+                ORDER BY pg_total_relation_size(c.oid) DESC
+            `);
+            tables = tablesResult.rows;
+        } catch (err) {
+            console.log('Error obteniendo tablas:', err.message);
+            tables = [];
+        }
+        
         res.json({
             success: true,
             connected: true,
             version,
             database: dbName,
             size,
-            stats
+            stats,
+            tables
         });
         
     } catch (error) {
