@@ -145,7 +145,7 @@ async function createSession(req, res) {
 async function getQR(req, res) {
     try {
         const { name } = req.params;
-        const qr = sessionManager.getQRCode(name);
+        const qr = await sessionManager.getQRCode(name);
 
         if (!qr) {
             return res.status(404).json({
