@@ -92,20 +92,20 @@ function renderDatabaseConnected(data) {
             <div style="font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 8px;">📊 Estadísticas</div>
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center;">
                 <div>
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #2563eb;">${data.stats.total_messages.toLocaleString()}</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #2563eb;">${(data.stats?.total_messages || 0).toLocaleString()}</div>
                     <div style="font-size: 0.75rem; color: #4b5563;">Mensajes Totales</div>
                 </div>
                 <div>
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #7c3aed;">${(data.stats.unique_phones || 0).toLocaleString()}</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #7c3aed;">${(data.stats?.unique_phones || 0).toLocaleString()}</div>
                     <div style="font-size: 0.75rem; color: #4b5563;">Números Únicos</div>
                 </div>
                 <div>
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #ca8a04;">${data.stats.queue_total.toLocaleString()}</div>
-                    <div style="font-size: 0.75rem; color: #4b5563;">En Cola (Total)</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #ca8a04;">${(data.stats?.gpswox_alerts || 0).toLocaleString()}</div>
+                    <div style="font-size: 0.75rem; color: #4b5563;">Alertas GPSwox</div>
                 </div>
                 <div>
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #16a34a;">${data.stats.queue_pending.toLocaleString()}</div>
-                    <div style="font-size: 0.75rem; color: #4b5563;">Pendientes</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #16a34a;">${(data.stats?.fx_forwards || 0).toLocaleString()}</div>
+                    <div style="font-size: 0.75rem; color: #4b5563;">Reenvíos FX</div>
                 </div>
             </div>
         </div>

@@ -228,6 +228,14 @@ async function getGPSwoxMessages(req, res) {
             count: result.rows.length
         });
     } catch (error) {
+        // Si la tabla no existe, devolver 200 con array vacío
+        if (error.message && error.message.includes('does not exist')) {
+            return res.json({
+                success: true,
+                messages: [],
+                count: 0
+            });
+        }
         res.status(500).json({
             success: false,
             error: error.message,
@@ -258,8 +266,21 @@ async function getGPSwoxMessageStats(req, res) {
             ...result.rows[0]
         });
     } catch (error) {
+        // Si la tabla no existe, devolver 200 con stats en cero
+        if (error.message && error.message.includes('does not exist')) {
+            return res.json({
+                success: true,
+                total_messages: '0',
+                total_sessions: '0',
+                total_vehicles: '0'
+            });
+        }
         res.status(500).json({
             success: false,
+            error: error.message
+        });
+    }
+}
             error: error.message,
             total_messages: 0,
             total_sessions: 0,
