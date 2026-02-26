@@ -299,6 +299,76 @@ function getNotificationTypes(req, res) {
     }
 }
 
+/**
+ * GET /api/fx/messages - Obtiene el historial de mensajes FX reenviados
+ */
+async function getFXMessages(req, res) {
+    try {
+        const limit = parseInt(req.query.limit) || 200;
+        const phoneFilter = req.query.phone || null;
+        const database = require('../database-postgres');
+        
+        let query = `
+            SELECT * FROM fx_messages
+            ${phoneFilter ? 'WHERE source_phone LIKE $2 OR target_phone LIKE $2' : ''}
+            ORDER BY timestamp DESC
+            LIMIT $1
+        `;
+        
+        const params = phoneFilter ? [limit, `%${phoneFilter}%`] : [limit];
+        const result = await database.query(query, params);
+        
+        res.json({
+            success: true,
+            messages: result.rows,
+            count: result.rows.length
+        });
+    } catch (error) {
+        console.error('Error obteniendo mensajes FX:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+/**
+ * GET /api/fx/message-stats - Obtiene estadísticas de mensajes FX
+ */
+async function getFXMessageStats(req, res) {
+    try {
+        const database = require('../database-postgres');
+        
+        const statsQuery = `
+            SELECT 
+                COUNT(*) as total_messages,
+                COUNT(DISTINCT fx_session) as total_sessions,
+                COUNT(*) FILTER (WHERE status = 'FORWARDED' OR status = 'SENT') as total_forwarded,
+                COUNT(*) FILTER (WHERE status = 'ERROR') as errors
+            FROM fx_messages
+        `;
+        
+        const result = await database.query(statsQuery);
+        const stats = result.rows[0];
+        
+        res.json({
+            success: true,
+            stats: {
+                total_messages: parseInt(stats.total_messages) || 0,
+                total_sessions: parseInt(stats.total_sessions) || 0,
+                total_forwarded: parseInt(stats.total_forwarded) || 0,
+                errors: parseInt(stats.errors) || 0
+            }
+        });
+    } catch (error) {
+        console.error('Error obteniendo estadísticas FX:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     createFXSession,
     createAllFXSessions,
@@ -309,5 +379,7 @@ module.exports = {
     getAccountSubscribers,
     getStats,
     getHistory,
-    getNotificationTypes
+    getNotificationTypes,
+    getFXMessages,
+    getFXMessageStats
 };

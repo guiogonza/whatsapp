@@ -123,7 +123,8 @@ function showSection(sectionId) {
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' },
         database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' },
         webhooks: { title: 'Centro de Mensajes', subtitle: 'Mensajes entrantes de WhatsApp Cloud API' },
-        'gpswox-messages': { title: 'Mensajes GPSwox', subtitle: 'Historial de conversaciones del bot GPSwox' }
+        'gpswox-messages': { title: 'Mensajes GPSwox', subtitle: 'Historial de conversaciones del bot GPSwox' },
+        'fx-messages': { title: 'Mensajes FX', subtitle: 'Historial de mensajes reenviados por sesiones FX' }
     };
     
     document.getElementById('sectionTitle').textContent = titles[sectionId].title;
@@ -141,6 +142,7 @@ function showSection(sectionId) {
     }
     if (sectionId === 'conversation') populateConversationSessions();
     if (sectionId === 'gpswox-messages') loadGPSwoxMessages();
+    if (sectionId === 'fx-messages') loadFXMessages();
 }
 
 // ======================== SESIONES ========================
@@ -2535,6 +2537,102 @@ async function loadGPSwoxStats() {
         }
     } catch (error) {
         console.error('Error loading GPSwox stats:', error);
+    }
+}
+
+// ======================== MENSAJES FX ========================
+
+const FX_MESSAGES_LIMIT = 200;
+
+/**
+ * Carga los mensajes de FX desde la base de datos
+ */
+async function loadFXMessages() {
+    try {
+        const phoneFilter = document.getElementById('fxPhoneFilter').value.trim();
+        const url = phoneFilter 
+            ? `${API_URL}/api/fx/messages?limit=${FX_MESSAGES_LIMIT}&phone=${phoneFilter}`
+            : `${API_URL}/api/fx/messages?limit=${FX_MESSAGES_LIMIT}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayFXMessages(data.messages);
+            await loadFXStats();
+        } else {
+            showToast('Error cargando mensajes FX: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error loading FX messages:', error);
+        showToast('Error cargando mensajes de FX', 'error');
+    }
+}
+
+/**
+ * Muestra los mensajes de FX en la tabla
+ */
+function displayFXMessages(messages) {
+    const tbody = document.getElementById('fxMessagesTable');
+    
+    if (!messages || messages.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">No hay mensajes FX registrados</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = messages.map(msg => {
+        const date = new Date(msg.timestamp);
+        const formattedDate = date.toLocaleString('es-CO');
+        
+        const statusBadge = getFXStatusBadge(msg.status);
+        
+        const messagePreview = msg.message.length > 150 
+            ? msg.message.substring(0, 150) + '...'
+            : msg.message;
+        
+        return `
+            <tr class="hover:bg-gray-50 border-b">
+                <td class="px-4 py-2 text-xs text-gray-600">${formattedDate}</td>
+                <td class="px-4 py-2 text-xs font-medium text-orange-600">${msg.fx_session}</td>
+                <td class="px-4 py-2 text-xs font-mono">${msg.source_phone || 'N/A'}</td>
+                <td class="px-4 py-2 text-xs font-mono text-blue-600">${msg.target_phone}</td>
+                <td class="px-4 py-2 text-xs text-gray-700">${escapeHtml(messagePreview)}</td>
+                <td class="px-4 py-2 text-center">${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Retorna un badge HTML según el estado del mensaje FX
+ */
+function getFXStatusBadge(status) {
+    const badges = {
+        'FORWARDED': '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">✅ Reenviado</span>',
+        'PENDING': '<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">⏳ Pendiente</span>',
+        'ERROR': '<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">❌ Error</span>',
+        'SENT': '<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">📨 Enviado</span>'
+    };
+    
+    return badges[status] || `<span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">${status}</span>`;
+}
+
+/**
+ * Carga las estadísticas de mensajes FX
+ */
+async function loadFXStats() {
+    try {
+        const response = await fetch(`${API_URL}/api/fx/message-stats`);
+        const data = await response.json();
+        
+        if (data.success && data.stats) {
+            document.getElementById('fxTotalMessages').textContent = data.stats.total_messages || 0;
+            document.getElementById('fxTotalForwarded').textContent = data.stats.total_forwarded || 0;
+            document.getElementById('fxTotalSessions').textContent = data.stats.total_sessions || 0;
+            document.getElementById('fxErrors').textContent = data.stats.errors || 0;
+        }
+    } catch (error) {
+        console.error('Error loading FX stats:', error);
     }
 }
 

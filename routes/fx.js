@@ -36,4 +36,10 @@ router.get('/history', fxController.getHistory);
 // Tipos de notificaciones disponibles
 router.get('/types', fxController.getNotificationTypes);
 
+// Obtener mensajes FX (historial de reenvíos)
+router.get('/messages', fxController.getFXMessages);
+
+// Obtener estadísticas de mensajes FX
+router.get('/message-stats', fxController.getFXMessageStats);
+
 module.exports = router;
