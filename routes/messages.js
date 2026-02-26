@@ -21,4 +21,7 @@ router.get('/consolidation/status', messageController.getConsolidationStatus);
 // Historial de mensajes
 router.get('/history', messageController.getMessageHistory);
 
+// Logs de mensajes (para webhook-viewer)
+router.get('/logs', messageController.getMessageLogs);
+
 module.exports = router;

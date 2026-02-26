@@ -237,12 +237,37 @@ function disableCloud(req, res) {
     }
 }
 
+/**
+ * GET /api/messages/logs - Obtiene logs de mensajes desde PostgreSQL
+ */
+async function getMessageLogs(req, res) {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        
+        const logs = await database.getMessageLogs(limit);
+        
+        res.json({
+            success: true,
+            logs: logs || [],
+            count: logs ? logs.length : 0
+        });
+    } catch (error) {
+        console.error('Error obteniendo logs:', error);
+        res.json({
+            success: true,
+            logs: [],
+            count: 0
+        });
+    }
+}
+
 module.exports = {
     sendMessage,
     sendBulkMessages,
     consolidateMessage,
     getConsolidationStatus,
     getMessageHistory,
+    getMessageLogs,
     getHybridStatus,
     sendCloudMessage,
     getCloudStats,

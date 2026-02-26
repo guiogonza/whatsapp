@@ -46,6 +46,7 @@ const gpswoxRouter = require('./routes/gpswox');
 const fxRouter = require('./routes/fx');
 const cloudRouter = require('./routes/cloud');
 const systemRouter = require('./routes/system');
+const settingsRouter = require('./routes/settings');
 
 // Inicialización de Express
 const app = express();
@@ -216,9 +217,21 @@ app.use('/api/messages', messagesRouter);
 app.use('/api/gpswox', gpswoxRouter);
 app.use('/api/fx', fxRouter);
 app.use('/api/cloud', cloudRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/network', systemRouter);
 app.use('/api/adapters/info', systemRouter);
 app.use('/api/proxy/status', systemRouter);
+
+// Alias para compatibilidad
+app.get('/api/message-logs', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const logs = await database.getMessageLogs(limit);
+        res.json({ success: true, logs: logs || [], count: logs ? logs.length : 0 });
+    } catch (error) {
+        res.json({ success: true, logs: [], count: 0 });
+    }
+});
 
 // Webhook routes
 app.get('/webhook', (req, res) => {
