@@ -2212,7 +2212,7 @@ async function loadOpenAIBalance() {
         try {
             const response = await fetch(`${API_URL}/api/sessions/${name}/qr?format=json`);
             const data = await response.json();
-            if (data.success && data.qr) {
+            if (data.success && data.qr && typeof data.qr === 'string') {
                 const img = document.getElementById(`qr-img-${name}`);
                 if (img) img.src = data.qr;
             }
@@ -2370,7 +2370,7 @@ async function loadOpenAIBalance() {
         try {
             const response = await fetch(`${API_URL}/api/sessions/${name}/qr?format=json`);
             const data = await response.json();
-            if (data.success && data.qr) {
+            if (data.success && data.qr && typeof data.qr === 'string') {
                 const img = document.getElementById(`qr-img-${name}`);
                 if (img) img.src = data.qr;
             }
