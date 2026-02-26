@@ -1051,6 +1051,133 @@ async function getGPSwoxStats() {
 }
 
 /**
+ * Guardar notificación FX (MetaTrader5)
+ * @param {Object} notification - Datos de la notificación
+ */
+async function logFXNotification(notification) {
+    if (!pool || !isConnected) {
+        console.error('❌ Base de datos no conectada');
+        return;
+    }
+
+    const { type, accountNumber, message, recipients, sent, timestamp } = notification;
+
+    try {
+        await pool.query(
+            `INSERT INTO fx_notifications (timestamp, type, account_number, message, recipients, sent)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+                timestamp || getColombiaTimestamp(),
+                type,
+                accountNumber || null,
+                message,
+                recipients || 0,
+                sent || 0
+            ]
+        );
+    } catch (error) {
+        // Si la tabla no existe, crearla
+        if (error.code === '42P01') {
+            console.log('📊 Creando tabla fx_notifications...');
+            try {
+                await pool.query(`
+                    CREATE TABLE IF NOT EXISTS fx_notifications (
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP NOT NULL,
+                        type VARCHAR(50) NOT NULL,
+                        account_number VARCHAR(20),
+                        message TEXT NOT NULL,
+                        recipients INTEGER DEFAULT 0,
+                        sent INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                // Intentar de nuevo
+                await pool.query(
+                    `INSERT INTO fx_notifications (timestamp, type, account_number, message, recipients, sent)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [
+                        timestamp || getColombiaTimestamp(),
+                        type,
+                        accountNumber || null,
+                        message,
+                        recipients || 0,
+                        sent || 0
+                    ]
+                );
+            } catch (retryError) {
+                console.error('❌ Error creando tabla fx_notifications:', retryError.message);
+            }
+        } else {
+            console.error('❌ Error guardando notificación FX:', error.message);
+        }
+    }
+}
+
+/**
+ * Obtener historial de notificaciones FX
+ * @param {number} limit - Límite de notificaciones a retornar
+ * @param {string} accountNumber - Filtrar por cuenta específica (opcional)
+ */
+async function getFXNotifications(limit = 100, accountNumber = null) {
+    if (!pool || !isConnected) {
+        return [];
+    }
+
+    try {
+        let query = `
+            SELECT id, timestamp, type, account_number, message, recipients, sent, created_at
+            FROM fx_notifications
+        `;
+        const params = [];
+
+        if (accountNumber) {
+            query += ` WHERE account_number = $1`;
+            params.push(accountNumber);
+        }
+
+        query += ` ORDER BY timestamp DESC LIMIT $${params.length + 1}`;
+        params.push(limit);
+
+        const result = await pool.query(query, params);
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error obteniendo notificaciones FX:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Obtener estadísticas de notificaciones FX
+ */
+async function getFXStats() {
+    if (!pool || !isConnected) {
+        return { totalNotifications: 0, totalSent: 0, totalRecipients: 0 };
+    }
+
+    try {
+        const result = await pool.query(`
+            SELECT 
+                COUNT(*) as total_notifications,
+                COALESCE(SUM(sent), 0) as total_sent,
+                COALESCE(SUM(recipients), 0) as total_recipients,
+                COUNT(DISTINCT account_number) as total_accounts
+            FROM fx_notifications
+        `);
+
+        return {
+            totalNotifications: parseInt(result.rows[0].total_notifications) || 0,
+            totalSent: parseInt(result.rows[0].total_sent) || 0,
+            totalRecipients: parseInt(result.rows[0].total_recipients) || 0,
+            totalAccounts: parseInt(result.rows[0].total_accounts) || 0
+        };
+    } catch (error) {
+        console.error('❌ Error obteniendo estadísticas FX:', error.message);
+        return { totalNotifications: 0, totalSent: 0, totalRecipients: 0, totalAccounts: 0 };
+    }
+}
+
+/**
  * Consulta si un número de teléfono tiene una conversación GPSwox activa
  * (estado diferente a COMPLETED o ERROR, y con actividad reciente en últimas 24 horas)
  * @param {string} phoneNumber Número de teléfono a consultar
@@ -1106,6 +1233,9 @@ module.exports = {
     getGPSwoxMessages,
     getGPSwoxStats,
     hasActiveGPSwoxConversation,
+    logFXNotification,
+    getFXNotifications,
+    getFXStats,
     getColombiaTimestamp,
     query,
     // Nuevas funciones para compatibilidad con monitor

@@ -127,6 +127,19 @@ module.exports = {
     GPSWOX_SESSION_NAMES: (process.env.GPSWOX_SESSION_NAMES || process.env.GPSWOX_SESSION_NAME || 'gpswox-session').split(',').map(s => s.trim()),
     GPSWOX_DEDICATED_MODE: process.env.GPSWOX_DEDICATED_MODE === 'true', // true = solo procesará GPSwox
     
+    // ============================================
+    // FX / MetaTrader5 - Notificaciones de Trading
+    // ============================================
+    // URL base de la API de MT5 (si existe)
+    MT5_API_BASE_URL: process.env.MT5_API_BASE_URL || '',
+    MT5_API_KEY: process.env.MT5_API_KEY || '',
+    // Secret para validar webhooks desde MT5
+    MT5_WEBHOOK_SECRET: process.env.MT5_WEBHOOK_SECRET || 'mt5_secret_2026',
+    // Sesiones dedicadas FX (múltiples sesiones separadas por coma)
+    FX_SESSION_NAMES: (process.env.FX_SESSION_NAMES || 'fx-session-1,fx-session-2').split(',').map(s => s.trim()).filter(s => s),
+    // Modo dedicado: true = sesiones FX SOLO envían notificaciones FX
+    FX_DEDICATED_MODE: process.env.FX_DEDICATED_MODE !== 'false', // true por defecto
+    
     // Estados de sesión
     SESSION_STATES: {
         STARTING: 'STARTING',
