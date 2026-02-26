@@ -438,10 +438,10 @@ function updateSessionsList() {
     const container = document.getElementById('sessionsList');
     
     // Filtrar TODAS las sesiones GPSwox y FX de la lista (se muestran en sus secciones dedicadas)
-    const gpswoxNames = ['gpswox-session', 'gpswox-session-2', 'gpswox-session-3'];
-    const fxNames = ['fx-session-1', 'fx-session-2'];
-    const excludedNames = [...gpswoxNames, ...fxNames];
-    const displaySessions = sessions.filter(s => !excludedNames.includes(s.name));
+    // Usar filtrado dinámico en lugar de nombres hardcodeados
+    const displaySessions = sessions.filter(s => 
+        !s.name.startsWith('gpswox-') && !s.name.startsWith('fx-')
+    );
     
     if (displaySessions.length === 0) {
         container.innerHTML = `
@@ -649,10 +649,11 @@ function updateSessionsCount() {
 }
 
 function populateSessionSelects() {
-    // Filtrar sesiones listas Y excluir TODAS las sesiones GPSwox de envíos masivos
-    const gpswoxNames = ['gpswox-session', 'gpswox-session-2', 'gpswox-session-3'];
+    // Filtrar sesiones listas Y excluir TODAS las sesiones GPSwox/FX de envíos masivos
     const readySessions = sessions.filter(s => s.state === 'READY');
-    const readySessionsForMessaging = readySessions.filter(s => !gpswoxNames.includes(s.name));
+    const readySessionsForMessaging = readySessions.filter(s => 
+        !s.name.startsWith('gpswox-') && !s.name.startsWith('fx-')
+    );
     
     const personalHtml = readySessionsForMessaging.length > 0
         ? readySessionsForMessaging.map(s => `
@@ -2120,7 +2121,11 @@ async function loadOpenAIBalance() {
 
     const gpswoxQRIntervals = {};
     const gpswoxStatusIntervals = {};
-    const GPSWOX_SESSION_NAMES = ['gpswox-session', 'gpswox-session-2', 'gpswox-session-3'];
+    
+    // Obtener dinámicamente los nombres de sesiones GPSwox
+    function getGPSwoxSessionNames() {
+        return sessions.filter(s => s.name.startsWith('gpswox-')).map(s => s.name);
+    }
 
     // Actualiza el estado visual de una tarjeta GPSwox
     function updateGPSwoxCardUI(name, state, phoneNumber) {
@@ -2171,7 +2176,8 @@ async function loadOpenAIBalance() {
 
     // Carga el estado actual de todas las sesiones GPSwox
     async function loadGPSwoxSessions() {
-        for (const name of GPSWOX_SESSION_NAMES) {
+        const gpswoxNames = getGPSwoxSessionNames();
+        for (const name of gpswoxNames) {
             try {
                 const response = await fetch(`${API_URL}/api/sessions/${name}/status`);
                 const data = await response.json();
@@ -2278,7 +2284,11 @@ async function loadOpenAIBalance() {
 
     const fxQRIntervals = {};
     const fxStatusIntervals = {};
-    const FX_SESSION_NAMES = ['fx-session-1', 'fx-session-2'];
+    
+    // Obtener dinámicamente los nombres de sesiones FX
+    function getFXSessionNames() {
+        return sessions.filter(s => s.name.startsWith('fx-')).map(s => s.name);
+    }
 
     // Actualiza el estado visual de una tarjeta FX
     function updateFXCardUI(name, state, phoneNumber) {
@@ -2329,7 +2339,8 @@ async function loadOpenAIBalance() {
 
     // Carga el estado actual de todas las sesiones FX
     async function loadFXSessions() {
-        for (const name of FX_SESSION_NAMES) {
+        const fxNames = getFXSessionNames();
+        for (const name of fxNames) {
             try {
                 const response = await fetch(`${API_URL}/api/sessions/${name}/status`);
                 const data = await response.json();
