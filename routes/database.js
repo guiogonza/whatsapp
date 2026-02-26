@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const database = require('../lib/database-postgres');
+const database = require('../database-postgres');
 
 /**
  * GET /api/database/status
