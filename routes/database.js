@@ -41,8 +41,8 @@ router.get('/status', async (req, res) => {
         try {
             const messagesResult = await database.query(`
                 SELECT 
-                    COALESCE((SELECT COUNT(*) FROM messages_sent WHERE session_type = 'baileys'), 0) +
-                    COALESCE((SELECT COUNT(*) FROM gpswox_messaging), 0) +
+                    COALESCE((SELECT COUNT(*) FROM messages WHERE status = 'sent'), 0) +
+                    COALESCE((SELECT COUNT(*) FROM gpswox_messages), 0) +
                     COALESCE((SELECT COUNT(*) FROM fx_messages), 0) as total
             `);
             stats.total_messages = parseInt(messagesResult.rows[0]?.total) || 0;
@@ -55,7 +55,7 @@ router.get('/status', async (req, res) => {
         try {
             const phonesResult = await database.query(`
                 SELECT COUNT(DISTINCT phone_number) as unique_phones 
-                FROM messages_sent 
+                FROM messages 
                 WHERE phone_number IS NOT NULL
             `);
             stats.unique_phones = parseInt(phonesResult.rows[0]?.unique_phones) || 0;
@@ -67,7 +67,7 @@ router.get('/status', async (req, res) => {
         // Alertas GPSwox
         try {
             const gpswoxResult = await database.query(`
-                SELECT COUNT(*) as count FROM gpswox_messaging
+                SELECT COUNT(*) as count FROM gpswox_messages
             `);
             stats.gpswox_alerts = parseInt(gpswoxResult.rows[0]?.count) || 0;
         } catch (err) {
