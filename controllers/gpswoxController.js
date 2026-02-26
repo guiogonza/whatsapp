@@ -200,6 +200,74 @@ function getStats(req, res) {
     }
 }
 
+/**
+ * GET /api/gpswox/messages - Obtener mensajes GPSwox
+ */
+async function getGPSwoxMessages(req, res) {
+    try {
+        const database = require('../database-postgres');
+        const limit = parseInt(req.query.limit) || 200;
+        const phone = req.query.phone;
+        
+        let query = 'SELECT * FROM gpswox_messaging';
+        const params = [];
+        
+        if (phone) {
+            query += ' WHERE vehicle_plate LIKE $1 OR session_name LIKE $1';
+            params.push(`%${phone}%`);
+        }
+        
+        query += ' ORDER BY timestamp DESC LIMIT $' + (params.length + 1);
+        params.push(limit);
+        
+        const result = await database.query(query, params);
+        
+        res.json({
+            success: true,
+            messages: result.rows,
+            count: result.rows.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            messages: []
+        });
+    }
+}
+
+/**
+ * GET /api/gpswox/message-stats - Estadísticas de mensajes GPSwox
+ */
+async function getGPSwoxMessageStats(req, res) {
+    try {
+        const database = require('../database-postgres');
+        
+        const statsQuery = `
+            SELECT 
+                COUNT(*) as total_messages,
+                COUNT(DISTINCT session_name) as total_sessions,
+                COUNT(DISTINCT vehicle_plate) as total_vehicles
+            FROM gpswox_messaging
+        `;
+        
+        const result = await database.query(statsQuery);
+        
+        res.json({
+            success: true,
+            ...result.rows[0]
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            total_messages: 0,
+            total_sessions: 0,
+            total_vehicles: 0
+        });
+    }
+}
+
 module.exports = {
     createGPSwoxSession,
     createAllGPSwoxSessions,
@@ -207,5 +275,7 @@ module.exports = {
     getConversation,
     startConversation,
     deleteConversation,
-    getStats
+    getStats,
+    getGPSwoxMessages,
+    getGPSwoxMessageStats
 };

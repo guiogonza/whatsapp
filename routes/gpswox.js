@@ -27,4 +27,8 @@ router.delete('/conversation/:phoneNumber', gpswoxController.deleteConversation)
 // Estadísticas
 router.get('/stats', gpswoxController.getStats);
 
+// Mensajes
+router.get('/messages', gpswoxController.getGPSwoxMessages);
+router.get('/message-stats', gpswoxController.getGPSwoxMessageStats);
+
 module.exports = router;

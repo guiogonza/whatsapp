@@ -30,18 +30,24 @@ router.get('/status', async (req, res) => {
         const size = sizeResult.rows[0].size;
         
         // Estadísticas de mensajes
-        const stats = {};
+        const stats = {
+            total_messages: 0,
+            unique_phones: 0,
+            gpswox_alerts: 0,
+            fx_forwards: 0
+        };
         
         // Total de mensajes  (de todas las tablas)
         try {
             const messagesResult = await database.query(`
                 SELECT 
-                    (SELECT COUNT(*) FROM messages_sent WHERE session_type = 'baileys') +
-                    (SELECT COUNT(*) FROM gpswox_messaging) +
-                    (SELECT COUNT(*) FROM fx_messages) as total
+                    COALESCE((SELECT COUNT(*) FROM messages_sent WHERE session_type = 'baileys'), 0) +
+                    COALESCE((SELECT COUNT(*) FROM gpswox_messaging), 0) +
+                    COALESCE((SELECT COUNT(*) FROM fx_messages), 0) as total
             `);
-            stats.total_messages = parseInt(messagesResult.rows[0].total) || 0;
+            stats.total_messages = parseInt(messagesResult.rows[0]?.total) || 0;
         } catch (err) {
+            console.log('Error contando mensajes totales:', err.message);
             stats.total_messages = 0;
         }
         
@@ -52,8 +58,9 @@ router.get('/status', async (req, res) => {
                 FROM messages_sent 
                 WHERE phone_number IS NOT NULL
             `);
-            stats.unique_phones = parseInt(phonesResult.rows[0].unique_phones) || 0;
+            stats.unique_phones = parseInt(phonesResult.rows[0]?.unique_phones) || 0;
         } catch (err) {
+            console.log('Error contando números únicos:', err.message);
             stats.unique_phones = 0;
         }
         
@@ -62,8 +69,9 @@ router.get('/status', async (req, res) => {
             const gpswoxResult = await database.query(`
                 SELECT COUNT(*) as count FROM gpswox_messaging
             `);
-            stats.gpswox_alerts = parseInt(gpswoxResult.rows[0].count) || 0;
+            stats.gpswox_alerts = parseInt(gpswoxResult.rows[0]?.count) || 0;
         } catch (err) {
+            console.log('Error contando alertas GPSwox:', err.message);
             stats.gpswox_alerts = 0;
         }
         
@@ -72,8 +80,9 @@ router.get('/status', async (req, res) => {
             const fxResult = await database.query(`
                 SELECT COUNT(*) as count FROM fx_messages WHERE status = 'FORWARDED'
             `);
-            stats.fx_forwards = parseInt(fxResult.rows[0].count) || 0;
+            stats.fx_forwards = parseInt(fxResult.rows[0]?.count) || 0;
         } catch (err) {
+            console.log('Error contando reenvíos FX:', err.message);
             stats.fx_forwards = 0;
         }
         

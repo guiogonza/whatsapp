@@ -10,4 +10,12 @@ const settingsController = require('../controllers/settingsController');
 router.get('/session-timeout', settingsController.getSessionTimeout);
 router.post('/session-timeout', settingsController.saveSessionTimeout);
 
+// Batch settings
+router.get('/batch', settingsController.getBatchSettings);
+router.post('/batch', settingsController.saveBatchSettings);
+
+// Notification interval
+router.get('/notification-interval', settingsController.getNotificationInterval);
+router.post('/notification-interval', settingsController.saveNotificationInterval);
+
 module.exports = router;
