@@ -190,7 +190,7 @@ function deleteConversation(req, res) {
  */
 function getStats(req, res) {
     try {
-        const stats = gpswoxSession.getConversationStats();
+        const stats = gpswoxSession.getStats();
         res.json({ success: true, ...stats });
     } catch (error) {
         res.status(500).json({
