@@ -28,8 +28,8 @@ async function createFXSession(req, res) {
         if (existing) {
             return res.status(409).json({
                 success: false,
-                error: `La sesión FX '${sessionName}' ya existe`,
-                qr: sessionManager.getQRCode(sessionName)
+                error: `La sesión FX '${sessionName}' ya existe`
+                // QR disponible via /api/sessions/${sessionName}/qr
             });
         }
 
@@ -40,8 +40,8 @@ async function createFXSession(req, res) {
             success: true,
             message: `Sesión FX '${sessionName}' creada exitosamente`,
             sessionName,
-            dedicatedMode: fxSession.isFXDedicatedMode(),
-            qr: sessionManager.getQRCode(sessionName)
+            dedicatedMode: fxSession.isFXDedicatedMode()
+            // QR se obtiene via /api/sessions/${sessionName}/qr después de unos segundos
         });
     } catch (error) {
         console.error('Error creando sesión FX:', error);

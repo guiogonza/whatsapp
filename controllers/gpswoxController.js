@@ -27,8 +27,8 @@ async function createGPSwoxSession(req, res) {
         if (existing) {
             return res.status(409).json({
                 success: false,
-                error: `La sesión GPSwox '${sessionName}' ya existe`,
-                qr: sessionManager.getQRCode(sessionName)
+                error: `La sesión GPSwox '${sessionName}' ya existe`
+                // QR disponible via /api/sessions/${sessionName}/qr
             });
         }
 
@@ -39,8 +39,8 @@ async function createGPSwoxSession(req, res) {
             success: true,
             message: `Sesión GPSwox '${sessionName}' creada exitosamente`,
             sessionName,
-            dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode(),
-            qr: sessionManager.getQRCode(sessionName)
+            dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode()
+            // QR se obtiene via /api/sessions/${sessionName}/qr después de unos segundos
         });
     } catch (error) {
         console.error('Error creando sesión GPSwox:', error);
@@ -66,8 +66,8 @@ async function createAllGPSwoxSessions(req, res) {
                     results.push({
                         sessionName,
                         success: true,
-                        message: 'Ya existe',
-                        qr: sessionManager.getQRCode(sessionName)
+                        message: 'Ya existe'
+                        // QR disponible via /api/sessions/${sessionName}/qr
                     });
                     continue;
                 }
@@ -76,8 +76,8 @@ async function createAllGPSwoxSessions(req, res) {
                 results.push({
                     sessionName,
                     success: true,
-                    message: 'Creada exitosamente',
-                    qr: sessionManager.getQRCode(sessionName)
+                    message: 'Creada exitosamente'
+                    // QR se obtiene via polling
                 });
             } catch (error) {
                 results.push({
