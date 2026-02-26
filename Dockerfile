@@ -81,5 +81,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Entrypoint para señales limpias
 ENTRYPOINT ["dumb-init", "--"]
 
-# Arranque (usar la versión optimizada)
-CMD ["node", "server-baileys.js"]
+# Arranque (usar la versión refactorizada)
+CMD ["node", "server-baileys-new.js"]
