@@ -1704,10 +1704,18 @@ async function initSettings() {
 async function refreshBatchStatus() {
     try {
         const response = await fetch(`${API_URL}/api/settings/batch`);
+        
+        if (!response.ok) {
+            console.error('Error en respuesta batch:', response.status);
+            return;
+        }
+        
         const data = await response.json();
         
-        if (data.success) {
-            const { settings } = data;
+        if (data && data.success) {
+            // Los datos están en el nivel raíz, no en data.settings
+            const batchSize = data.batchSize || 10;
+            const batchDelay = data.batchDelay || 60;
             
             // Actualizar UI
             const range = document.getElementById('batchIntervalRange');
@@ -1716,14 +1724,14 @@ async function refreshBatchStatus() {
             const pendingNumbers = document.getElementById('pendingNumbers');
             const currentInterval = document.getElementById('currentInterval');
 
-            if (range) range.value = settings.interval;
-            if (value) value.textContent = settings.interval;
-            if (queueSize) queueSize.textContent = settings.queueSize;
-            if (pendingNumbers) pendingNumbers.textContent = settings.pendingNumbers;
-            if (currentInterval) currentInterval.textContent = `${settings.interval} min`;
+            if (range) range.value = batchDelay;
+            if (value) value.textContent = batchDelay;
+            if (queueSize) queueSize.textContent = batchSize;
+            if (pendingNumbers) pendingNumbers.textContent = 0; // Esto debe venir del backend
+            if (currentInterval) currentInterval.textContent = `${batchDelay} seg`;
         }
     } catch (error) {
-        console.error('Error cargando configuración:', error);
+        console.error('Error cargando configuración de batch:', error);
     }
 }
 
@@ -1794,14 +1802,20 @@ async function saveNotificationSettings() {
 async function loadNotificationSettings() {
     try {
         const response = await fetch(`${API_URL}/api/settings/notification-interval`);
+        
+        if (!response.ok) {
+            console.error('Error en respuesta:', response.status);
+            return;
+        }
+        
         const data = await response.json();
         
-        if (data.success && data.interval) {
+        if (data && data.success && data.interval) {
             selectedNotificationInterval = data.interval;
             setNotificationInterval(data.interval);
         }
     } catch (error) {
-        console.error('Error cargando configuración:', error);
+        console.error('Error cargando configuración de notificaciones:', error);
     }
 }
 
