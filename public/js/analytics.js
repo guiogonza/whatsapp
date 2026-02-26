@@ -125,7 +125,7 @@ function initAnalytics() {
 // Cargar sesiones disponibles para el filtro
 async function loadAnalyticsSessions() {
     try {
-        const res = await fetch(`${API_URL}/sessions`);
+        const res = await fetch(`${API_URL}/api/sessions`);
         if (res.ok) {
             const data = await res.json();
             const sessions = data.sessions || [];
