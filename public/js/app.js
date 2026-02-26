@@ -422,9 +422,11 @@ function updateNetworkInfo() {
 function updateSessionsList() {
     const container = document.getElementById('sessionsList');
     
-    // Filtrar TODAS las sesiones GPSwox de la lista (se muestran en su sección dedicada)
+    // Filtrar TODAS las sesiones GPSwox y FX de la lista (se muestran en sus secciones dedicadas)
     const gpswoxNames = ['gpswox-session', 'gpswox-session-2', 'gpswox-session-3'];
-    const displaySessions = sessions.filter(s => !gpswoxNames.includes(s.name));
+    const fxNames = ['fx-session-1', 'fx-session-2'];
+    const excludedNames = [...gpswoxNames, ...fxNames];
+    const displaySessions = sessions.filter(s => !excludedNames.includes(s.name));
     
     if (displaySessions.length === 0) {
         container.innerHTML = `
@@ -2256,6 +2258,164 @@ async function loadOpenAIBalance() {
 
     // Inicializar al cargar
     loadGPSwoxSessions();
+
+// ======================== FX MULTI-SESSION MANAGEMENT ========================
+
+    const fxQRIntervals = {};
+    const fxStatusIntervals = {};
+    const FX_SESSION_NAMES = ['fx-session-1', 'fx-session-2'];
+
+    // Actualiza el estado visual de una tarjeta FX
+    function updateFXCardUI(name, state, phoneNumber) {
+        const badge = document.getElementById(`badge-${name}`);
+        const qrContainer = document.getElementById(`qr-container-${name}`);
+        const statusMsg = document.getElementById(`status-msg-${name}`);
+        const createBtn = document.getElementById(`create-btn-${name}`);
+        const closeBtn = document.getElementById(`close-btn-${name}`);
+        const card = document.getElementById(`fx-card-${name}`);
+
+        if (!badge) return;
+
+        if (state === 'READY') {
+            badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-200 text-green-800';
+            badge.textContent = '✅ Conectada';
+            if (qrContainer) qrContainer.classList.add('hidden');
+            if (statusMsg) { statusMsg.className = 'mt-2 text-sm font-medium text-green-600'; statusMsg.textContent = `✅ Conectada como ${phoneNumber || ''}`; }
+            if (createBtn) createBtn.classList.add('hidden');
+            if (closeBtn) closeBtn.classList.remove('hidden');
+            if (card) card.classList.add('border-green-400');
+        } else if (state === 'WAITING_FOR_QR') {
+            badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-200 text-yellow-800';
+            badge.textContent = '📱 Esperando QR';
+            if (qrContainer) qrContainer.classList.remove('hidden');
+            if (statusMsg) { statusMsg.className = 'mt-2 text-sm font-medium text-yellow-600'; statusMsg.textContent = '📱 Escanea el QR para conectar'; }
+            if (createBtn) createBtn.classList.add('hidden');
+            if (closeBtn) closeBtn.classList.remove('hidden');
+            if (card) card.classList.remove('border-green-400');
+            startFXQRPolling(name);
+        } else if (state === 'LOADING') {
+            badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-blue-200 text-blue-800';
+            badge.textContent = '⏳ Cargando';
+            if (qrContainer) qrContainer.classList.add('hidden');
+            if (statusMsg) { statusMsg.className = 'mt-2 text-sm font-medium text-blue-600'; statusMsg.textContent = '⏳ Iniciando sesión...'; }
+            if (createBtn) createBtn.classList.add('hidden');
+            if (closeBtn) closeBtn.classList.remove('hidden');
+        } else {
+            // Inactiva
+            badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
+            badge.textContent = 'Inactiva';
+            if (qrContainer) qrContainer.classList.add('hidden');
+            if (statusMsg) { statusMsg.className = 'mt-2 text-sm font-medium text-gray-500'; statusMsg.textContent = ''; }
+            if (createBtn) { createBtn.classList.remove('hidden'); createBtn.disabled = false; createBtn.innerHTML = '▶️ Crear Sesión'; }
+            if (closeBtn) closeBtn.classList.add('hidden');
+            if (card) card.classList.remove('border-green-400');
+        }
+    }
+
+    // Carga el estado actual de todas las sesiones FX
+    async function loadFXSessions() {
+        for (const name of FX_SESSION_NAMES) {
+            try {
+                const response = await fetch(`${API_URL}/api/sessions/${name}/status`);
+                const data = await response.json();
+                if (data.success && data.session) {
+                    updateFXCardUI(name, data.session.state, data.session.phoneNumber);
+                } else {
+                    updateFXCardUI(name, 'INACTIVE', null);
+                }
+            } catch (e) {
+                updateFXCardUI(name, 'INACTIVE', null);
+            }
+        }
+    }
+
+    function startFXQRPolling(name) {
+        // Limpiar intervalos anteriores
+        if (fxQRIntervals[name]) clearInterval(fxQRIntervals[name]);
+        if (fxStatusIntervals[name]) clearInterval(fxStatusIntervals[name]);
+
+        updateFXQRByName(name);
+        fxQRIntervals[name] = setInterval(() => updateFXQRByName(name), 60000);
+
+        // Verificar conexión cada 5s
+        fxStatusIntervals[name] = setInterval(async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/sessions/${name}/status`);
+                const data = await res.json();
+                if (data.success && data.session && data.session.state === 'READY') {
+                    clearInterval(fxQRIntervals[name]);
+                    clearInterval(fxStatusIntervals[name]);
+                    delete fxQRIntervals[name];
+                    delete fxStatusIntervals[name];
+                    updateFXCardUI(name, 'READY', data.session.phoneNumber);
+                }
+            } catch (e) {}
+        }, 5000);
+    }
+
+    async function updateFXQRByName(name) {
+        try {
+            const response = await fetch(`${API_URL}/api/sessions/${name}/qr?format=json`);
+            const data = await response.json();
+            if (data.success && data.qr) {
+                const img = document.getElementById(`qr-img-${name}`);
+                if (img) img.src = data.qr;
+            }
+        } catch (e) {
+            console.error(`Error fetching QR for ${name}:`, e);
+        }
+    }
+
+    // Crear una sesión FX específica por nombre
+    async function createFXByName(name) {
+        const btn = document.getElementById(`create-btn-${name}`);
+        if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Creando...'; }
+
+        try {
+            const response = await fetch(`${API_URL}/api/fx/session/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionName: name })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                // Esperar un momento para que inicie
+                setTimeout(() => loadFXSessions(), 2000);
+            } else {
+                alert(`Error: ${result.error}`);
+                if (btn) { btn.disabled = false; btn.innerHTML = '▶️ Crear Sesión'; }
+            }
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+            if (btn) { btn.disabled = false; btn.innerHTML = '▶️ Crear Sesión'; }
+        }
+    }
+
+    async function closeFXSessionByName(name) {
+        if (!confirm(`¿Eliminar completamente la sesión ${name}?\n\nEsto eliminará todos los datos de la sesión y tendrás que escanear un nuevo QR para crearla de nuevo.`)) return;
+
+        try {
+            const response = await fetch(`${API_URL}/api/sessions/${name}`, { method: 'DELETE' });
+            const result = await response.json();
+
+            if (result.success) {
+                if (fxQRIntervals[name]) { clearInterval(fxQRIntervals[name]); delete fxQRIntervals[name]; }
+                if (fxStatusIntervals[name]) { clearInterval(fxStatusIntervals[name]); delete fxStatusIntervals[name]; }
+                updateFXCardUI(name, 'INACTIVE', null);
+            } else {
+                alert(`Error: ${result.error || result.message}`);
+            }
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        }
+    }
+
+    window.createFXByName = createFXByName;
+    window.closeFXSessionByName = closeFXSessionByName;
+
+    // Inicializar al cargar
+    loadFXSessions();
 
 // ======================== MENSAJES GPSWOX ========================
 
