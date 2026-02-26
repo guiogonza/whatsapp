@@ -2289,6 +2289,12 @@ app.get('/api/database/status', async (req, res) => {
     }
 });
 
+// ======================== FX ROUTES ========================
+
+// Montar rutas de FX (MetaTrader5)
+const fxRouter = require('./routes/fx');
+app.use('/api/fx', fxRouter);
+
 // ======================== HEALTH CHECK ========================
 
 app.get('/health', (req, res) => {
