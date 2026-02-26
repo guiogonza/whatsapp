@@ -269,7 +269,7 @@ function getAdaptersInfo(req, res) {
 function getRotationInfo(req, res) {
     try {
         const info = sessionManager.getRotationInfo();
-        res.json({ success: true, ...info });
+        res.json({ success: true, rotation: info });
     } catch (error) {
         res.status(500).json({
             success: false,

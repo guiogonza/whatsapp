@@ -253,21 +253,22 @@ app.post('/webhook/whatsapp', (req, res) => {
 app.get('/api/webhook/messages', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
-        const messages = webhook.getRecentMessages(limit);
+        const messages = await webhook.getReceivedMessagesFromDB(limit);
         res.json({ success: true, messages });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-app.get('/api/webhook/config', (req, res) => {
+app.get('/api/webhook/config', async (req, res) => {
     try {
+        const messages = await webhook.getReceivedMessagesFromDB(1);
         res.json({
             success: true,
             webhookUrl: process.env.WEBHOOK_URL || '',
-            verifyToken: config.WEBHOOK_VERIFY_TOKEN,
-            configured: webhook.isConfigured(),
-            messagesReceived: webhook.getStats().received
+            verifyToken: webhook.getVerifyToken(),
+            configured: !!(process.env.WEBHOOK_URL),
+            messagesReceived: messages.length
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

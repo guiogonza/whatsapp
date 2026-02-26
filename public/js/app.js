@@ -359,7 +359,20 @@ async function updateRotationInfo() {
     try {
         const response = await fetch(`${API_URL}/api/sessions/rotation/info`);
         const data = await response.json();
-        const rotationData = data.rotation;
+        
+        if (!data || !data.success) {
+            console.error('Error en respuesta de rotación:', data);
+            return;
+        }
+        
+        // Extraer rotation object (puede venir como data.rotation o directamente en data)
+        const rotationData = data.rotation || data;
+        
+        if (!rotationData) {
+            console.error('No hay datos de rotación');
+            return;
+        }
+        
         currentRotationSession = rotationData.currentSession;
         
         const infoEl = document.getElementById('rotationInfo');
