@@ -443,6 +443,10 @@ function updateSessionsList() {
         !s.name.startsWith('gpswox-') && !s.name.startsWith('fx-')
     );
     
+    // Actualizar sesiones dedicadas FX y GPSwox
+    updateDedicatedFXSessions();
+    updateDedicatedGPSwoxSessions();
+    
     if (displaySessions.length === 0) {
         container.innerHTML = `
             <div class="col-span-full text-center p-8 bg-white rounded-lg shadow">
@@ -463,6 +467,107 @@ function updateSessionsList() {
     container.innerHTML = sortedSessions.map(s => createSessionCard(s)).join('');
     sortedSessions.forEach(s => {
         if (s.state === 'WAITING_FOR_QR' && s.qrReady) loadQRCode(s.name);
+    });
+}
+
+function updateDedicatedFXSessions() {
+    const fxSessions = sessions.filter(s => s.name.startsWith('fx-'));
+    const fxSessionNames = ['fx-session-1', 'fx-session-2'];
+    
+    fxSessionNames.forEach(name => {
+        const session = fxSessions.find(s => s.name === name);
+        const badge = document.getElementById(`badge-${name}`);
+        const info = document.getElementById(`info-${name}`);
+        const statusMsg = document.getElementById(`status-msg-${name}`);
+        const createBtn = document.getElementById(`create-btn-${name}`);
+        const closeBtn = document.getElementById(`close-btn-${name}`);
+        const qrContainer = document.getElementById(`qr-container-${name}`);
+        
+        if (!badge) return;
+        
+        if (session) {
+            // Sesión activa
+            if (session.state === 'READY') {
+                badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-500 text-white';
+                badge.textContent = '✅ Conectada';
+                statusMsg.textContent = `📞 Número: ${session.phoneNumber || 'N/A'}`;
+                statusMsg.className = 'mt-2 text-sm font-medium text-green-700';
+            } else if (session.state === 'WAITING_FOR_QR') {
+                badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-500 text-white';
+                badge.textContent = '📱 Esperando QR';
+                statusMsg.textContent = 'Escanea el código QR con WhatsApp';
+                statusMsg.className = 'mt-2 text-sm font-medium text-yellow-700';
+                if (qrContainer && session.qrReady) {
+                    qrContainer.classList.remove('hidden');
+                    loadQRCode(name);
+                }
+            } else {
+                badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-400 text-white';
+                badge.textContent = '⏳ Cargando...';
+                statusMsg.textContent = 'Inicializando sesión...';
+                statusMsg.className = 'mt-2 text-sm font-medium text-gray-600';
+            }
+            if (createBtn) createBtn.classList.add('hidden');
+            if (closeBtn) closeBtn.classList.remove('hidden');
+        } else {
+            // No hay sesión
+            badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
+            badge.textContent = 'Inactiva';
+            statusMsg.textContent = '';
+            if (createBtn) createBtn.classList.remove('hidden');
+            if (closeBtn) closeBtn.classList.add('hidden');
+            if (qrContainer) qrContainer.classList.add('hidden');
+        }
+    });
+}
+
+function updateDedicatedGPSwoxSessions() {
+    const gpswoxSessions = sessions.filter(s => s.name.startsWith('gpswox-'));
+    const gpswoxSessionNames = ['gpswox-session', 'gpswox-session-2', 'gpswox-session-3'];
+    
+    gpswoxSessionNames.forEach(name => {
+        const session = gpswoxSessions.find(s => s.name === name);
+        const badge = document.getElementById(`badge-${name}`);
+        const statusMsg = document.getElementById(`status-msg-${name}`);
+        const createBtn = document.getElementById(`create-btn-${name}`);
+        const closeBtn = document.getElementById(`close-btn-${name}`);
+        const qrContainer = document.getElementById(`qr-container-${name}`);
+        
+        if (!badge) return;
+        
+        if (session) {
+            // Sesión activa
+            if (session.state === 'READY') {
+                badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-500 text-white';
+                badge.textContent = '✅ Conectada';
+                statusMsg.textContent = `📞 Número: ${session.phoneNumber || 'N/A'}`;
+                statusMsg.className = 'mt-2 text-sm font-medium text-green-700';
+            } else if (session.state === 'WAITING_FOR_QR') {
+                badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-500 text-white';
+                badge.textContent = '📱 Esperando QR';
+                statusMsg.textContent = 'Escanea el código QR con WhatsApp';
+                statusMsg.className = 'mt-2 text-sm font-medium text-yellow-700';
+                if (qrContainer && session.qrReady) {
+                    qrContainer.classList.remove('hidden');
+                    loadQRCode(name);
+                }
+            } else {
+                badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-400 text-white';
+                badge.textContent = '⏳ Cargando...';
+                statusMsg.textContent = 'Inicializando sesión...';
+                statusMsg.className = 'mt-2 text-sm font-medium text-gray-600';
+            }
+            if (createBtn) createBtn.classList.add('hidden');
+            if (closeBtn) closeBtn.classList.remove('hidden');
+        } else {
+            // No hay sesión
+            badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
+            badge.textContent = 'Inactiva';
+            statusMsg.textContent = '';
+            if (createBtn) createBtn.classList.remove('hidden');
+            if (closeBtn) closeBtn.classList.add('hidden');
+            if (qrContainer) qrContainer.classList.add('hidden');
+        }
     });
 }
 
