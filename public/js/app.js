@@ -476,6 +476,7 @@ function updateDedicatedFXSessions() {
     
     fxSessionNames.forEach(name => {
         const session = fxSessions.find(s => s.name === name);
+        const card = document.getElementById(`fx-card-${name}`);
         const badge = document.getElementById(`badge-${name}`);
         const info = document.getElementById(`info-${name}`);
         const statusMsg = document.getElementById(`status-msg-${name}`);
@@ -483,16 +484,19 @@ function updateDedicatedFXSessions() {
         const closeBtn = document.getElementById(`close-btn-${name}`);
         const qrContainer = document.getElementById(`qr-container-${name}`);
         
-        if (!badge) return;
+        if (!badge || !card) return;
         
         if (session) {
             // Sesión activa
             if (session.state === 'READY') {
+                // Cambiar fondo a verde como Baileys
+                card.className = 'bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg shadow p-5 border-2 border-green-300';
                 badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-500 text-white';
                 badge.textContent = '✅ Conectada';
                 statusMsg.textContent = `📞 Número: ${session.phoneNumber || 'N/A'}`;
                 statusMsg.className = 'mt-2 text-sm font-medium text-green-700';
             } else if (session.state === 'WAITING_FOR_QR') {
+                card.className = 'bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg shadow p-5 border-2 border-yellow-300';
                 badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-500 text-white';
                 badge.textContent = '📱 Esperando QR';
                 statusMsg.textContent = 'Escanea el código QR con WhatsApp';
@@ -502,6 +506,7 @@ function updateDedicatedFXSessions() {
                     loadQRCode(name);
                 }
             } else {
+                card.className = 'bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg shadow p-5 border-2 border-gray-300';
                 badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-400 text-white';
                 badge.textContent = '⏳ Cargando...';
                 statusMsg.textContent = 'Inicializando sesión...';
@@ -510,7 +515,8 @@ function updateDedicatedFXSessions() {
             if (createBtn) createBtn.classList.add('hidden');
             if (closeBtn) closeBtn.classList.remove('hidden');
         } else {
-            // No hay sesión
+            // No hay sesión - volver al color naranja original
+            card.className = 'bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg shadow p-5 border-2 border-orange-200';
             badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
             badge.textContent = 'Inactiva';
             statusMsg.textContent = '';
@@ -527,22 +533,26 @@ function updateDedicatedGPSwoxSessions() {
     
     gpswoxSessionNames.forEach(name => {
         const session = gpswoxSessions.find(s => s.name === name);
+        const card = document.getElementById(`gpswox-card-${name}`);
         const badge = document.getElementById(`badge-${name}`);
         const statusMsg = document.getElementById(`status-msg-${name}`);
         const createBtn = document.getElementById(`create-btn-${name}`);
         const closeBtn = document.getElementById(`close-btn-${name}`);
         const qrContainer = document.getElementById(`qr-container-${name}`);
         
-        if (!badge) return;
+        if (!badge || !card) return;
         
         if (session) {
             // Sesión activa
             if (session.state === 'READY') {
+                // Cambiar fondo a verde como Baileys
+                card.className = 'bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg shadow p-5 border-2 border-green-300';
                 badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-green-500 text-white';
                 badge.textContent = '✅ Conectada';
                 statusMsg.textContent = `📞 Número: ${session.phoneNumber || 'N/A'}`;
                 statusMsg.className = 'mt-2 text-sm font-medium text-green-700';
             } else if (session.state === 'WAITING_FOR_QR') {
+                card.className = 'bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg shadow p-5 border-2 border-yellow-300';
                 badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-500 text-white';
                 badge.textContent = '📱 Esperando QR';
                 statusMsg.textContent = 'Escanea el código QR con WhatsApp';
@@ -552,6 +562,7 @@ function updateDedicatedGPSwoxSessions() {
                     loadQRCode(name);
                 }
             } else {
+                card.className = 'bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg shadow p-5 border-2 border-gray-300';
                 badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-400 text-white';
                 badge.textContent = '⏳ Cargando...';
                 statusMsg.textContent = 'Inicializando sesión...';
@@ -560,7 +571,8 @@ function updateDedicatedGPSwoxSessions() {
             if (createBtn) createBtn.classList.add('hidden');
             if (closeBtn) closeBtn.classList.remove('hidden');
         } else {
-            // No hay sesión
+            // No hay sesión - volver al color morado original
+            card.className = 'bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200';
             badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
             badge.textContent = 'Inactiva';
             statusMsg.textContent = '';
