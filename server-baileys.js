@@ -29,6 +29,7 @@ const webhook = require('./lib/session/webhook');
 // Utilidades centralizadas
 const { formatPhoneNumber } = require('./lib/session/utils');
 const { checkProxyAvailable } = require('./lib/session/proxy');
+const mt5Detector = require('./lib/session/mt5-detector');
 
 // Inicialización de Express
 const app = express();
@@ -129,60 +130,18 @@ async function monitorSessions() {
 function sendSessionsStatusNotification() {
     try {
         const sessionsStatus = sessionManager.getSessionsStatus();
-        const sessionsObj = sessionManager.getAllSessions();
-        const rotationInfo = sessionManager.getRotationInfo();
-        const total = sessionsStatus.length;
         const active = sessionsStatus.filter(s => s.state === config.SESSION_STATES.READY);
-        const inactive = sessionsStatus.filter(s => s.state !== config.SESSION_STATES.READY);
 
-        // Emojis usando codigos Unicode para evitar problemas de codificacion
-        const EMOJI = {
-            CHART: '\uD83D\uDCCA',     // 
-            CLOCK: '\u23F0',           // 
-            GRAPH: '\uD83D\uDCC8',     // 
-            CHECK: '\u2705',           // 
-            WARNING: '\u26A0\uFE0F',   // 
-            PHONE: '\uD83D\uDCF1',     // 
-            REFRESH: '\uD83D\uDD04'    // 
-        };
-
+        // Mensaje minimalista: solo nombres de sesiones activas
         const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
-        let msg = `${EMOJI.CHART} *REPORTE DE SESIONES*\n\n` +
-            `${EMOJI.CLOCK} ${nowStr}\n\n` +
-            `${EMOJI.GRAPH} Total: ${total} | ${EMOJI.CHECK} Activas: ${active.length} | ${EMOJI.WARNING} Inactivas: ${inactive.length}\n\n`;
+        let msg = `📊 *Sesiones Activas* (${active.length})\n${nowStr}\n\n`;
 
         if (active.length === 0) {
-            msg += "*Sesiones Activas:*\n- Sin sesiones activas\n";
+            msg += "⚠️ Sin sesiones activas";
         } else {
-            msg += "*Sesiones Activas:*\n";
+            // Solo listar los nombres
             active.forEach((s, i) => {
-                const sessionObj = sessionsObj[s.name] || {};
-                const info = sessionObj.info || {};
-                const label = info.pushname ? ` (${info.pushname})` : '';
-                const phoneNumber = info.me?.id?.split('@')[0] || info.me?.user || 'N/A';
-                const consolidados = sessionObj.consolidatedCount || 0;
-                const recibidos = sessionObj.messagesReceivedCount || 0;
-                const enviados = sessionObj.messagesSentCount || 0;
-                const proxyInfo = sessionObj.proxyHost ? `${sessionObj.proxyHost}:${sessionObj.proxyPort}` : 'Sin proxy';
-                const location = sessionObj.proxyCountry && sessionObj.proxyCity ? `${sessionObj.proxyCity}, ${sessionObj.proxyCountry}` : 'N/A';
-
-                msg += `${i + 1}. ${EMOJI.CHECK} *${s.name}*${label}\n`;
-                msg += `   ${EMOJI.PHONE} ${phoneNumber}\n`;
-                msg += `   📦 Consolidados: ${consolidados}\n`;
-                msg += `   📥 Recibidos: ${recibidos}\n`;
-                msg += `   📤 Enviados: ${enviados}\n`;
-                msg += `   🌐 IP: ${proxyInfo}\n`;
-                msg += `   📍 Ubicación: ${location}\n\n`;
-            });
-        }
-
-        if (inactive.length === 0) {
-            msg += "\n*Requieren atencion:*\n- Sin sesiones inactivas\n";
-        } else {
-            msg += "\n*Requieren atencion:*\n";
-            inactive.forEach((s, i) => {
-                const icon = s.state == config.SESSION_STATES.WAITING_FOR_QR ? EMOJI.PHONE : (s.state == config.SESSION_STATES.RECONNECTING ? EMOJI.REFRESH : EMOJI.WARNING);
-                msg += `${i + 1}. ${icon} *${s.name}* - ${s.state}\n`;
+                msg += `${i + 1}. ${s.name}\n`;
             });
         }
 
@@ -657,6 +616,57 @@ app.get('/api/proxy/status', (req, res) => {
                 ...proxyStatus,
                 sessionAssignments: Object.fromEntries(assignments)
             }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/sessions/:name/reconnect - Reconecta una sesión aplicando proxy
+ */
+app.post('/api/sessions/:name/reconnect', async (req, res) => {
+    try {
+        const { name } = req.params;
+        
+        console.log(`🔄 Solicitud de reconexión para sesión: ${name}`);
+        
+        const session = await sessionManager.reconnectSession(name);
+        
+        res.json({
+            success: true,
+            message: `Sesión ${name} reconectada exitosamente`,
+            session: {
+                name: session.name,
+                state: session.state
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/sessions/reconnect-all - Reconecta todas las sesiones con proxies
+ */
+app.post('/api/sessions/reconnect-all', async (req, res) => {
+    try {
+        const { excludeGpswox = true } = req.body;
+        
+        console.log(`🔄 Solicitud de reconexión masiva (excludeGpswox: ${excludeGpswox})`);
+        
+        const results = await sessionManager.reconnectAllSessions(excludeGpswox);
+        
+        res.json({
+            success: true,
+            message: 'Reconexión masiva completada',
+            results
         });
     } catch (error) {
         res.status(500).json({
@@ -1252,7 +1262,29 @@ app.post('/api/messages/send', async (req, res) => {
         // Limpiar formato de mensaje GPS
         const cleanedMessage = cleanGPSMessage(message);
 
-        // SIEMPRE consolidar - sin opcion de bypass
+        // 🎯 DETECCIÓN FX: Si el mensaje contiene keywords MT5, enviar inmediatamente por FX
+        if (mt5Detector.isMT5Alert(cleanedMessage)) {
+            console.log(`📊 API detectó mensaje FX: "${cleanedMessage.substring(0, 50)}..."`);
+            
+            try {
+                const fxResult = await sessionManager.sendViaFX(phoneNumber, cleanedMessage);
+                if (fxResult.success) {
+                    return res.json({
+                        success: true,
+                        consolidated: false,
+                        fx: true,
+                        message: `Mensaje enviado INMEDIATAMENTE por sesión FX: ${fxResult.fxSession}`,
+                        details: fxResult
+                    });
+                } else {
+                    console.log(`⚠️ No se pudo enviar por FX: ${fxResult.error}, enviando a consolidación`);
+                }
+            } catch (fxError) {
+                console.log(`⚠️ Error al enviar por FX: ${fxError.message}, enviando a consolidación`);
+            }
+        }
+
+        // Si no es FX o falló el envío FX, enviar a consolidación normal
         const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
             res.json({
@@ -1289,7 +1321,29 @@ app.post('/api/session/send-message', async (req, res) => {
         // Limpiar formato de mensaje GPS
         const cleanedMessage = cleanGPSMessage(message);
 
-        // SIEMPRE consolidar - sin opcion de bypass
+        // 🎯 DETECCIÓN FX: Si el mensaje contiene keywords MT5, enviar inmediatamente por FX
+        if (mt5Detector.isMT5Alert(cleanedMessage)) {
+            console.log(`📊 API detectó mensaje FX: "${cleanedMessage.substring(0, 50)}..."`);
+            
+            try {
+                const fxResult = await sessionManager.sendViaFX(phoneNumber, cleanedMessage);
+                if (fxResult.success) {
+                    return res.json({
+                        success: true,
+                        consolidated: false,
+                        fx: true,
+                        message: `Mensaje enviado INMEDIATAMENTE por sesión FX: ${fxResult.fxSession}`,
+                        details: fxResult
+                    });
+                } else {
+                    console.log(`⚠️ No se pudo enviar por FX: ${fxResult.error}, enviando a consolidación`);
+                }
+            } catch (fxError) {
+                console.log(`⚠️ Error al enviar por FX: ${fxError.message}, enviando a consolidación`);
+            }
+        }
+
+        // Si no es FX o falló el envío FX, enviar a consolidación normal
         const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
             res.json({
