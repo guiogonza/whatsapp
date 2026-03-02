@@ -2470,6 +2470,20 @@ async function initialize() {
         // Cargar sesiones existentes
         await sessionManager.loadSessionsFromDisk();
 
+        // Auto-crear sesiones FX si no existen (para que siempre estén disponibles)
+        const fxSession = require('./lib/session/fx-session');
+        const fxNames = fxSession.getFXSessionNames();
+        for (const fxName of fxNames) {
+            if (!sessionManager.getSession(fxName)) {
+                console.log(`📱 Auto-creando sesión FX: ${fxName}`);
+                try {
+                    await sessionManager.createSession(fxName);
+                } catch (e) {
+                    console.log(`⚠️ No se pudo auto-crear ${fxName}: ${e.message}`);
+                }
+            }
+        }
+
         // Iniciar servidor HTTP
         server.listen(config.PORT, () => {
             console.log(`ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Servidor escuchando en puerto ${config.PORT}`);
