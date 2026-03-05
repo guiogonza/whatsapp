@@ -615,6 +615,8 @@ function createSessionCard(session) {
         'whatsapp-web-js': { label: 'WWJS', color: 'bg-green-100 text-green-800', icon: '🟢' }
     };
     const adapterInfo = adapterLabels[session.adapterType] || { label: session.adapterType || 'Desconocido', color: 'bg-gray-100 text-gray-800', icon: '⚪' };
+    const isActiveSession = session.name === currentRotationSession && session.state === 'READY';
+    const isResting = session.name === restingSessionName && session.state === 'READY';
     // Si alcanzó límite horario, cambiar colores
     let colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
     if (session.hourlyLimitReached && session.state === 'READY') {
@@ -624,8 +626,6 @@ function createSessionCard(session) {
         colorClass = 'border-yellow-400 bg-yellow-50';
     }
     const stateLabel = labels[session.state] || session.state;
-    const isActiveSession = session.name === currentRotationSession && session.state === 'READY';
-    const isResting = session.name === restingSessionName && session.state === 'READY';
     
     let userInfoHtml = '';
     if (session.phoneNumber && session.state === 'READY') {
