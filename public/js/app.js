@@ -147,6 +147,7 @@ function showSection(sectionId) {
 
 // ======================== SESIONES ========================
 let networkInfo = { publicIP: 'Cargando...', lastChecked: null };
+let restingSessionName = null; // Sesión actualmente descansando (descanso rotativo)
 
 async function loadSessions() {
     try {
@@ -377,6 +378,9 @@ async function updateRotationInfo() {
         
         currentRotationSession = rotationData.currentSession;
         
+        // Guardar sesión descansando para usarla en las tarjetas
+        restingSessionName = rotationData.rest?.restingSession || null;
+        
         const infoEl = document.getElementById('rotationInfo');
         if (rotationData.totalActiveSessions > 0) {
             const nextRotation = new Date(rotationData.nextRotation);
@@ -385,7 +389,14 @@ async function updateRotationInfo() {
             const timeUntilSec = Math.floor((timeUntilMs / 1000) % 60);
             let timeDisplay = timeUntilMin > 0 ? `${timeUntilMin}m ${timeUntilSec}s` : `${timeUntilSec}s`;
             if (timeUntilMs <= 0) timeDisplay = '🔄 Rotando...';
-            infoEl.innerHTML = `🔄 <strong class="text-purple-700">${currentRotationSession || 'N/A'}</strong> enviando | Próxima rotación: <span class="font-mono">${timeDisplay}</span>`;
+            
+            let restHtml = '';
+            if (rotationData.rest?.enabled && rotationData.rest.restingSession) {
+                restHtml = ` | 😴 <strong class="text-orange-600">${rotationData.rest.restingSession}</strong> descansando (${rotationData.rest.minutesRemaining} min)`;
+            } else if (rotationData.rest?.enabled && rotationData.rest.totalPeriods > 0) {
+                restHtml = ' | ✅ <span class="text-green-600">Todas activas</span>';
+            }
+            infoEl.innerHTML = `🔄 <strong class="text-purple-700">${currentRotationSession || 'N/A'}</strong> enviando${restHtml}`;
         } else {
             infoEl.innerHTML = '⚠️ No hay sesiones activas para rotación';
         }
@@ -609,8 +620,12 @@ function createSessionCard(session) {
     if (session.hourlyLimitReached && session.state === 'READY') {
         colorClass = 'border-orange-500 bg-orange-50';
     }
+    if (isResting) {
+        colorClass = 'border-yellow-400 bg-yellow-50';
+    }
     const stateLabel = labels[session.state] || session.state;
     const isActiveSession = session.name === currentRotationSession && session.state === 'READY';
+    const isResting = session.name === restingSessionName && session.state === 'READY';
     
     let userInfoHtml = '';
     if (session.phoneNumber && session.state === 'READY') {
@@ -631,6 +646,7 @@ function createSessionCard(session) {
                             <h3 class="text-lg font-bold">${session.name}</h3>
                             <span class="${adapterInfo.color} text-xs px-2 py-0.5 rounded-full font-semibold">${adapterInfo.icon} ${adapterInfo.label}</span>
                             ${isActiveSession ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
+                            ${isResting ? '<span class="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">😴 DESCANSANDO</span>' : ''}
                             ${session.hourlyLimitReached ? '<span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">⏸️ LÍMITE</span>' : ''}
                         </div>
                         <span class="text-sm">${stateLabel}</span>
