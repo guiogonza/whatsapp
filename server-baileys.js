@@ -132,6 +132,9 @@ function sendSessionsStatusNotification() {
         const sessionsStatus = sessionManager.getSessionsStatus();
         const active = sessionsStatus.filter(s => s.state === config.SESSION_STATES.READY);
 
+        // Info de descanso rotativo
+        const restInfo = sessionManager.getRestingSession ? sessionManager.getRestingSession() : null;
+
         // Mensaje minimalista: solo nombres de sesiones activas
         const nowStr = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
         let msg = `📊 *Sesiones Activas* (${active.length})\n${nowStr}\n\n`;
@@ -139,10 +142,18 @@ function sendSessionsStatusNotification() {
         if (active.length === 0) {
             msg += "⚠️ Sin sesiones activas";
         } else {
-            // Solo listar los nombres
+            // Listar nombres con indicador de descanso
             active.forEach((s, i) => {
-                msg += `${i + 1}. ${s.name}\n`;
+                const isResting = restInfo && restInfo.sessionName === s.name;
+                const icon = isResting ? '😴' : '✅';
+                const restLabel = isResting ? ` _(descansando ${restInfo.minutesRemaining} min)_` : '';
+                msg += `${icon} ${s.name}${restLabel}\n`;
             });
+        }
+
+        // Agregar resumen de descanso rotativo
+        if (restInfo) {
+            msg += `\n🔄 *Descanso rotativo:* ${restInfo.sessionName} descansa ${restInfo.minutesRemaining} min`;
         }
 
         sessionManager.sendNotificationToAdmin(msg);
