@@ -148,6 +148,7 @@ function showSection(sectionId) {
 // ======================== SESIONES ========================
 let networkInfo = { publicIP: 'Cargando...', lastChecked: null };
 let restingSessionName = null; // Sesión actualmente descansando (descanso rotativo)
+let restingMsRemaining = 0; // Milisegundos restantes de descanso
 
 async function loadSessions() {
     try {
@@ -380,6 +381,7 @@ async function updateRotationInfo() {
         
         // Guardar sesión descansando para usarla en las tarjetas
         restingSessionName = rotationData.rest?.restingSession || null;
+        restingMsRemaining = rotationData.rest?.msRemaining || 0;
         
         const infoEl = document.getElementById('rotationInfo');
         if (rotationData.totalActiveSessions > 0) {
@@ -646,7 +648,7 @@ function createSessionCard(session) {
                             <h3 class="text-lg font-bold">${session.name}</h3>
                             <span class="${adapterInfo.color} text-xs px-2 py-0.5 rounded-full font-semibold">${adapterInfo.icon} ${adapterInfo.label}</span>
                             ${isActiveSession ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
-                            ${isResting ? '<span class="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">😴 DESCANSANDO</span>' : ''}
+                            ${isResting ? `<span class="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">😴 DESCANSANDO <span class="countdown-timer" data-reset-ms="${restingMsRemaining}">${formatCountdown(restingMsRemaining)}</span></span>` : ''}
                             ${session.hourlyLimitReached ? '<span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">⏸️ LÍMITE</span>' : ''}
                         </div>
                         <span class="text-sm">${stateLabel}</span>
