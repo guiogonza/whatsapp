@@ -149,6 +149,8 @@ function showSection(sectionId) {
 let networkInfo = { publicIP: 'Cargando...', lastChecked: null };
 let restingSessionName = null; // Sesión actualmente descansando (descanso rotativo)
 let restingMsRemaining = 0; // Milisegundos restantes de descanso
+let gracePeriodMsRemaining = 0; // Milisegundos restantes del periodo de gracia
+let nextRestingSession = null; // Próxima sesión que descansará
 
 async function loadSessions() {
     try {
@@ -382,6 +384,8 @@ async function updateRotationInfo() {
         // Guardar sesión descansando para usarla en las tarjetas
         restingSessionName = rotationData.rest?.restingSession || null;
         restingMsRemaining = rotationData.rest?.msRemaining || 0;
+        gracePeriodMsRemaining = rotationData.rest?.gracePeriodMsRemaining || 0;
+        nextRestingSession = rotationData.rest?.nextRestingSession || null;
         
         const infoEl = document.getElementById('rotationInfo');
         if (rotationData.totalActiveSessions > 0) {
@@ -394,9 +398,9 @@ async function updateRotationInfo() {
             
             let restHtml = '';
             if (rotationData.rest?.enabled && rotationData.rest.restingSession) {
-                restHtml = ` | 😴 <strong class="text-orange-600">${rotationData.rest.restingSession}</strong> descansando (${rotationData.rest.minutesRemaining} min)`;
+                restHtml = ` | 😴 <strong class="text-orange-600">${rotationData.rest.restingSession}</strong> descansando (<span class="countdown-timer" data-reset-ms="${rotationData.rest.msRemaining}">${formatCountdown(rotationData.rest.msRemaining)}</span>)`;
             } else if (rotationData.rest?.enabled && rotationData.rest.totalPeriods > 0) {
-                restHtml = ' | ✅ <span class="text-green-600">Todas activas</span>';
+                restHtml = ` | ✅ <span class="text-green-600">Todas activas</span> ⏳ Descanso en: <span class="countdown-timer text-orange-600 font-bold" data-reset-ms="${rotationData.rest.gracePeriodMsRemaining}">${formatCountdown(rotationData.rest.gracePeriodMsRemaining)}</span> (${rotationData.rest.nextRestingSession || '?'})`;
             }
             infoEl.innerHTML = `🔄 <strong class="text-purple-700">${currentRotationSession || 'N/A'}</strong> enviando${restHtml}`;
         } else {
@@ -619,6 +623,7 @@ function createSessionCard(session) {
     const adapterInfo = adapterLabels[session.adapterType] || { label: session.adapterType || 'Desconocido', color: 'bg-gray-100 text-gray-800', icon: '⚪' };
     const isActiveSession = session.name === currentRotationSession && session.state === 'READY';
     const isResting = session.name === restingSessionName && session.state === 'READY';
+    const isNextToRest = !restingSessionName && session.name === nextRestingSession && session.state === 'READY' && gracePeriodMsRemaining > 0;
     // Si alcanzó límite horario, cambiar colores
     let colorClass = colors[session.state] || 'border-gray-500 bg-gray-50';
     if (session.hourlyLimitReached && session.state === 'READY') {
@@ -649,6 +654,7 @@ function createSessionCard(session) {
                             <span class="${adapterInfo.color} text-xs px-2 py-0.5 rounded-full font-semibold">${adapterInfo.icon} ${adapterInfo.label}</span>
                             ${isActiveSession ? '<span class="active-session-badge text-white text-xs px-2 py-1 rounded-full font-bold">💓 ACTIVA</span>' : ''}
                             ${isResting ? `<span class="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">😴 DESCANSANDO <span class="countdown-timer" data-reset-ms="${restingMsRemaining}">${formatCountdown(restingMsRemaining)}</span></span>` : ''}
+                            ${isNextToRest ? `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">⏳ Descansa en <span class="countdown-timer" data-reset-ms="${gracePeriodMsRemaining}">${formatCountdown(gracePeriodMsRemaining)}</span></span>` : ''}
                             ${session.hourlyLimitReached ? '<span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">⏸️ LÍMITE</span>' : ''}
                         </div>
                         <span class="text-sm">${stateLabel}</span>
