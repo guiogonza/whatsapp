@@ -1,6 +1,8 @@
 node_modules/
 .wwebjs_auth/
 .wwebjs_cache/
+whatsapp-sessions/
+data/
 *.log
 combined.log
 error.log
