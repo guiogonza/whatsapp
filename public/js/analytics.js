@@ -7,6 +7,7 @@ if (typeof ChartDataLabels !== 'undefined') {
 
 let analyticsTimelineChart = null;
 let analyticsTopChart = null;
+let analyticsSessionsMonthlyChart = null;
 let analyticsInitialized = false;
 let analyticsRefreshInterval = null;
 let analyticsTopData = []; // Guardar datos para filtrado
@@ -449,6 +450,88 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
     });
 }
 
+const SESSION_COLORS = [
+    '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', 
+    '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
+    '#06b6d4', '#e11d48', '#a855f7', '#22c55e', '#eab308'
+];
+
+async function loadSessionsMonthly(year) {
+    const section = document.getElementById('sessionsMonthlySection');
+    if (!section) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/analytics/sessions-monthly?year=${year}`);
+        const data = await response.json();
+        
+        if (!data.success || !data.data || data.data.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+        
+        section.classList.remove('hidden');
+        
+        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        
+        // Extraer meses y sesiones únicas
+        const mesesSet = new Set();
+        const sessionsSet = new Set();
+        data.data.forEach(row => {
+            mesesSet.add(row.mes);
+            sessionsSet.add(row.session);
+        });
+        
+        const meses = [...mesesSet].sort();
+        const sessions = [...sessionsSet].sort();
+        
+        // Agrupar datos: { session: { mes: enviados } }
+        const sessionData = {};
+        data.data.forEach(row => {
+            if (!sessionData[row.session]) sessionData[row.session] = {};
+            sessionData[row.session][row.mes] = row.enviados;
+        });
+        
+        const labels = meses.map(m => {
+            const idx = parseInt(m.split('-')[1]) - 1;
+            return monthNames[idx];
+        });
+        
+        const datasets = sessions.map((session, i) => ({
+            label: session,
+            data: meses.map(m => sessionData[session]?.[m] || 0),
+            backgroundColor: SESSION_COLORS[i % SESSION_COLORS.length],
+            borderColor: SESSION_COLORS[i % SESSION_COLORS.length],
+            borderWidth: 1
+        }));
+        
+        const ctx = document.getElementById('sessionsMonthlyChart');
+        if (!ctx) return;
+        
+        if (analyticsSessionsMonthlyChart) analyticsSessionsMonthlyChart.destroy();
+        
+        analyticsSessionsMonthlyChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { mode: 'index', intersect: false },
+                    datalabels: { display: false }
+                },
+                scales: {
+                    x: { stacked: false },
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando sessions monthly:', error);
+        section.classList.add('hidden');
+    }
+}
+
 function buildAnalyticsTopChart(ctx, labels, totals, fullData) {
     if (analyticsTopChart) analyticsTopChart.destroy();
     
@@ -457,7 +540,6 @@ function buildAnalyticsTopChart(ctx, labels, totals, fullData) {
     
     // Resetear ordenamiento al cargar nuevos datos
     resetAnalyticsSortIndicators();
-    
     analyticsTopChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -873,6 +955,16 @@ async function refreshAnalytics() {
         const timelineCtx = document.getElementById('analyticsTimelineChart');
         if (timelineCtx) {
             buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, enviados, errores, cola, chartType);
+        }
+        
+        // Mostrar gráfica de sesiones por mes solo en periodo año
+        const sessionsSection = document.getElementById('sessionsMonthlySection');
+        if (period === 'year') {
+            const yearPicker = document.getElementById('analyticsYearPicker');
+            const year = yearPicker ? yearPicker.value : new Date().getFullYear();
+            loadSessionsMonthly(year);
+        } else if (sessionsSection) {
+            sessionsSection.classList.add('hidden');
         }
         
         const topRows = data.top_numbers || [];

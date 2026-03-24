@@ -131,6 +131,50 @@ async function getMessages(req, res) {
     }
 }
 
+/**
+ * GET /api/analytics/sessions-monthly
+ * Mensajes por sesión agrupados por mes (para gráfica anual)
+ */
+async function getSessionsMonthly(req, res) {
+    try {
+        const { year } = req.query;
+        const targetYear = parseInt(year) || new Date().getFullYear();
+        const startDate = `${targetYear}-01-01`;
+        const endDate = `${targetYear}-12-31 23:59:59`;
+
+        const result = await database.query(`
+            SELECT 
+                TO_CHAR(timestamp, 'YYYY-MM') as mes,
+                session_name,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'SUCCESS' OR status = 'SENT' THEN 1 ELSE 0 END) as enviados
+            FROM messages_sent
+            WHERE timestamp >= $1 AND timestamp <= $2
+            AND session_name IS NOT NULL AND session_name != ''
+            GROUP BY TO_CHAR(timestamp, 'YYYY-MM'), session_name
+            ORDER BY mes, session_name
+        `, [startDate, endDate]);
+
+        res.json({
+            success: true,
+            year: targetYear,
+            data: result.rows.map(row => ({
+                mes: row.mes,
+                session: row.session_name,
+                total: parseInt(row.total) || 0,
+                enviados: parseInt(row.enviados) || 0
+            }))
+        });
+    } catch (error) {
+        console.error('Error en analytics/sessions-monthly:', error);
+        if (error.message && error.message.includes('does not exist')) {
+            return res.json({ success: true, year: new Date().getFullYear(), data: [] });
+        }
+        res.status(500).json({ success: false, error: error.message });
+    }
+}
+
 module.exports = {
-    getMessages
+    getMessages,
+    getSessionsMonthly
 };
