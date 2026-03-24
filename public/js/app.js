@@ -333,6 +333,27 @@ async function loadCloudApiStats() {
                     statusEl.textContent = '● ACTIVA';
                 }
             }
+            
+            // Límite mensual de conversaciones
+            const limitWarn = document.getElementById('cloudMonthlyLimitWarn');
+            const limitOverride = document.getElementById('cloudMonthlyLimitOverride');
+            if (data.monthlyLimit) {
+                const ml = data.monthlyLimit;
+                if (ml.limitReached && !ml.override) {
+                    // Límite alcanzado, mostrar advertencia + botón continuar
+                    limitWarn.classList.remove('hidden');
+                    limitOverride.classList.add('hidden');
+                    document.getElementById('cloudLimitText').textContent = `${ml.current} / ${ml.limit} conversaciones este mes`;
+                } else if (ml.override) {
+                    // Override activo, mostrar advertencia + botón pausar
+                    limitWarn.classList.add('hidden');
+                    limitOverride.classList.remove('hidden');
+                    document.getElementById('cloudLimitOverrideText').textContent = `${ml.current} / ${ml.limit} conversaciones (límite ignorado)`;
+                } else {
+                    limitWarn.classList.add('hidden');
+                    limitOverride.classList.add('hidden');
+                }
+            }
         }
     } catch (error) {
         console.error('Error cargando stats Cloud API:', error);
@@ -396,6 +417,59 @@ async function disableCloudApi() {
         const btn = document.getElementById('btnDisableCloud');
         btn.disabled = false;
         btn.textContent = '✕ Deshabilitar';
+    }
+}
+
+// Continuar enviando Cloud API (ignorar límite mensual)
+async function continueCloudApi() {
+    if (!confirm('¿Continuar enviando por Cloud API? Esto generará costos adicionales más allá de las 1000 conversaciones gratuitas.')) {
+        return;
+    }
+    try {
+        const btn = document.getElementById('btnContinueCloud');
+        btn.disabled = true;
+        btn.textContent = '⏳ Activando...';
+        
+        const response = await fetch(`${API_URL}/api/cloud/continue`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCloudApiStats();
+        } else {
+            throw new Error(data.error || 'Error');
+        }
+    } catch (error) {
+        console.error('Error continuando Cloud API:', error);
+        alert('❌ Error: ' + error.message);
+    } finally {
+        const btn = document.getElementById('btnContinueCloud');
+        btn.disabled = false;
+        btn.textContent = '▶ Continuar enviando';
+    }
+}
+
+// Pausar envío Cloud API (re-activar límite mensual)
+async function pauseCloudApi() {
+    try {
+        const btn = document.getElementById('btnPauseCloud');
+        btn.disabled = true;
+        btn.textContent = '⏳ Pausando...';
+        
+        const response = await fetch(`${API_URL}/api/cloud/pause`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCloudApiStats();
+        } else {
+            throw new Error(data.error || 'Error');
+        }
+    } catch (error) {
+        console.error('Error pausando Cloud API:', error);
+        alert('❌ Error: ' + error.message);
+    } finally {
+        const btn = document.getElementById('btnPauseCloud');
+        btn.disabled = false;
+        btn.textContent = '⏸ Pausar envío';
     }
 }
 

@@ -918,6 +918,7 @@ app.get('/api/cloud/stats', async (req, res) => {
             phoneNumber: config.WHATSAPP_CLOUD_PHONE_ID,
             hybridMode: config.HYBRID_MODE_ENABLED,
             percentage: config.WHATSAPP_CLOUD_PERCENTAGE || 50,
+            monthlyLimit: cloudApi.getMonthlyLimitInfo(),
             costs: {
                 monthlyMessages: dbStats.thisMonth,
                 monthlyConversations,
@@ -966,6 +967,40 @@ app.post('/api/cloud/disable', (req, res) => {
             success: true,
             message: 'Cloud API deshabilitada. Los mensajes irán solo por Baileys o quedarán en cola.',
             stats: cloudApi.getStats()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/cloud/continue - Continuar enviando después de alcanzar el límite mensual
+ */
+app.post('/api/cloud/continue', (req, res) => {
+    try {
+        const cloudApi = require('./lib/session/whatsapp-cloud-api');
+        cloudApi.setMonthlyLimitOverride(true);
+        res.json({
+            success: true,
+            message: `Límite mensual ignorado. Cloud API continuará enviando más allá de ${cloudApi.MONTHLY_CONVERSATION_LIMIT} conversaciones.`,
+            limitInfo: cloudApi.getMonthlyLimitInfo()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/cloud/pause - Re-activar el límite mensual (pausar envío Cloud API)
+ */
+app.post('/api/cloud/pause', (req, res) => {
+    try {
+        const cloudApi = require('./lib/session/whatsapp-cloud-api');
+        cloudApi.setMonthlyLimitOverride(false);
+        res.json({
+            success: true,
+            message: `Límite mensual re-activado. Cloud API se pausará al alcanzar ${cloudApi.MONTHLY_CONVERSATION_LIMIT} conversaciones.`,
+            limitInfo: cloudApi.getMonthlyLimitInfo()
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
