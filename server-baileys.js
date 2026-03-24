@@ -815,16 +815,22 @@ app.post('/api/cloud/send', async (req, res) => {
 });
 
 /**
- * GET /api/cloud/stats - Estadísticas de WhatsApp Cloud API
+ * GET /api/cloud/stats - Estadísticas de WhatsApp Cloud API con costos
+ * Pricing Colombia (utility templates): ~$0.0085 USD por mensaje
+ * 1000 conversaciones gratis/mes (service conversations)
  */
 app.get('/api/cloud/stats', async (req, res) => {
     try {
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         const stats = cloudApi.getStats();
 
+        const COST_PER_MESSAGE_USD = 0.0085; // Utility template Colombia
+        const FREE_CONVERSATIONS = 1000; // Gratis por mes (service)
+        const USD_TO_COP = 4200; // Tasa aproximada
+
         // Obtener conteo de mensajes enviados desde la BD
         const db = require('./database-postgres');
-        let dbStats = { total: 0, today: 0, thisHour: 0 };
+        let dbStats = { total: 0, today: 0, thisHour: 0, thisMonth: 0 };
 
         try {
             // Total de mensajes enviados por Cloud API
@@ -850,6 +856,14 @@ app.get('/api/cloud/stats', async (req, res) => {
             `);
             dbStats.thisHour = parseInt(hourResult.rows[0]?.count || 0);
 
+            // Mensajes del mes actual
+            const monthResult = await db.query(`
+                SELECT COUNT(*) as count FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent' 
+                AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+            `);
+            dbStats.thisMonth = parseInt(monthResult.rows[0]?.count || 0);
+
             // Mensajes por día (últimos 7 días)
             const dailyResult = await db.query(`
                 SELECT DATE(created_at) as date, COUNT(*) as count 
@@ -865,13 +879,30 @@ app.get('/api/cloud/stats', async (req, res) => {
             console.error('Error obteniendo estadísticas de BD:', dbErr);
         }
 
+        // Calcular costos
+        const monthlyMessages = dbStats.thisMonth || 0;
+        const billableMessages = Math.max(0, monthlyMessages - FREE_CONVERSATIONS);
+        const costUSD = billableMessages * COST_PER_MESSAGE_USD;
+        const costCOP = costUSD * USD_TO_COP;
+        const todayCostUSD = (dbStats.today || 0) * COST_PER_MESSAGE_USD;
+
         res.json({
             success: true,
             cloudApi: stats,
             database: dbStats,
             phoneNumber: config.WHATSAPP_CLOUD_PHONE_ID,
             hybridMode: config.HYBRID_MODE_ENABLED,
-            percentage: config.WHATSAPP_CLOUD_PERCENTAGE || 50
+            percentage: config.WHATSAPP_CLOUD_PERCENTAGE || 50,
+            costs: {
+                monthlyMessages,
+                freeConversations: FREE_CONVERSATIONS,
+                billableMessages,
+                costPerMessageUSD: COST_PER_MESSAGE_USD,
+                monthCostUSD: Math.round(costUSD * 100) / 100,
+                monthCostCOP: Math.round(costCOP),
+                todayCostUSD: Math.round(todayCostUSD * 100) / 100,
+                usdToCop: USD_TO_COP
+            }
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

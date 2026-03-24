@@ -173,14 +173,55 @@
                             <div class="text-xs text-blue-100">Última hora</div>
                         </div>
                         <div class="bg-white/20 rounded-lg p-3 text-center">
+                            <div id="cloudApiMonth" class="text-2xl font-bold">0</div>
+                            <div class="text-xs text-blue-100">Este mes</div>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-3 text-center">
                             <div id="cloudApiTotal" class="text-2xl font-bold">0</div>
                             <div class="text-xs text-blue-100">Total</div>
                         </div>
-                        <div class="bg-white/20 rounded-lg p-3 text-center">
-                            <div id="cloudApiPercentage" class="text-2xl font-bold">50%</div>
-                            <div class="text-xs text-blue-100">Distribución</div>
+                    </div>
+                    
+                    <!-- Barra de progreso hora -->
+                    <div class="mt-4">
+                        <div class="flex justify-between text-xs text-blue-100 mb-1">
+                            <span>Uso por hora</span>
+                            <span id="cloudApiHourProgress">0 / 500</span>
+                        </div>
+                        <div class="w-full bg-white/20 rounded-full h-2">
+                            <div id="cloudApiHourBar" class="bg-green-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                         </div>
                     </div>
+                    
+                    <!-- Costos mensuales -->
+                    <div class="mt-4 pt-4 border-t border-white/20">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-lg">💰</span>
+                            <span class="font-bold text-sm">Consumo Mensual</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-white/10 rounded-lg p-2 text-center">
+                                <div id="cloudCostMonth" class="text-lg font-bold">$0</div>
+                                <div class="text-xs text-blue-200">USD / mes</div>
+                            </div>
+                            <div class="bg-white/10 rounded-lg p-2 text-center">
+                                <div id="cloudCostMonthCOP" class="text-lg font-bold">$0</div>
+                                <div class="text-xs text-blue-200">COP / mes</div>
+                            </div>
+                            <div class="bg-white/10 rounded-lg p-2 text-center">
+                                <div id="cloudCostToday" class="text-lg font-bold">$0</div>
+                                <div class="text-xs text-blue-200">USD hoy</div>
+                            </div>
+                            <div class="bg-white/10 rounded-lg p-2 text-center">
+                                <div id="cloudFreeMsgs" class="text-lg font-bold">1000</div>
+                                <div class="text-xs text-blue-200">Gratis restantes</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-xs text-blue-200 text-center">
+                            📊 Tarifa: $0.0085 USD/msg (utility template Colombia) · 1000 conversaciones gratis/mes
+                        </div>
+                    </div>
+                    
                     <div class="mt-4 pt-4 border-t border-white/20">
                         <div class="flex items-center justify-between text-sm">
                             <span class="text-blue-100">📞 Número: <span id="cloudApiPhone" class="font-mono">-</span></span>

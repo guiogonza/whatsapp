@@ -184,8 +184,32 @@ async function loadCloudApiStats() {
             // Actualizar estadísticas
             document.getElementById('cloudApiToday').textContent = data.database?.today || 0;
             document.getElementById('cloudApiHour').textContent = data.database?.thisHour || 0;
+            document.getElementById('cloudApiMonth').textContent = data.database?.thisMonth || 0;
             document.getElementById('cloudApiTotal').textContent = data.database?.total || 0;
-            document.getElementById('cloudApiPercentage').textContent = `${data.percentage || 50}%`;
+            
+            // Barra de progreso por hora
+            const hourUsage = data.database?.thisHour || 0;
+            const hourLimit = data.cloudApi?.hourlyLimit || 500;
+            const hourPct = Math.min(100, Math.round((hourUsage / hourLimit) * 100));
+            document.getElementById('cloudApiHourProgress').textContent = `${hourUsage} / ${hourLimit}`;
+            const hourBar = document.getElementById('cloudApiHourBar');
+            hourBar.style.width = `${hourPct}%`;
+            if (hourPct >= 100) {
+                hourBar.className = 'bg-red-400 h-2 rounded-full transition-all duration-500';
+            } else if (hourPct >= 80) {
+                hourBar.className = 'bg-yellow-400 h-2 rounded-full transition-all duration-500';
+            } else {
+                hourBar.className = 'bg-green-400 h-2 rounded-full transition-all duration-500';
+            }
+            
+            // Costos
+            if (data.costs) {
+                document.getElementById('cloudCostMonth').textContent = `$${data.costs.monthCostUSD}`;
+                document.getElementById('cloudCostMonthCOP').textContent = `$${data.costs.monthCostCOP.toLocaleString()}`;
+                document.getElementById('cloudCostToday').textContent = `$${data.costs.todayCostUSD}`;
+                const freeRemaining = Math.max(0, data.costs.freeConversations - data.costs.monthlyMessages);
+                document.getElementById('cloudFreeMsgs').textContent = freeRemaining.toLocaleString();
+            }
             
             // Número de teléfono
             if (data.phoneNumber) {
@@ -207,21 +231,17 @@ async function loadCloudApiStats() {
             const errorTextEl = document.getElementById('cloudApiErrorText');
             const btnEnableEl = document.getElementById('btnEnableCloud');
             const btnDisableEl = document.getElementById('btnDisableCloud');
-            const hourUsage = data.cloudApi?.messagesThisHour || 0;
-            const hourLimit = data.cloudApi?.hourlyLimit || 500;
             
             // Verificar estado de la cuenta
             const accountReady = data.cloudApi?.accountReady !== false;
             const accountError = data.cloudApi?.accountError;
             
             if (!accountReady) {
-                // Cuenta no está lista
                 statusEl.classList.add('hidden');
                 accountStatusEl.classList.remove('hidden');
                 accountStatusEl.textContent = '⏳ CUENTA PENDIENTE';
                 accountStatusEl.className = 'bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold';
                 
-                // Mostrar error si existe
                 if (accountError) {
                     accountErrorEl.classList.remove('hidden');
                     errorTextEl.textContent = accountError;
@@ -229,16 +249,13 @@ async function loadCloudApiStats() {
                     accountErrorEl.classList.add('hidden');
                 }
                 
-                // Mostrar botón de habilitar
                 btnEnableEl.classList.remove('hidden');
                 btnDisableEl.classList.add('hidden');
             } else {
-                // Cuenta está lista
                 accountStatusEl.classList.add('hidden');
                 accountErrorEl.classList.add('hidden');
                 statusEl.classList.remove('hidden');
                 
-                // Mostrar botón de deshabilitar
                 btnEnableEl.classList.add('hidden');
                 btnDisableEl.classList.remove('hidden');
                 
