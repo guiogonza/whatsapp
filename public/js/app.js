@@ -15,6 +15,68 @@ let searchSortColumn = 'timestamp';
 let searchSortDirection = 'desc';
 let searchCurrentData = [];
 
+// ======================== TOGGLE MÉTODO DE ENVÍO ========================
+
+function getSelectedMethod(name) {
+    const radio = document.querySelector(`input[name="${name}"]:checked`);
+    return radio ? radio.value : 'baileys';
+}
+
+function togglePersonalMethod() {
+    const method = getSelectedMethod('personalMethod');
+    const sessionsContainer = document.getElementById('personalSessionsContainer');
+    const baileysLabel = document.getElementById('personalMethodBaileysLabel');
+    const cloudLabel = document.getElementById('personalMethodCloudLabel');
+    
+    if (method === 'cloud-api') {
+        if (sessionsContainer) sessionsContainer.style.display = 'none';
+        baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
+        cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-green-500 bg-green-50';
+    } else {
+        if (sessionsContainer) sessionsContainer.style.display = '';
+        baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50';
+        cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
+    }
+}
+
+function toggleBulkMethod() {
+    const method = getSelectedMethod('bulkMethod');
+    const sessionsContainer = document.getElementById('bulkSessionsContainer');
+    const baileysLabel = document.getElementById('bulkMethodBaileysLabel');
+    const cloudLabel = document.getElementById('bulkMethodCloudLabel');
+    const tabGroups = document.getElementById('tabGroups');
+    
+    if (method === 'cloud-api') {
+        if (sessionsContainer) sessionsContainer.style.display = 'none';
+        baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
+        cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-green-500 bg-green-50';
+        if (tabGroups) tabGroups.style.display = 'none';
+        switchBulkTab('numbers');
+    } else {
+        if (sessionsContainer) sessionsContainer.style.display = '';
+        baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-purple-500 bg-purple-50';
+        cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
+        if (tabGroups) tabGroups.style.display = '';
+    }
+}
+
+function toggleConvMethod() {
+    const method = getSelectedMethod('convMethod');
+    const sessionsContainer = document.getElementById('convSessionsContainer');
+    const baileysLabel = document.getElementById('convMethodBaileysLabel');
+    const cloudLabel = document.getElementById('convMethodCloudLabel');
+    
+    if (method === 'cloud-api') {
+        if (sessionsContainer) sessionsContainer.style.display = 'none';
+        baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
+        cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-green-500 bg-green-50';
+    } else {
+        if (sessionsContainer) sessionsContainer.style.display = '';
+        baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-purple-500 bg-purple-50';
+        cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
+    }
+}
+
 // ======================== UTILIDADES ========================
 
 /**
@@ -202,12 +264,13 @@ async function loadCloudApiStats() {
                 hourBar.className = 'bg-green-400 h-2 rounded-full transition-all duration-500';
             }
             
-            // Costos
+            // Costos (basados en conversaciones, no mensajes)
             if (data.costs) {
                 document.getElementById('cloudCostMonth').textContent = `$${data.costs.monthCostUSD}`;
                 document.getElementById('cloudCostMonthCOP').textContent = `$${data.costs.monthCostCOP.toLocaleString()}`;
-                document.getElementById('cloudCostToday').textContent = `$${data.costs.todayCostUSD}`;
-                const freeRemaining = Math.max(0, data.costs.freeConversations - data.costs.monthlyMessages);
+                const todayConv = data.costs.todayConversations || 0;
+                document.getElementById('cloudCostToday').textContent = `${todayConv} conv.`;
+                const freeRemaining = data.costs.freeRemaining || 0;
                 document.getElementById('cloudFreeMsgs').textContent = freeRemaining.toLocaleString();
             }
             
@@ -219,7 +282,7 @@ async function loadCloudApiStats() {
             // Estado del modo híbrido
             const hybridEl = document.getElementById('cloudApiHybridStatus');
             if (data.hybridMode) {
-                hybridEl.textContent = `🔀 Modo Híbrido (${data.percentage}% Cloud)`;
+                hybridEl.textContent = `🔀 Híbrido: 3 API + 1 Baileys/sesión`;
             } else {
                 hybridEl.textContent = '📱 Solo Baileys';
             }
@@ -1577,18 +1640,13 @@ function deselectAllGroups() {
 }
 
 async function sendPersonalMessage() {
-    const selectedSessions = getSelectedPersonalSessions();
+    const method = getSelectedMethod('personalMethod');
     const phoneNumber = document.getElementById('personalPhone').value.trim();
     const message = document.getElementById('personalMessage').value.trim();
     const fileInput = document.getElementById('personalFile');
     const statusEl = document.getElementById('personalStatus');
     const button = document.getElementById('sendPersonalBtn');
 
-    if (selectedSessions.length === 0) {
-        statusEl.className = 'text-sm text-red-500';
-        statusEl.textContent = 'Selecciona al menos una sesión';
-        return;
-    }
     if (!phoneNumber) {
         statusEl.className = 'text-sm text-red-500';
         statusEl.textContent = 'Ingresa el número de teléfono';
@@ -1597,6 +1655,50 @@ async function sendPersonalMessage() {
     if (!message && !fileInput.files[0]) {
         statusEl.className = 'text-sm text-red-500';
         statusEl.textContent = 'Escribe un mensaje o adjunta un archivo';
+        return;
+    }
+
+    // Envío vía Cloud API
+    if (method === 'cloud-api') {
+        if (!message) {
+            statusEl.className = 'text-sm text-red-500';
+            statusEl.textContent = 'WhatsApp API solo soporta mensajes de texto (no archivos)';
+            return;
+        }
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner inline-block mr-2"></span> Enviando vía API...';
+        statusEl.className = 'text-sm text-blue-500';
+        statusEl.textContent = 'Enviando vía WhatsApp Cloud API...';
+
+        try {
+            const response = await fetch(`${API_URL}/api/cloud/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phoneNumber, message })
+            });
+            const result = await response.json();
+            if (result.success) {
+                statusEl.className = 'text-sm text-green-500';
+                statusEl.textContent = `✅ Mensaje enviado vía WhatsApp API (ID: ${result.messageId || 'ok'})`;
+                document.getElementById('personalMessage').value = '';
+            } else {
+                statusEl.className = 'text-sm text-red-500';
+                statusEl.textContent = `❌ Error API: ${result.error?.message || result.error || 'Error desconocido'}`;
+            }
+        } catch (error) {
+            statusEl.className = 'text-sm text-red-500';
+            statusEl.textContent = `❌ Error: ${error.message}`;
+        }
+        button.disabled = false;
+        button.innerHTML = '📨 Enviar Mensaje';
+        return;
+    }
+
+    // Envío vía Baileys (sesiones)
+    const selectedSessions = getSelectedPersonalSessions();
+    if (selectedSessions.length === 0) {
+        statusEl.className = 'text-sm text-red-500';
+        statusEl.textContent = 'Selecciona al menos una sesión';
         return;
     }
 
@@ -1699,6 +1801,7 @@ async function loadGroupsFromSession() {
 }
 
 async function sendBulkMessages() {
+    const method = getSelectedMethod('bulkMethod');
     const message = document.getElementById('bulkMessage').value.trim();
     const delay = parseInt(document.getElementById('bulkDelay').value) * 1000;
     const fileInput = document.getElementById('bulkFileInput');
@@ -1713,11 +1816,13 @@ async function sendBulkMessages() {
     let isGroupSend = false;
 
     if (bulkCurrentTab === 'numbers') {
-        selectedSessions = getSelectedBulkSessions();
-        if (selectedSessions.length === 0) {
-            statusEl.className = 'text-sm text-red-500';
-            statusEl.textContent = 'Selecciona al menos una sesión';
-            return;
+        if (method === 'baileys') {
+            selectedSessions = getSelectedBulkSessions();
+            if (selectedSessions.length === 0) {
+                statusEl.className = 'text-sm text-red-500';
+                statusEl.textContent = 'Selecciona al menos una sesión';
+                return;
+            }
         }
         const contactsText = document.getElementById('bulkContacts').value.trim();
         if (!contactsText) {
@@ -1760,6 +1865,55 @@ async function sendBulkMessages() {
         return;
     }
 
+    // Envío vía Cloud API
+    if (method === 'cloud-api' && !isGroupSend) {
+        if (!message) {
+            statusEl.className = 'text-sm text-red-500';
+            statusEl.textContent = 'WhatsApp API solo soporta mensajes de texto';
+            return;
+        }
+        if (!confirm(`¿Enviar mensaje a ${recipients.length} número(s) vía WhatsApp API?`)) return;
+
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner inline-block mr-2"></span> Enviando vía API...';
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '0%';
+
+        let sentCount = 0, failedCount = 0;
+        for (let i = 0; i < recipients.length; i++) {
+            statusEl.className = 'text-sm text-blue-500';
+            statusEl.textContent = `☁️ Enviando a ${recipients[i]}... (${i+1}/${recipients.length})`;
+            try {
+                const response = await fetch(`${API_URL}/api/cloud/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: recipients[i], message })
+                });
+                const result = await response.json();
+                if (result.success) sentCount++;
+                else failedCount++;
+            } catch (error) {
+                failedCount++;
+            }
+            const progress = ((i + 1) / recipients.length) * 100;
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${i + 1}/${recipients.length} procesados`;
+            if (i < recipients.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        statusEl.className = failedCount === 0 ? 'text-sm text-green-500' : 'text-sm text-yellow-500';
+        statusEl.textContent = failedCount === 0 
+            ? `✅ Completado vía API: ${sentCount} mensajes enviados`
+            : `⚠️ API: ${sentCount} enviados, ${failedCount} fallidos`;
+        button.disabled = false;
+        button.innerHTML = '🚀 Enviar Masivo';
+        setTimeout(() => progressContainer.classList.add('hidden'), 3000);
+        return;
+    }
+
+    // Envío vía Baileys (sesiones)
     const recipientType = isGroupSend ? 'grupo(s)' : 'número(s)';
     const totalMensajes = recipients.length * selectedSessions.length;
     if (!confirm(`¿Enviar mensaje a ${recipients.length} ${recipientType} desde ${selectedSessions.length} sesión(es)?\n\nTotal: ${totalMensajes} mensajes`)) return;
@@ -2122,13 +2276,14 @@ function clearConversationLog() {
 }
 
 async function startAIConversation() {
+    const method = getSelectedMethod('convMethod');
     const selectedSessions = getSelectedConversationSessions();
     const topic = document.getElementById('conversationTopic')?.value?.trim();
     const messageCount = parseInt(document.getElementById('conversationMessageCount')?.value) || 5;
     const delay = parseInt(document.getElementById('conversationDelay')?.value) || 15;
     const style = document.getElementById('conversationStyle')?.value || 'casual';
     
-    if (selectedSessions.length < 2) {
+    if (method === 'baileys' && selectedSessions.length < 2) {
         showToast('Selecciona al menos 2 sesiones', 'error');
         return;
     }
@@ -2137,6 +2292,8 @@ async function startAIConversation() {
         showToast('Escribe un tema para iniciar la conversación', 'error');
         return;
     }
+
+    const useCloudApi = method === 'cloud-api';
     
     conversationActive = true;
     conversationAbortController = new AbortController();
@@ -2144,17 +2301,18 @@ async function startAIConversation() {
     // Actualizar UI
     document.getElementById('startConversationBtn').classList.add('hidden');
     document.getElementById('stopConversationBtn').classList.remove('hidden');
+    const methodLabel = useCloudApi ? '☁️ WhatsApp API' : '📱 Baileys';
     document.getElementById('conversationStatus').innerHTML = `
         <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <div class="flex items-center gap-2">
                 <div class="animate-spin rounded-full h-4 w-4 border-2 border-purple-600 border-t-transparent"></div>
-                <span class="text-purple-700">Conversación en progreso...</span>
+                <span class="text-purple-700">Conversación en progreso (${methodLabel})...</span>
             </div>
         </div>
     `;
     
     clearConversationLog();
-    addConversationLog(`🚀 Iniciando conversación entre ${selectedSessions.length} sesiones`, 'system');
+    addConversationLog(`🚀 Iniciando conversación vía ${methodLabel} entre ${selectedSessions.length} sesiones`, 'system');
     addConversationLog(`📝 Tema: "${topic}"`, 'system');
     addConversationLog(`💬 Mensajes por sesión: ${messageCount} | Delay: ${delay}s | Estilo: ${style}`, 'system');
     
@@ -2167,7 +2325,8 @@ async function startAIConversation() {
                 topic,
                 messageCount,
                 delay,
-                style
+                style,
+                useCloudApi
             }),
             signal: conversationAbortController.signal
         });

@@ -780,9 +780,10 @@ app.get('/api/webhook/config', (req, res) => {
  */
 app.post('/api/cloud/send', async (req, res) => {
     try {
-        const { to, type, message, template } = req.body;
+        const { to, type, message, template, phoneNumber } = req.body;
+        const destNumber = to || phoneNumber;
 
-        if (!to) {
+        if (!destNumber) {
             return res.status(400).json({ success: false, error: 'Número de destino requerido' });
         }
 
@@ -790,21 +791,25 @@ app.post('/api/cloud/send', async (req, res) => {
         let result;
 
         if (type === 'template') {
-            result = await cloudApi.sendTemplateMessage(to, template || 'hello_world');
+            result = await cloudApi.sendTemplateMessage(destNumber, template || 'hello_world');
+        } else if (message) {
+            // Usar sendMessage inteligente (detecta si es alerta GPS → template, sino texto)
+            result = await cloudApi.sendMessage(destNumber, message);
         } else {
-            result = await cloudApi.sendTextMessage(to, message);
+            return res.status(400).json({ success: false, error: 'message o template requerido' });
         }
 
         if (result.success) {
-            // Guardar en BD
+            // Guardar en BD como messages (para estadísticas consistentes)
             const db = require('./database-postgres');
             try {
+                const formattedNumber = cloudApi.formatPhoneForApi(destNumber) + '@s.whatsapp.net';
                 await db.query(`
-                    INSERT INTO webhook_messages (wa_message_id, from_number, to_number, message_type, message_body, direction, status, timestamp)
-                    VALUES ($1, $2, $3, $4, $5, 'outgoing', 'sent', NOW())
-                `, [result.messageId, config.WHATSAPP_CLOUD_PHONE_ID, to, type || 'text', message || `[Template: ${template || 'hello_world'}]`]);
+                    INSERT INTO messages (session, phone_number, message_preview, char_count, status, is_consolidated, msg_count, created_at, timestamp)
+                    VALUES ('cloud-api', $1, $2, $3, 'sent', false, 1, NOW(), NOW())
+                `, [formattedNumber, (message || `[Template: ${template}]`).substring(0, 200), (message || '').length]);
             } catch (dbErr) {
-                console.error('Error guardando mensaje saliente:', dbErr);
+                console.error('Error guardando mensaje Cloud API:', dbErr);
             }
         }
 
@@ -824,13 +829,13 @@ app.get('/api/cloud/stats', async (req, res) => {
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         const stats = cloudApi.getStats();
 
-        const COST_PER_MESSAGE_USD = 0.0085; // Utility template Colombia
-        const FREE_CONVERSATIONS = 1000; // Gratis por mes (service)
+        const COST_PER_CONVERSATION_USD = 0.0085; // Utility template Colombia - por conversación (ventana 24h)
+        const FREE_CONVERSATIONS = 1000; // Gratis por mes (service conversations)
         const USD_TO_COP = 4200; // Tasa aproximada
 
-        // Obtener conteo de mensajes enviados desde la BD
+        // Obtener conteo de mensajes y conversaciones desde la BD
         const db = require('./database-postgres');
-        let dbStats = { total: 0, today: 0, thisHour: 0, thisMonth: 0 };
+        let dbStats = { total: 0, today: 0, thisHour: 0, thisMonth: 0, conversations: { month: 0, today: 0, uniqueNumbers: 0 } };
 
         try {
             // Total de mensajes enviados por Cloud API
@@ -864,9 +869,30 @@ app.get('/api/cloud/stats', async (req, res) => {
             `);
             dbStats.thisMonth = parseInt(monthResult.rows[0]?.count || 0);
 
+            // CONVERSACIONES únicas del mes (número + día = 1 conversación)
+            const convMonthResult = await db.query(`
+                SELECT COUNT(DISTINCT phone_number || DATE(created_at)::text) as conversations,
+                       COUNT(DISTINCT phone_number) as unique_numbers
+                FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent' 
+                AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+            `);
+            dbStats.conversations.month = parseInt(convMonthResult.rows[0]?.conversations || 0);
+            dbStats.conversations.uniqueNumbers = parseInt(convMonthResult.rows[0]?.unique_numbers || 0);
+
+            // Conversaciones únicas de hoy
+            const convTodayResult = await db.query(`
+                SELECT COUNT(DISTINCT phone_number) as conversations
+                FROM messages 
+                WHERE session = 'cloud-api' AND status = 'sent' 
+                AND created_at >= CURRENT_DATE
+            `);
+            dbStats.conversations.today = parseInt(convTodayResult.rows[0]?.conversations || 0);
+
             // Mensajes por día (últimos 7 días)
             const dailyResult = await db.query(`
-                SELECT DATE(created_at) as date, COUNT(*) as count 
+                SELECT DATE(created_at) as date, COUNT(*) as count,
+                       COUNT(DISTINCT phone_number) as conversations
                 FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
                 AND created_at >= NOW() - INTERVAL '7 days'
@@ -879,12 +905,11 @@ app.get('/api/cloud/stats', async (req, res) => {
             console.error('Error obteniendo estadísticas de BD:', dbErr);
         }
 
-        // Calcular costos
-        const monthlyMessages = dbStats.thisMonth || 0;
-        const billableMessages = Math.max(0, monthlyMessages - FREE_CONVERSATIONS);
-        const costUSD = billableMessages * COST_PER_MESSAGE_USD;
+        // Calcular costos basados en CONVERSACIONES, no mensajes
+        const monthlyConversations = dbStats.conversations.month || 0;
+        const billableConversations = Math.max(0, monthlyConversations - FREE_CONVERSATIONS);
+        const costUSD = billableConversations * COST_PER_CONVERSATION_USD;
         const costCOP = costUSD * USD_TO_COP;
-        const todayCostUSD = (dbStats.today || 0) * COST_PER_MESSAGE_USD;
 
         res.json({
             success: true,
@@ -894,13 +919,16 @@ app.get('/api/cloud/stats', async (req, res) => {
             hybridMode: config.HYBRID_MODE_ENABLED,
             percentage: config.WHATSAPP_CLOUD_PERCENTAGE || 50,
             costs: {
-                monthlyMessages,
+                monthlyMessages: dbStats.thisMonth,
+                monthlyConversations,
                 freeConversations: FREE_CONVERSATIONS,
-                billableMessages,
-                costPerMessageUSD: COST_PER_MESSAGE_USD,
+                freeRemaining: Math.max(0, FREE_CONVERSATIONS - monthlyConversations),
+                billableConversations,
+                costPerConversationUSD: COST_PER_CONVERSATION_USD,
                 monthCostUSD: Math.round(costUSD * 100) / 100,
                 monthCostCOP: Math.round(costCOP),
-                todayCostUSD: Math.round(todayCostUSD * 100) / 100,
+                todayConversations: dbStats.conversations.today,
+                uniqueNumbers: dbStats.conversations.uniqueNumbers,
                 usdToCop: USD_TO_COP
             }
         });
@@ -2127,7 +2155,7 @@ async function generateAIResponse(conversationHistory, style = 'casual') {
  */
 app.post('/api/conversation/start', async (req, res) => {
     try {
-        const { sessions: sessionNames, topic, messageCount = 5, delay = 15, style = 'casual' } = req.body;
+        const { sessions: sessionNames, topic, messageCount = 5, delay = 15, style = 'casual', useCloudApi = false } = req.body;
 
         // Verificar que la API key esté configurada
         if (!OPENAI_API_KEY) {
@@ -2191,7 +2219,7 @@ app.post('/api/conversation/start', async (req, res) => {
         const sessionList = Object.keys(sessionPhones);
         let currentSenderIndex = 0;
 
-        console.log(`\n🤖 Iniciando conversación IA entre ${sessionList.length} sesiones`);
+        console.log(`\n🤖 Iniciando conversación IA entre ${sessionList.length} sesiones ${useCloudApi ? '(vía Cloud API)' : '(vía Baileys)'}`);
         console.log(`📝 Tema: "${topic}"`);
         console.log(`💬 Mensajes por sesión: ${messageCount}`);
 
@@ -2211,13 +2239,21 @@ app.post('/api/conversation/start', async (req, res) => {
             const senderSession = allSessions[senderName];
 
             try {
-                // Enviar mensaje
-                const formattedReceiver = receiverPhone + '@s.whatsapp.net';
-                await senderSession.socket.sendMessage(formattedReceiver, {
-                    text: currentMessage
-                });
-
-                console.log(`✅ ${senderName} → ${receiverName}: ${currentMessage.substring(0, 50)}...`);
+                // Enviar mensaje vía Cloud API o Baileys
+                if (useCloudApi) {
+                    const cloudApi = require('./lib/session/whatsapp-cloud-api');
+                    const sendResult = await cloudApi.sendTextMessage(receiverPhone, currentMessage);
+                    if (!sendResult.success) {
+                        throw new Error(sendResult.error?.message || 'Error Cloud API');
+                    }
+                    console.log(`✅ ☁️ Cloud API → ${receiverName}: ${currentMessage.substring(0, 50)}...`);
+                } else {
+                    const formattedReceiver = receiverPhone + '@s.whatsapp.net';
+                    await senderSession.socket.sendMessage(formattedReceiver, {
+                        text: currentMessage
+                    });
+                    console.log(`✅ ${senderName} → ${receiverName}: ${currentMessage.substring(0, 50)}...`);
+                }
 
                 messages.push({
                     from: senderName,

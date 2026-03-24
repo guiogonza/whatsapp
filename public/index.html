@@ -209,8 +209,8 @@
                                 <div class="text-xs text-blue-200">COP / mes</div>
                             </div>
                             <div class="bg-white/10 rounded-lg p-2 text-center">
-                                <div id="cloudCostToday" class="text-lg font-bold">$0</div>
-                                <div class="text-xs text-blue-200">USD hoy</div>
+                                <div id="cloudCostToday" class="text-lg font-bold">0</div>
+                                <div class="text-xs text-blue-200">Conv. hoy</div>
                             </div>
                             <div class="bg-white/10 rounded-lg p-2 text-center">
                                 <div id="cloudFreeMsgs" class="text-lg font-bold">1000</div>
@@ -218,7 +218,7 @@
                             </div>
                         </div>
                         <div class="mt-2 text-xs text-blue-200 text-center">
-                            📊 Tarifa: $0.0085 USD/msg (utility template Colombia) · 1000 conversaciones gratis/mes
+                            📊 Tarifa: $0.0085 USD/conversación (24h por número) · 1000 conv. gratis/mes
                         </div>
                     </div>
                     
@@ -437,9 +437,25 @@
             <section id="section-personal" class="section-content">
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">💬 Enviar Mensaje Personalizado</h3>
+                    
+                    <!-- Método de envío -->
+                    <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Método de envío</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50" id="personalMethodBaileysLabel">
+                                <input type="radio" name="personalMethod" value="baileys" checked onchange="togglePersonalMethod()" class="text-blue-500">
+                                <span class="text-sm font-medium">📱 Baileys (sesiones)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white" id="personalMethodCloudLabel">
+                                <input type="radio" name="personalMethod" value="cloud-api" onchange="togglePersonalMethod()" class="text-green-500">
+                                <span class="text-sm font-medium">☁️ WhatsApp API</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="space-y-4">
-                            <div>
+                            <div id="personalSessionsContainer">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Sesiones (selecciona una o varias)</label>
                                 <div id="personalSessionCheckboxes" class="border rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">
                                     <p class="text-gray-500 text-sm">Cargando sesiones...</p>
@@ -475,6 +491,21 @@
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">📤 Envío Masivo de Mensajes</h3>
 
+                    <!-- Método de envío masivo -->
+                    <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Método de envío</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-purple-500 bg-purple-50" id="bulkMethodBaileysLabel">
+                                <input type="radio" name="bulkMethod" value="baileys" checked onchange="toggleBulkMethod()" class="text-purple-500">
+                                <span class="text-sm font-medium">📱 Baileys (sesiones)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white" id="bulkMethodCloudLabel">
+                                <input type="radio" name="bulkMethod" value="cloud-api" onchange="toggleBulkMethod()" class="text-green-500">
+                                <span class="text-sm font-medium">☁️ WhatsApp API</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Tabs -->
                     <div class="mb-4 border-b">
                         <div class="flex">
@@ -485,7 +516,7 @@
 
                     <!-- Panel Numbers -->
                     <div id="panelNumbers" class="mb-4">
-                        <div class="mb-4">
+                        <div class="mb-4" id="bulkSessionsContainer">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Sesiones de WhatsApp (selecciona una o varias)</label>
                             <div id="bulkSessionCheckboxes" class="border rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">
                                 <p class="text-gray-500 text-sm">Cargando sesiones...</p>
@@ -1052,9 +1083,24 @@
                         </div>
                     </div>
 
+                    <!-- Método de envío conversación -->
+                    <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Método de envío</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-purple-500 bg-purple-50" id="convMethodBaileysLabel">
+                                <input type="radio" name="convMethod" value="baileys" checked onchange="toggleConvMethod()" class="text-purple-500">
+                                <span class="text-sm font-medium">📱 Baileys (sesiones)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white" id="convMethodCloudLabel">
+                                <input type="radio" name="convMethod" value="cloud-api" onchange="toggleConvMethod()" class="text-green-500">
+                                <span class="text-sm font-medium">☁️ WhatsApp API</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="space-y-4">
-                            <div>
+                            <div id="convSessionsContainer">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Sesiones para conversar (mínimo 2)</label>
                                 <div id="conversationSessionCheckboxes" class="border rounded-lg p-3 max-h-40 overflow-y-auto bg-gray-50">
                                     <p class="text-gray-500 text-sm">Cargando sesiones...</p>
