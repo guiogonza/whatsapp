@@ -803,11 +803,13 @@ app.post('/api/cloud/send', async (req, res) => {
             // Guardar en BD como messages (para estadísticas consistentes)
             const db = require('./database-postgres');
             try {
+                const { getColombiaTimestamp } = require('./lib/session/utils');
+                const colombiaTs = getColombiaTimestamp();
                 const formattedNumber = cloudApi.formatPhoneForApi(destNumber) + '@s.whatsapp.net';
                 await db.query(`
                     INSERT INTO messages (session, phone_number, message_preview, char_count, status, is_consolidated, msg_count, created_at, timestamp)
-                    VALUES ('cloud-api', $1, $2, $3, 'sent', false, 1, NOW(), NOW())
-                `, [formattedNumber, (message || `[Template: ${template}]`).substring(0, 200), (message || '').length]);
+                    VALUES ('cloud-api', $1, $2, $3, 'sent', false, 1, $4, $4)
+                `, [formattedNumber, (message || `[Template: ${template}]`).substring(0, 200), (message || '').length, colombiaTs]);
             } catch (dbErr) {
                 console.error('Error guardando mensaje Cloud API:', dbErr);
             }
