@@ -828,8 +828,34 @@ async function refreshAnalytics() {
                 errores = timeline.map(x => Number(x.errores || 0));
                 cola = timeline.map(x => Number(x.en_cola || 0));
             }
+        } else if (period === 'year') {
+            // Para periodo año, agrupar por mes
+            const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const monthsMap = {};
+            
+            timeline.forEach(item => {
+                if (!item.periodo) return;
+                const dateStr = item.periodo.split('T')[0];
+                const monthKey = dateStr.substring(0, 7); // "YYYY-MM"
+                if (!monthsMap[monthKey]) {
+                    monthsMap[monthKey] = { enviados: 0, errores: 0, en_cola: 0 };
+                }
+                monthsMap[monthKey].enviados += Number(item.enviados || 0);
+                monthsMap[monthKey].errores += Number(item.errores || 0);
+                monthsMap[monthKey].en_cola += Number(item.en_cola || 0);
+            });
+            
+            // Ordenar por mes y generar arrays
+            const sortedMonths = Object.keys(monthsMap).sort();
+            labels = sortedMonths.map(m => {
+                const monthIdx = parseInt(m.split('-')[1]) - 1;
+                return monthNames[monthIdx] + ' ' + m.split('-')[0];
+            });
+            enviados = sortedMonths.map(m => monthsMap[m].enviados);
+            errores = sortedMonths.map(m => monthsMap[m].errores);
+            cola = sortedMonths.map(m => monthsMap[m].en_cola);
         } else {
-            // Para otros periodos, normalizar las fechas del periodo a formato legible
+            // Para otros periodos (month, day), normalizar las fechas del periodo a formato legible
             labels = timeline.map(x => {
                 if (!x.periodo) return '';
                 const dateStr = x.periodo.split('T')[0];
@@ -842,7 +868,6 @@ async function refreshAnalytics() {
             enviados = timeline.map(x => Number(x.enviados || 0));
             errores = timeline.map(x => Number(x.errores || 0));
             cola = timeline.map(x => Number(x.en_cola || 0));
-            // chartType ya está en 'bar' por defecto
         }
         
         const timelineCtx = document.getElementById('analyticsTimelineChart');
