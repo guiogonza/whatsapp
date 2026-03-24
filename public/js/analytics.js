@@ -370,7 +370,7 @@ function updateAnalyticsKPIs(timeline) {
     document.getElementById('analytics_kpi_total').textContent = sum(timeline, 'total').toLocaleString();
     document.getElementById('analytics_kpi_enviados').textContent = sum(timeline, 'enviados').toLocaleString();
     document.getElementById('analytics_kpi_errores').textContent = sum(timeline, 'errores').toLocaleString();
-    document.getElementById('analytics_kpi_cola').textContent = sum(timeline, 'en_cola').toLocaleString();
+    document.getElementById('analytics_kpi_cola').textContent = sum(timeline, 'recibidos').toLocaleString();
 }
 
 function updateAnalyticsSystemStatus(health) {
@@ -397,10 +397,19 @@ function updateAnalyticsFooter(db_stats) {
     document.getElementById('analyticsLastUpdate').textContent = new Date().toLocaleTimeString('es-CO');
 }
 
-function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chartType = 'line', totales = null) {
+function buildAnalyticsTimelineChart(ctx, labels, recibidos, enviados, errores, chartType = 'line', totales = null) {
     if (analyticsTimelineChart) analyticsTimelineChart.destroy();
     
     const datasets = [
+        { 
+            label: 'Recibidos (individuales)', 
+            data: recibidos, 
+            tension: 0.35, 
+            borderColor: '#f59e0b', 
+            backgroundColor: chartType === 'bar' ? '#f59e0b' : 'rgba(245, 158, 11, 0.8)', 
+            fill: false,
+            borderWidth: chartType === 'bar' ? 0 : 2
+        },
         { 
             label: 'Enviados', 
             data: enviados, 
@@ -416,15 +425,6 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
             tension: 0.35, 
             borderColor: '#ef4444', 
             backgroundColor: chartType === 'bar' ? '#ef4444' : 'rgba(239, 68, 68, 0.8)', 
-            fill: false,
-            borderWidth: chartType === 'bar' ? 0 : 2
-        },
-        { 
-            label: 'En cola', 
-            data: cola, 
-            tension: 0.35, 
-            borderColor: '#f59e0b', 
-            backgroundColor: chartType === 'bar' ? '#f59e0b' : 'rgba(245, 158, 11, 0.8)', 
             fill: false,
             borderWidth: chartType === 'bar' ? 0 : 2
         },
@@ -458,6 +458,73 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
             scales: {
                 y: { beginAtZero: true, stacked: false, ticks: { precision: 0 } },
                 x: { stacked: false }
+            }
+        }
+    });
+}
+
+let analyticsConsolidationChart = null;
+
+function buildConsolidationChart(labels, recibidos, consolidados, msgsEnConsolidados) {
+    const ctx = document.getElementById('consolidationChart');
+    if (!ctx) return;
+    
+    if (analyticsConsolidationChart) analyticsConsolidationChart.destroy();
+    
+    const datasets = [
+        {
+            label: 'Recibidos (individuales)',
+            data: recibidos,
+            backgroundColor: '#f59e0b',
+            borderWidth: 0
+        },
+        {
+            label: 'Enviados (consolidados)',
+            data: consolidados,
+            backgroundColor: '#10b981',
+            borderWidth: 0
+        }
+    ];
+    
+    if (msgsEnConsolidados) {
+        datasets.push({
+            label: 'Alertas agrupadas en envíos',
+            data: msgsEnConsolidados,
+            backgroundColor: 'rgba(99, 102, 241, 0.4)',
+            borderColor: '#6366f1',
+            borderWidth: 1
+        });
+    }
+    
+    analyticsConsolidationChart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        afterBody: function(tooltipItems) {
+                            const idx = tooltipItems[0].dataIndex;
+                            const rec = recibidos[idx] || 0;
+                            const cons = consolidados[idx] || 0;
+                            if (cons > 0) {
+                                const ratio = (rec / cons).toFixed(1);
+                                return `\nRatio: ${ratio} alertas → 1 mensaje`;
+                            }
+                            return '';
+                        }
+                    }
+                },
+                datalabels: { display: false }
+            },
+            scales: {
+                x: { stacked: false },
+                y: { beginAtZero: true, ticks: { precision: 0 } }
             }
         }
     });
@@ -873,7 +940,7 @@ async function refreshAnalytics() {
         const timeline = data.timeline || [];
         const period = document.getElementById('analyticsPeriod').value;
         
-        let labels, enviados, errores, cola;
+        let labels, enviados, errores, recibidos, consolidados;
         let chartType = 'bar'; // Por defecto barras
         
         // Si es semana, expandir a todos los días de la semana
@@ -883,22 +950,21 @@ async function refreshAnalytics() {
                 const { start, end } = getWeekDates(weekPicker);
                 const daysMap = {};
                 
-                // Crear un mapa con los datos existentes
-                // Normalizar la clave del periodo a solo fecha (YYYY-MM-DD)
                 timeline.forEach(item => {
                     const periodoKey = item.periodo ? item.periodo.split('T')[0] : item.periodo;
                     daysMap[periodoKey] = {
                         enviados: Number(item.enviados || 0),
                         errores: Number(item.errores || 0),
-                        en_cola: Number(item.en_cola || 0)
+                        recibidos: Number(item.recibidos || 0),
+                        consolidados: Number(item.consolidados || 0)
                     };
                 });
                 
-                // Generar todos los días de la semana
                 labels = [];
                 enviados = [];
                 errores = [];
-                cola = [];
+                recibidos = [];
+                consolidados = [];
                 
                 const currentDay = new Date(start);
                 while (currentDay <= end) {
@@ -906,22 +972,23 @@ async function refreshAnalytics() {
                     const dayName = currentDay.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
                     labels.push(dayName);
                     
-                    const dayData = daysMap[dateStr] || { enviados: 0, errores: 0, en_cola: 0 };
+                    const dayData = daysMap[dateStr] || { enviados: 0, errores: 0, recibidos: 0, consolidados: 0 };
                     enviados.push(dayData.enviados);
                     errores.push(dayData.errores);
-                    cola.push(dayData.en_cola);
+                    recibidos.push(dayData.recibidos);
+                    consolidados.push(dayData.consolidados);
                     
                     currentDay.setDate(currentDay.getDate() + 1);
                 }
             } else {
-                // Fallback si no hay week picker - normalizar fechas
                 labels = timeline.map(x => {
                     const dateStr = x.periodo ? x.periodo.split('T')[0] : x.periodo;
                     return dateStr;
                 });
                 enviados = timeline.map(x => Number(x.enviados || 0));
                 errores = timeline.map(x => Number(x.errores || 0));
-                cola = timeline.map(x => Number(x.en_cola || 0));
+                recibidos = timeline.map(x => Number(x.recibidos || 0));
+                consolidados = timeline.map(x => Number(x.consolidados || 0));
             }
         } else if (period === 'year') {
             // Para periodo año, agrupar por mes
@@ -931,16 +998,17 @@ async function refreshAnalytics() {
             timeline.forEach(item => {
                 if (!item.periodo) return;
                 const dateStr = item.periodo.split('T')[0];
-                const monthKey = dateStr.substring(0, 7); // "YYYY-MM"
+                const monthKey = dateStr.substring(0, 7);
                 if (!monthsMap[monthKey]) {
-                    monthsMap[monthKey] = { enviados: 0, errores: 0, en_cola: 0 };
+                    monthsMap[monthKey] = { enviados: 0, errores: 0, recibidos: 0, consolidados: 0, msgs_en_consolidados: 0 };
                 }
                 monthsMap[monthKey].enviados += Number(item.enviados || 0);
                 monthsMap[monthKey].errores += Number(item.errores || 0);
-                monthsMap[monthKey].en_cola += Number(item.en_cola || 0);
+                monthsMap[monthKey].recibidos += Number(item.recibidos || 0);
+                monthsMap[monthKey].consolidados += Number(item.consolidados || 0);
+                monthsMap[monthKey].msgs_en_consolidados += Number(item.msgs_en_consolidados || 0);
             });
             
-            // Ordenar por mes y generar arrays
             const sortedMonths = Object.keys(monthsMap).sort();
             labels = sortedMonths.map(m => {
                 const monthIdx = parseInt(m.split('-')[1]) - 1;
@@ -948,14 +1016,14 @@ async function refreshAnalytics() {
             });
             enviados = sortedMonths.map(m => monthsMap[m].enviados);
             errores = sortedMonths.map(m => monthsMap[m].errores);
-            cola = sortedMonths.map(m => monthsMap[m].en_cola);
-            // Agregar totales por mes
+            recibidos = sortedMonths.map(m => monthsMap[m].recibidos);
+            consolidados = sortedMonths.map(m => monthsMap[m].consolidados);
             var totalesMes = sortedMonths.map(m => {
                 const d = monthsMap[m];
-                return d.enviados + d.errores + d.en_cola;
+                return d.recibidos + d.enviados;
             });
+            var msgsConsolidados = sortedMonths.map(m => monthsMap[m].msgs_en_consolidados);
         } else {
-            // Para otros periodos (month, day), normalizar las fechas del periodo a formato legible
             labels = timeline.map(x => {
                 if (!x.periodo) return '';
                 const dateStr = x.periodo.split('T')[0];
@@ -967,22 +1035,29 @@ async function refreshAnalytics() {
             });
             enviados = timeline.map(x => Number(x.enviados || 0));
             errores = timeline.map(x => Number(x.errores || 0));
-            cola = timeline.map(x => Number(x.en_cola || 0));
+            recibidos = timeline.map(x => Number(x.recibidos || 0));
+            consolidados = timeline.map(x => Number(x.consolidados || 0));
         }
         
         const timelineCtx = document.getElementById('analyticsTimelineChart');
         if (timelineCtx) {
-            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, enviados, errores, cola, chartType, typeof totalesMes !== 'undefined' ? totalesMes : null);
+            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, recibidos, enviados, errores, chartType, typeof totalesMes !== 'undefined' ? totalesMes : null);
         }
         
-        // Mostrar gráfica de sesiones por mes solo en periodo año
+        // Gráfica de consolidación (solo en periodo año)
+        const consolidationSection = document.getElementById('consolidationChartSection');
         const sessionsSection = document.getElementById('sessionsMonthlySection');
         if (period === 'year') {
+            if (consolidationSection) {
+                consolidationSection.classList.remove('hidden');
+                buildConsolidationChart(labels, recibidos, consolidados, typeof msgsConsolidados !== 'undefined' ? msgsConsolidados : null);
+            }
             const yearPicker = document.getElementById('analyticsYearPicker');
             const year = yearPicker ? yearPicker.value : new Date().getFullYear();
             loadSessionsMonthly(year);
-        } else if (sessionsSection) {
-            sessionsSection.classList.add('hidden');
+        } else {
+            if (consolidationSection) consolidationSection.classList.add('hidden');
+            if (sessionsSection) sessionsSection.classList.add('hidden');
         }
         
         const topRows = data.top_numbers || [];

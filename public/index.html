@@ -874,7 +874,7 @@
                     </div>
                     <div class="bg-white rounded-lg shadow p-5">
                         <div class="text-3xl font-semibold text-yellow-600" id="analytics_kpi_cola">—</div>
-                        <div class="text-sm text-gray-500">En cola</div>
+                        <div class="text-sm text-gray-500">Recibidos</div>
                     </div>
                 </div>
 
@@ -903,6 +903,14 @@
                     <h3 class="text-lg font-semibold mb-4">Evolución por periodo</h3>
                     <div class="w-full" style="height: 350px;">
                         <canvas id="analyticsTimelineChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="consolidationChartSection" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+                    <h3 class="text-lg font-semibold mb-2">📦 Consolidación de Mensajes</h3>
+                    <p class="text-sm text-gray-500 mb-4">Compara alertas individuales recibidas vs mensajes consolidados enviados</p>
+                    <div class="w-full" style="height: 350px;">
+                        <canvas id="consolidationChart"></canvas>
                     </div>
                 </div>
 

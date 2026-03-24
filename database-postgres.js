@@ -390,14 +390,16 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFil
         const sessionCondition = sessionFilter ? ' AND session = $3' : '';
         const baseParams = sessionFilter ? [startDate, endDate, sessionFilter] : [startDate, endDate];
         
-        // Timeline por fecha - usar alias en español para compatibilidad
+        // Timeline por fecha - separar recibidos individuales vs enviados consolidados
         const timelineResult = await pool.query(
             `SELECT 
                 DATE(timestamp) as periodo,
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
-                COUNT(CASE WHEN status = 'queued' THEN 1 END) as en_cola
+                COUNT(CASE WHEN status = 'queued' AND is_consolidated = false THEN 1 END) as recibidos,
+                COUNT(CASE WHEN is_consolidated = true THEN 1 END) as consolidados,
+                COALESCE(SUM(CASE WHEN is_consolidated = true THEN msg_count ELSE 0 END), 0) as msgs_en_consolidados
              FROM messages
              WHERE DATE(timestamp) BETWEEN $1 AND $2${sessionCondition}
              GROUP BY DATE(timestamp)
