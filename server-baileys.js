@@ -1394,10 +1394,13 @@ app.post('/api/messages/send', async (req, res) => {
         // Si no es FX o falló el envío FX, enviar a consolidación normal
         const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
+            const sentNow = result.sentImmediately;
             res.json({
                 success: true,
-                consolidated: true,
-                message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
+                consolidated: !sentNow,
+                message: sentNow
+                    ? `Mensaje enviado INMEDIATAMENTE por Cloud API`
+                    : `Mensaje en cola (${result.pendingCount} pendientes, envio en ${result.sendInMinutes} min)`,
                 details: result
             });
         } else {
@@ -1453,10 +1456,13 @@ app.post('/api/session/send-message', async (req, res) => {
         // Si no es FX o falló el envío FX, enviar a consolidación normal
         const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
         if (result.success) {
+            const sentNow = result.sentImmediately;
             res.json({
                 success: true,
-                consolidated: true,
-                message: `Mensaje agregado a consolidacion (${result.pendingCount} msgs pendientes, envio en ${result.sendInMinutes} min)`,
+                consolidated: !sentNow,
+                message: sentNow
+                    ? `Mensaje enviado INMEDIATAMENTE por Cloud API`
+                    : `Mensaje en cola (${result.pendingCount} pendientes, envio en ${result.sendInMinutes} min)`,
                 details: result
             });
         } else {
