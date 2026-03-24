@@ -87,7 +87,7 @@ module.exports = {
     // ID del número de teléfono de Business
     WHATSAPP_CLOUD_PHONE_ID: process.env.WHATSAPP_CLOUD_PHONE_ID || '',
     // Versión de la API de Graph
-    WHATSAPP_CLOUD_API_VERSION: process.env.WHATSAPP_CLOUD_API_VERSION || 'v18.0',
+    WHATSAPP_CLOUD_API_VERSION: process.env.WHATSAPP_CLOUD_API_VERSION || 'v21.0',
     // Límite de mensajes por hora via Cloud API
     WHATSAPP_CLOUD_MAX_PER_HOUR: parseInt(process.env.WHATSAPP_CLOUD_MAX_PER_HOUR) || 500,
     // Porcentaje de mensajes que van por Cloud API (0-100)
