@@ -1039,9 +1039,12 @@ async function refreshAnalytics() {
             consolidados = timeline.map(x => Number(x.consolidados || 0));
         }
         
+        // Calcular totales para todos los periodos
+        var totalesMes = recibidos.map((r, i) => r + (enviados[i] || 0));
+        
         const timelineCtx = document.getElementById('analyticsTimelineChart');
         if (timelineCtx) {
-            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, recibidos, enviados, errores, chartType, typeof totalesMes !== 'undefined' ? totalesMes : null);
+            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, recibidos, enviados, errores, chartType, totalesMes);
         }
         
         // Gráfica de consolidación (solo en periodo año)
