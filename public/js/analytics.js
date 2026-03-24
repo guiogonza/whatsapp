@@ -397,7 +397,7 @@ function updateAnalyticsFooter(db_stats) {
     document.getElementById('analyticsLastUpdate').textContent = new Date().toLocaleTimeString('es-CO');
 }
 
-function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chartType = 'line') {
+function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chartType = 'line', totales = null) {
     if (analyticsTimelineChart) analyticsTimelineChart.destroy();
     
     const datasets = [
@@ -429,6 +429,19 @@ function buildAnalyticsTimelineChart(ctx, labels, enviados, errores, cola, chart
             borderWidth: chartType === 'bar' ? 0 : 2
         },
     ];
+    
+    if (totales) {
+        datasets.unshift({
+            label: 'Total',
+            data: totales,
+            tension: 0.35,
+            borderColor: '#6366f1',
+            backgroundColor: chartType === 'bar' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.2)',
+            fill: false,
+            borderWidth: chartType === 'bar' ? 1 : 2,
+            borderDash: chartType === 'bar' ? [] : [5, 5]
+        });
+    }
     
     analyticsTimelineChart = new Chart(ctx, {
         type: chartType,
@@ -936,6 +949,11 @@ async function refreshAnalytics() {
             enviados = sortedMonths.map(m => monthsMap[m].enviados);
             errores = sortedMonths.map(m => monthsMap[m].errores);
             cola = sortedMonths.map(m => monthsMap[m].en_cola);
+            // Agregar totales por mes
+            var totalesMes = sortedMonths.map(m => {
+                const d = monthsMap[m];
+                return d.enviados + d.errores + d.en_cola;
+            });
         } else {
             // Para otros periodos (month, day), normalizar las fechas del periodo a formato legible
             labels = timeline.map(x => {
@@ -954,7 +972,7 @@ async function refreshAnalytics() {
         
         const timelineCtx = document.getElementById('analyticsTimelineChart');
         if (timelineCtx) {
-            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, enviados, errores, cola, chartType);
+            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, enviados, errores, cola, chartType, typeof totalesMes !== 'undefined' ? totalesMes : null);
         }
         
         // Mostrar gráfica de sesiones por mes solo en periodo año

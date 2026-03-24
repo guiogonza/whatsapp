@@ -145,14 +145,14 @@ async function getSessionsMonthly(req, res) {
         const result = await database.query(`
             SELECT 
                 TO_CHAR(timestamp, 'YYYY-MM') as mes,
-                session_name,
+                session,
                 COUNT(*) as total,
-                SUM(CASE WHEN status = 'SUCCESS' OR status = 'SENT' THEN 1 ELSE 0 END) as enviados
-            FROM messages_sent
+                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as enviados
+            FROM messages
             WHERE timestamp >= $1 AND timestamp <= $2
-            AND session_name IS NOT NULL AND session_name != ''
-            GROUP BY TO_CHAR(timestamp, 'YYYY-MM'), session_name
-            ORDER BY mes, session_name
+            AND session IS NOT NULL AND session != '' AND session != 'consolidation'
+            GROUP BY TO_CHAR(timestamp, 'YYYY-MM'), session
+            ORDER BY mes, session
         `, [startDate, endDate]);
 
         res.json({
@@ -160,7 +160,7 @@ async function getSessionsMonthly(req, res) {
             year: targetYear,
             data: result.rows.map(row => ({
                 mes: row.mes,
-                session: row.session_name,
+                session: row.session,
                 total: parseInt(row.total) || 0,
                 enviados: parseInt(row.enviados) || 0
             }))

@@ -1729,6 +1729,18 @@ app.get('/api/analytics/stats', async (req, res) => {
 });
 
 /**
+ * GET /api/analytics/sessions-monthly - Envíos por sesión agrupados por mes
+ */
+app.get('/api/analytics/sessions-monthly', async (req, res) => {
+    try {
+        const analyticsController = require('./controllers/analyticsController');
+        await analyticsController.getSessionsMonthly(req, res);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/analytics/messages - Historial de mensajes
  */
 app.get('/api/analytics/messages', async (req, res) => {
