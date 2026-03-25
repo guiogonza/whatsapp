@@ -605,7 +605,7 @@
                 </div>
                 <div style="display:flex;gap:0;border-bottom:1px solid #2a2a2a;margin-bottom:8px;">
                     <button id="tab-received" onclick="switchTab('received')" style="flex:1;padding:10px;background:#25D366;color:#000;border:none;cursor:pointer;font-weight:bold;border-radius:0;">↩ Recibidos</button>
-                    <button id="tab-sent" onclick="switchTab('sent')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;">↗ Enviados</button>
+                    <button id="tab-sent" onclick="switchTab('sent')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;">↗ Enviados <span id="sentTodayBadge" style="background:#25D366;color:#000;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:4px;">0</span> hoy</button>
                 </div>
                 <div class="messages-container" id="messagesContainer">
                     <div class="empty-state">
@@ -630,7 +630,7 @@
                         <label>Tipo de mensaje</label>
                         <select id="messageType" onchange="toggleMessageFields()">
                             <option value="template">📋 Plantilla (hello_world)</option>
-                            <option value="text">💬 Texto libre</option>
+                            <option value="text">💬 Texto libre (solo Baileys, gratis)</option>
                         </select>
                     </div>
                     <div class="form-group" id="textMessageGroup" style="display: none;">
@@ -679,6 +679,10 @@
             loadCloudStats();
             loadHealthStats();
             setupAutoRefresh();
+            loadSentTodayCount();
+            scheduleMidnightReset();
+            // Actualizar badge cada 30s
+            setInterval(loadSentTodayCount, 30000);
         });
 
         async function loadCloudStats() {
@@ -777,6 +781,34 @@
         }
 
         let currentTab = 'received';
+
+        async function loadSentTodayCount() {
+            try {
+                const res = await fetch(`${API_BASE}/api/cloud/stats`);
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('sentTodayBadge').textContent = data.stats?.today ?? data.today ?? 0;
+                }
+            } catch(e) {}
+        }
+
+        // Calcular ms hasta medianoche en Colombia (GMT-5)
+        function msUntilMidnightColombia() {
+            const now = new Date();
+            // Hora actual en Colombia
+            const col = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+            const midnight = new Date(col);
+            midnight.setHours(24, 0, 0, 0);
+            return midnight - col;
+        }
+
+        function scheduleMidnightReset() {
+            setTimeout(() => {
+                document.getElementById('sentTodayBadge').textContent = '0';
+                loadSentTodayCount();
+                scheduleMidnightReset(); // reprogramar para siguiente medianoche
+            }, msUntilMidnightColombia());
+        }
 
         function switchTab(tab) {
             currentTab = tab;

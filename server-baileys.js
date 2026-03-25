@@ -793,8 +793,15 @@ app.post('/api/cloud/send', async (req, res) => {
         if (type === 'template') {
             result = await cloudApi.sendTemplateMessage(destNumber, template || 'hello_world');
         } else if (message) {
-            // Usar sendMessage inteligente (detecta si es alerta GPS → template, sino texto)
-            result = await cloudApi.sendMessage(destNumber, message);
+            // Texto libre: NUNCA usar Cloud API (costo). Solo Baileys.
+            const activeSessions = sessionManager.getActiveSessions();
+            if (!activeSessions || activeSessions.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'No hay sesiones Baileys activas. El texto libre no se envía por Cloud API para evitar costos. Activa una sesión Baileys primero.'
+                });
+            }
+            result = await sessionManager.sendMessageWithRotation(destNumber, message);
         } else {
             return res.status(400).json({ success: false, error: 'message o template requerido' });
         }
@@ -848,10 +855,11 @@ app.get('/api/cloud/stats', async (req, res) => {
             dbStats.total = parseInt(totalResult.rows[0]?.count || 0);
 
             // Mensajes de hoy
+            // Hoy en Colombia (GMT-5): inicio del día allá
             const todayResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at >= CURRENT_DATE
+                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.today = parseInt(todayResult.rows[0]?.count || 0);
 
@@ -863,31 +871,31 @@ app.get('/api/cloud/stats', async (req, res) => {
             `);
             dbStats.thisHour = parseInt(hourResult.rows[0]?.count || 0);
 
-            // Mensajes del mes actual
+            // Mensajes del mes actual en Colombia
             const monthResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.thisMonth = parseInt(monthResult.rows[0]?.count || 0);
 
             // CONVERSACIONES únicas del mes (número + día = 1 conversación)
             const convMonthResult = await db.query(`
-                SELECT COUNT(DISTINCT phone_number || DATE(created_at)::text) as conversations,
+                SELECT COUNT(DISTINCT phone_number || DATE((created_at AT TIME ZONE 'America/Bogota'))::text) as conversations,
                        COUNT(DISTINCT phone_number) as unique_numbers
                 FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.conversations.month = parseInt(convMonthResult.rows[0]?.conversations || 0);
             dbStats.conversations.uniqueNumbers = parseInt(convMonthResult.rows[0]?.unique_numbers || 0);
 
-            // Conversaciones únicas de hoy
+            // Conversaciones únicas de hoy en Colombia
             const convTodayResult = await db.query(`
                 SELECT COUNT(DISTINCT phone_number) as conversations
                 FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at >= CURRENT_DATE
+                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.conversations.today = parseInt(convTodayResult.rows[0]?.conversations || 0);
 
