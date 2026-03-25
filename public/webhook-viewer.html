@@ -592,7 +592,7 @@
             <!-- Messages Panel -->
             <div class="panel">
                 <div class="panel-header">
-                    <h2><i class="fas fa-comments"></i> Mensajes Recibidos</h2>
+                    <h2><i class="fas fa-comments"></i> Mensajes</h2>
                     <div style="display: flex; align-items: center; gap: 16px;">
                         <label class="auto-refresh">
                             <input type="checkbox" id="autoRefresh" checked>
@@ -602,6 +602,10 @@
                             <i class="fas fa-sync-alt"></i> Actualizar
                         </button>
                     </div>
+                </div>
+                <div style="display:flex;gap:0;border-bottom:1px solid #2a2a2a;margin-bottom:8px;">
+                    <button id="tab-received" onclick="switchTab('received')" style="flex:1;padding:10px;background:#25D366;color:#000;border:none;cursor:pointer;font-weight:bold;border-radius:0;">↩ Recibidos</button>
+                    <button id="tab-sent" onclick="switchTab('sent')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;">↗ Enviados</button>
                 </div>
                 <div class="messages-container" id="messagesContainer">
                     <div class="empty-state">
@@ -772,17 +776,35 @@
             startRefresh();
         }
 
+        let currentTab = 'received';
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tab-received').style.background = tab === 'received' ? '#25D366' : '#1a1a2e';
+            document.getElementById('tab-received').style.color = tab === 'received' ? '#000' : '#aaa';
+            document.getElementById('tab-sent').style.background = tab === 'sent' ? '#25D366' : '#1a1a2e';
+            document.getElementById('tab-sent').style.color = tab === 'sent' ? '#000' : '#aaa';
+            loadMessages();
+        }
+
         async function loadMessages() {
             const btn = document.getElementById('refreshBtn');
             btn.classList.add('loading');
             
             try {
-                const response = await fetch(`${API_BASE}/api/webhook/messages?limit=50`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    renderMessages(data.messages);
-                    updateStats(data.messages);
+                if (currentTab === 'received') {
+                    const response = await fetch(`${API_BASE}/api/webhook/messages?limit=50`);
+                    const data = await response.json();
+                    if (data.success) {
+                        renderMessages(data.messages, 'received');
+                        updateStats(data.messages);
+                    }
+                } else {
+                    const response = await fetch(`${API_BASE}/api/monitor/messages?limit=50`);
+                    const data = await response.json();
+                    if (data.success) {
+                        renderSentMessages(data.messages);
+                    }
                 }
             } catch (error) {
                 console.error('Error loading messages:', error);
@@ -790,6 +812,27 @@
             } finally {
                 btn.classList.remove('loading');
             }
+        }
+
+        function renderSentMessages(messages) {
+            const container = document.getElementById('messagesContainer');
+            if (!messages || messages.length === 0) {
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-paper-plane"></i><h3>Sin mensajes enviados</h3></div>`;
+                return;
+            }
+            container.innerHTML = messages.map(msg => `
+                <div class="message-item outgoing">
+                    <div class="message-header">
+                        <span class="message-from"><i class="fas fa-arrow-right"></i> Enviado a: ${formatPhone(msg.destination)}</span>
+                        <span class="message-time">${formatDate(msg.timestamp)}</span>
+                    </div>
+                    <div class="message-body">${escapeHtml(msg.message || 'Sin contenido')}</div>
+                    <div class="message-meta">
+                        <span class="meta-tag">${msg.session || 'cloud-api'}</span>
+                        <span class="meta-tag status-${msg.status}">${msg.status}</span>
+                    </div>
+                </div>
+            `).join('');
         }
 
         function renderMessages(messages) {
