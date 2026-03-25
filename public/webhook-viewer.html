@@ -820,6 +820,7 @@
                         <span class="meta-tag">${msg.message_type || 'text'}</span>
                         ${msg.status ? `<span class="meta-tag status-${msg.status}">${msg.status}</span>` : ''}
                         <span class="meta-tag">${msg.wa_message_id ? msg.wa_message_id.substring(0, 20) + '...' : 'N/A'}</span>
+                        ${msg.direction !== 'outgoing' ? `<button onclick="replyTo('${msg.from_number || msg.from}')" style="margin-left:auto;background:#25D366;color:#000;border:none;padding:4px 12px;border-radius:12px;cursor:pointer;font-size:12px;font-weight:bold;">↩ Responder</button>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -836,6 +837,14 @@
             const type = document.getElementById('messageType').value;
             const textGroup = document.getElementById('textMessageGroup');
             textGroup.style.display = type === 'text' ? 'block' : 'none';
+        }
+
+        function replyTo(phoneNumber) {
+            document.getElementById('toNumber').value = phoneNumber;
+            document.getElementById('messageType').value = 'text';
+            toggleMessageFields();
+            document.getElementById('messageText').focus();
+            document.querySelector('.send-panel').scrollIntoView({ behavior: 'smooth' });
         }
 
         async function sendMessage(event) {
