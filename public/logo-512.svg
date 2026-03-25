@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Fondo verde oscuro -->
+  <rect width="512" height="512" rx="100" fill="#075E54"/>
+
+  <!-- Círculo verde claro -->
+  <circle cx="256" cy="210" r="130" fill="#25D366"/>
+
+  <!-- Pin GPS: cabeza -->
+  <circle cx="256" cy="185" rx="55" ry="55" r="55" fill="white"/>
+  <circle cx="256" cy="185" r="26" fill="#075E54"/>
+
+  <!-- Pin GPS: punta -->
+  <polygon points="256,300 215,225 297,225" fill="white"/>
+
+  <!-- Ondas de señal -->
+  <path d="M 175 135 A 85 85 0 0 1 337 135" stroke="white" stroke-width="9" fill="none" opacity="0.45"/>
+  <path d="M 195 110 A 65 65 0 0 1 317 110" stroke="white" stroke-width="7" fill="none" opacity="0.28"/>
+
+  <!-- Texto -->
+  <text x="256" y="398" font-family="Arial, sans-serif" font-size="50" font-weight="bold" fill="white" text-anchor="middle">RASTREAMOS</text>
+
+  <!-- Línea decorativa -->
+  <rect x="115" y="416" width="282" height="5" rx="2" fill="#25D366"/>
+</svg>
