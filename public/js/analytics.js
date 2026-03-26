@@ -376,7 +376,7 @@ function updateAnalyticsKPIs(timeline) {
     const sum = (arr, key) => arr.reduce((acc, x) => acc + (Number(x[key]) || 0), 0);
     
     if (!timeline || timeline.length === 0) {
-        ['analytics_kpi_total', 'analytics_kpi_enviados', 'analytics_kpi_errores', 'analytics_kpi_cola'].forEach(id => {
+        ['analytics_kpi_total', 'analytics_kpi_enviados', 'analytics_kpi_errores', 'analytics_kpi_descartados', 'analytics_kpi_cola'].forEach(id => {
             document.getElementById(id).textContent = '0';
         });
         return;
@@ -384,6 +384,7 @@ function updateAnalyticsKPIs(timeline) {
     document.getElementById('analytics_kpi_total').textContent = sum(timeline, 'total').toLocaleString();
     document.getElementById('analytics_kpi_enviados').textContent = sum(timeline, 'enviados').toLocaleString();
     document.getElementById('analytics_kpi_errores').textContent = sum(timeline, 'errores').toLocaleString();
+    document.getElementById('analytics_kpi_descartados').textContent = sum(timeline, 'descartados').toLocaleString();
     document.getElementById('analytics_kpi_cola').textContent = sum(timeline, 'recibidos').toLocaleString();
 }
 
@@ -407,11 +408,27 @@ function updateAnalyticsSystemStatus(health) {
 function updateAnalyticsFooter(db_stats) {
     document.getElementById('analyticsDbSize').textContent = db_stats?.db_size_mb ?? '—';
     const byStatus = db_stats?.total_by_status || {};
-    document.getElementById('analyticsDbByStatus').textContent = Object.entries(byStatus).map(([k, v]) => `${k}: ${v.toLocaleString()}`).join(' | ') || '—';
+    const labelMap = {
+        sent: 'enviados',
+        error: 'errores',
+        queued: 'en cola',
+        received: 'recibidos',
+        discarded: 'descartados'
+    };
+    const order = ['sent', 'error', 'discarded', 'received', 'queued'];
+    const sortedEntries = Object.entries(byStatus).sort((a, b) => {
+        const ai = order.indexOf(a[0]);
+        const bi = order.indexOf(b[0]);
+        const av = ai === -1 ? 999 : ai;
+        const bv = bi === -1 ? 999 : bi;
+        return av - bv;
+    });
+    document.getElementById('analyticsDbByStatus').textContent =
+        sortedEntries.map(([k, v]) => `${labelMap[k] || k}: ${v.toLocaleString()}`).join(' | ') || '—';
     document.getElementById('analyticsLastUpdate').textContent = new Date().toLocaleTimeString('es-CO');
 }
 
-function buildAnalyticsTimelineChart(ctx, labels, recibidos, enviados, errores, chartType = 'line', totales = null) {
+function buildAnalyticsTimelineChart(ctx, labels, recibidos, enviados, errores, descartados, chartType = 'line', totales = null) {
     if (analyticsTimelineChart) analyticsTimelineChart.destroy();
     
     const datasets = [
@@ -439,6 +456,15 @@ function buildAnalyticsTimelineChart(ctx, labels, recibidos, enviados, errores, 
             tension: 0.35, 
             borderColor: '#ef4444', 
             backgroundColor: chartType === 'bar' ? '#ef4444' : 'rgba(239, 68, 68, 0.8)', 
+            fill: false,
+            borderWidth: chartType === 'bar' ? 0 : 2
+        },
+        {
+            label: 'Descartados',
+            data: descartados,
+            tension: 0.35,
+            borderColor: '#64748b',
+            backgroundColor: chartType === 'bar' ? '#64748b' : 'rgba(100, 116, 139, 0.8)',
             fill: false,
             borderWidth: chartType === 'bar' ? 0 : 2
         },
@@ -954,7 +980,7 @@ async function refreshAnalytics() {
         const timeline = data.timeline || [];
         const period = document.getElementById('analyticsPeriod').value;
         
-        let labels, enviados, errores, recibidos, consolidados;
+        let labels, enviados, errores, descartados, recibidos, consolidados;
         let chartType = 'bar'; // Por defecto barras
         
         // Si es semana, expandir a todos los días de la semana
@@ -969,6 +995,7 @@ async function refreshAnalytics() {
                     daysMap[periodoKey] = {
                         enviados: Number(item.enviados || 0),
                         errores: Number(item.errores || 0),
+                        descartados: Number(item.descartados || 0),
                         recibidos: Number(item.recibidos || 0),
                         consolidados: Number(item.consolidados || 0)
                     };
@@ -977,6 +1004,7 @@ async function refreshAnalytics() {
                 labels = [];
                 enviados = [];
                 errores = [];
+                descartados = [];
                 recibidos = [];
                 consolidados = [];
                 
@@ -986,9 +1014,10 @@ async function refreshAnalytics() {
                     const dayName = currentDay.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
                     labels.push(dayName);
                     
-                    const dayData = daysMap[dateStr] || { enviados: 0, errores: 0, recibidos: 0, consolidados: 0 };
+                    const dayData = daysMap[dateStr] || { enviados: 0, errores: 0, descartados: 0, recibidos: 0, consolidados: 0 };
                     enviados.push(dayData.enviados);
                     errores.push(dayData.errores);
+                    descartados.push(dayData.descartados);
                     recibidos.push(dayData.recibidos);
                     consolidados.push(dayData.consolidados);
                     
@@ -1001,6 +1030,7 @@ async function refreshAnalytics() {
                 });
                 enviados = timeline.map(x => Number(x.enviados || 0));
                 errores = timeline.map(x => Number(x.errores || 0));
+                descartados = timeline.map(x => Number(x.descartados || 0));
                 recibidos = timeline.map(x => Number(x.recibidos || 0));
                 consolidados = timeline.map(x => Number(x.consolidados || 0));
             }
@@ -1014,10 +1044,11 @@ async function refreshAnalytics() {
                 const dateStr = item.periodo.split('T')[0];
                 const monthKey = dateStr.substring(0, 7);
                 if (!monthsMap[monthKey]) {
-                    monthsMap[monthKey] = { enviados: 0, errores: 0, recibidos: 0, consolidados: 0, msgs_en_consolidados: 0 };
+                    monthsMap[monthKey] = { enviados: 0, errores: 0, descartados: 0, recibidos: 0, consolidados: 0, msgs_en_consolidados: 0 };
                 }
                 monthsMap[monthKey].enviados += Number(item.enviados || 0);
                 monthsMap[monthKey].errores += Number(item.errores || 0);
+                monthsMap[monthKey].descartados += Number(item.descartados || 0);
                 monthsMap[monthKey].recibidos += Number(item.recibidos || 0);
                 monthsMap[monthKey].consolidados += Number(item.consolidados || 0);
                 monthsMap[monthKey].msgs_en_consolidados += Number(item.msgs_en_consolidados || 0);
@@ -1030,6 +1061,7 @@ async function refreshAnalytics() {
             });
             enviados = sortedMonths.map(m => monthsMap[m].enviados);
             errores = sortedMonths.map(m => monthsMap[m].errores);
+            descartados = sortedMonths.map(m => monthsMap[m].descartados);
             recibidos = sortedMonths.map(m => monthsMap[m].recibidos);
             consolidados = sortedMonths.map(m => monthsMap[m].consolidados);
             var totalesMes = sortedMonths.map(m => {
@@ -1049,6 +1081,7 @@ async function refreshAnalytics() {
             });
             enviados = timeline.map(x => Number(x.enviados || 0));
             errores = timeline.map(x => Number(x.errores || 0));
+            descartados = timeline.map(x => Number(x.descartados || 0));
             recibidos = timeline.map(x => Number(x.recibidos || 0));
             consolidados = timeline.map(x => Number(x.consolidados || 0));
         }
@@ -1058,7 +1091,7 @@ async function refreshAnalytics() {
         
         const timelineCtx = document.getElementById('analyticsTimelineChart');
         if (timelineCtx) {
-            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, recibidos, enviados, errores, chartType, totalesMes);
+            buildAnalyticsTimelineChart(timelineCtx.getContext('2d'), labels, recibidos, enviados, errores, descartados, chartType, totalesMes);
         }
         
         // Gráfica de consolidación (solo en periodo año)

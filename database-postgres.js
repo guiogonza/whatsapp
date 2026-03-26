@@ -75,12 +75,36 @@ async function createTables() {
                 phone_number VARCHAR(50) NOT NULL,
                 message_preview TEXT,
                 char_count INTEGER DEFAULT 0,
-                status VARCHAR(20) NOT NULL CHECK (status IN ('sent', 'error', 'queued', 'received')),
+                status VARCHAR(20) NOT NULL CHECK (status IN ('sent', 'error', 'queued', 'received', 'discarded')),
                 error_message TEXT,
                 is_consolidated BOOLEAN DEFAULT FALSE,
                 msg_count INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        `);
+
+        // Migrar restricción de status para soportar mensajes descartados
+        await client.query(`
+            DO $$
+            DECLARE
+                constraint_name text;
+            BEGIN
+                FOR constraint_name IN
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'messages'::regclass
+                      AND contype = 'c'
+                      AND pg_get_constraintdef(oid) ILIKE '%status%'
+                LOOP
+                    EXECUTE format('ALTER TABLE messages DROP CONSTRAINT %I', constraint_name);
+                END LOOP;
+            END $$;
+        `);
+
+        await client.query(`
+            ALTER TABLE messages
+            ADD CONSTRAINT messages_status_check
+            CHECK (status IN ('sent', 'error', 'queued', 'received', 'discarded'))
         `);
 
         // Agregar columna msg_count si no existe (para migraciones)
@@ -207,7 +231,7 @@ async function logMessage(session, phoneNumber, message, status, errorMessage = 
 
     // Validar y normalizar status
     let finalStatus = (status || '').toLowerCase();
-    const allowed = ['sent', 'error', 'queued', 'received'];
+    const allowed = ['sent', 'error', 'queued', 'received', 'discarded'];
     if (finalStatus === 'success') finalStatus = 'sent';
     if (!allowed.includes(finalStatus)) finalStatus = 'queued';
 
@@ -368,7 +392,8 @@ async function getStats() {
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent,
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as failed,
-                COUNT(CASE WHEN status = 'queued' THEN 1 END) as queued
+                COUNT(CASE WHEN status = 'queued' THEN 1 END) as queued,
+                COUNT(CASE WHEN status = 'discarded' THEN 1 END) as discarded
             FROM messages
         `);
         
@@ -397,6 +422,7 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFil
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
+                COUNT(CASE WHEN status = 'discarded' THEN 1 END) as descartados,
                 COUNT(CASE WHEN status = 'received' OR (status = 'queued' AND is_consolidated = false) THEN 1 END) as recibidos,
                 COUNT(CASE WHEN is_consolidated = true THEN 1 END) as consolidados,
                 COALESCE(SUM(CASE WHEN is_consolidated = true THEN msg_count ELSE 0 END), 0) as msgs_en_consolidados
@@ -418,6 +444,7 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFil
                 COALESCE(SUM(char_count), 0) as total_chars,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
+                COUNT(CASE WHEN status = 'discarded' THEN 1 END) as descartados,
                 COUNT(CASE WHEN status = 'queued' THEN 1 END) as en_cola,
                 MIN(timestamp) as first_message,
                 MAX(timestamp) as last_message

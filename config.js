@@ -95,6 +95,15 @@ module.exports = {
     WHATSAPP_CLOUD_PERCENTAGE: parseInt(process.env.WHATSAPP_CLOUD_PERCENTAGE) || 50,
     // Habilitar modo híbrido (Cloud API + Baileys)
     HYBRID_MODE_ENABLED: process.env.HYBRID_MODE_ENABLED !== 'false',
+
+    // ============================================
+    // Meta Template Analytics (Dashboard)
+    // ============================================
+    META_GRAPH_VERSION: process.env.META_GRAPH_VERSION || process.env.WHATSAPP_CLOUD_API_VERSION || 'v21.0',
+    META_WABA_ID: process.env.META_WABA_ID || '',
+    META_TEMPLATE_ID: process.env.META_TEMPLATE_ID || '',
+    META_TEMPLATE_NAME: process.env.META_TEMPLATE_NAME || '',
+    META_TEMPLATE_LANGUAGE: process.env.META_TEMPLATE_LANGUAGE || 'es_CO',
     
     // ============================================
     // Webhook para recibir mensajes

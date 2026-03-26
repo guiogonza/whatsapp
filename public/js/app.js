@@ -181,6 +181,7 @@ function showSection(sectionId) {
         personal: { title: 'Mensaje Personalizado', subtitle: 'Envía mensajes individuales' },
         bulk: { title: 'Envío Masivo', subtitle: 'Envía mensajes a múltiples destinatarios' },
         analytics: { title: 'Analytics Dashboard', subtitle: 'Estadísticas y métricas de mensajes' },
+        meta: { title: 'Meta Template Analytics', subtitle: 'Métricas de plantillas desde Meta Business' },
         conversation: { title: 'Conversación IA Anti-Ban', subtitle: 'Genera actividad natural entre sesiones' },
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' },
         database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' },
@@ -196,6 +197,7 @@ function showSection(sectionId) {
     else stopMonitor();
     
     if (sectionId === 'analytics') initAnalytics();
+    if (sectionId === 'meta') initMetaSection();
     if (sectionId === 'settings') initSettings();
     if (sectionId === 'database') initDatabase();
     if (sectionId === 'search') {
@@ -3059,4 +3061,88 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+let metaInitialized = false;
+
+function setMetaValue(id, value, formatter) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (value === null || value === undefined || Number.isNaN(value)) {
+        el.textContent = '—';
+        return;
+    }
+    el.textContent = formatter ? formatter(value) : String(value);
+}
+
+function initMetaSection() {
+    if (!metaInitialized) {
+        const today = new Date();
+        const weekAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+        const fmt = (d) => d.toISOString().split('T')[0];
+        const start = document.getElementById('metaStartDate');
+        const end = document.getElementById('metaEndDate');
+        if (start && !start.value) start.value = fmt(weekAgo);
+        if (end && !end.value) end.value = fmt(today);
+        metaInitialized = true;
+    }
+    loadMetaStats();
+}
+
+async function loadMetaStats() {
+    const badge = document.getElementById('metaStatusBadge');
+    const warning = document.getElementById('metaWarning');
+    try {
+        const startDate = document.getElementById('metaStartDate')?.value;
+        const endDate = document.getElementById('metaEndDate')?.value;
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+
+        if (badge) {
+            badge.textContent = 'Cargando...';
+            badge.className = 'px-2 py-1 text-xs rounded-full bg-yellow-200 text-yellow-800';
+        }
+        if (warning) warning.classList.add('hidden');
+
+        const response = await fetch(`${API_URL}/api/meta/template-stats?${params}`);
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+
+        const template = data.template || {};
+        const stats = data.stats || {};
+
+        setMetaValue('metaTemplateName', template.name || template.id || 'No configurada');
+        const metaPieces = [template.language, template.status, template.category, template.quality ? `quality: ${template.quality}` : null].filter(Boolean);
+        setMetaValue('metaTemplateMeta', metaPieces.join(' · ') || '—');
+
+        setMetaValue('metaSpend', stats.spendUSD, (v) => Number(v).toFixed(2));
+        setMetaValue('metaCostPerDelivered', stats.costPerDelivered, (v) => Number(v).toFixed(4));
+        setMetaValue('metaSent', stats.sent, (v) => Number(v).toLocaleString());
+        setMetaValue('metaDelivered', stats.delivered, (v) => Number(v).toLocaleString());
+        setMetaValue('metaRead', stats.read, (v) => Number(v).toLocaleString());
+        setMetaValue('metaReplies', stats.uniqueReplies, (v) => Number(v).toLocaleString());
+
+        if (badge) {
+            badge.textContent = data.available ? 'OK' : 'Sin analytics';
+            badge.className = data.available
+                ? 'px-2 py-1 text-xs rounded-full bg-green-200 text-green-800'
+                : 'px-2 py-1 text-xs rounded-full bg-amber-200 text-amber-800';
+        }
+
+        if (warning && Array.isArray(data.warnings) && data.warnings.length > 0) {
+            warning.textContent = data.warnings.join(' | ');
+            warning.classList.remove('hidden');
+        }
+    } catch (error) {
+        if (badge) {
+            badge.textContent = 'Error';
+            badge.className = 'px-2 py-1 text-xs rounded-full bg-red-200 text-red-800';
+        }
+        if (warning) {
+            warning.textContent = `No se pudo cargar Meta: ${error.message}`;
+            warning.classList.remove('hidden');
+        }
+        console.error('Error cargando Meta stats:', error);
+    }
 }

@@ -30,6 +30,7 @@ const webhook = require('./lib/session/webhook');
 const { formatPhoneNumber } = require('./lib/session/utils');
 const { checkProxyAvailable } = require('./lib/session/proxy');
 const mt5Detector = require('./lib/session/mt5-detector');
+const axios = require('axios');
 
 // ---- Caché Redis (opcional - degrada a no-cache si Redis no está disponible) ----
 let redisClient = null;
@@ -109,6 +110,10 @@ app.use(authenticateAPI);
 // Configurar charset UTF-8 para archivos estáticos
 app.use(express.static(config.PUBLIC_PATH, {
     setHeaders: (res, path) => {
+        // Evitar que el navegador se quede con una versión vieja del dashboard
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         if (path.endsWith('.html')) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
         } else if (path.endsWith('.js')) {
@@ -253,6 +258,214 @@ async function getPublicIP() {
         console.error('Error obteniendo IP pública:', error.message);
         return { ip: cachedPublicIP || 'No disponible', usingProxy: cachedProxyStatus || false };
     }
+}
+
+function toNumberOrNull(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+function aggregateMetric(payload, keyRegexes) {
+    let total = 0;
+    let found = false;
+
+    const walk = (node) => {
+        if (node === null || node === undefined) return;
+        if (Array.isArray(node)) {
+            node.forEach(walk);
+            return;
+        }
+        if (typeof node !== 'object') return;
+
+        // Meta template_analytics reporta costos como [{ type: 'amount_spent', value: 0.49 }]
+        // y no como claves directas amount_spent: 0.49.
+        if (
+            typeof node.type === 'string' &&
+            (typeof node.value === 'number' || (typeof node.value === 'string' && node.value.trim() !== '' && !isNaN(Number(node.value))))
+        ) {
+            const metricType = node.type.toLowerCase();
+            if (keyRegexes.some((re) => re.test(metricType))) {
+                total += Number(node.value);
+                found = true;
+            }
+        }
+
+        for (const [k, v] of Object.entries(node)) {
+            if (v && typeof v === 'object') {
+                walk(v);
+                continue;
+            }
+            if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)))) {
+                const key = String(k).toLowerCase();
+                if (keyRegexes.some((re) => re.test(key))) {
+                    total += Number(v);
+                    found = true;
+                }
+            }
+        }
+    };
+
+    walk(payload);
+    return found ? total : null;
+}
+
+async function resolveWabaIdFromPhoneId({ token, graphVersion, phoneId }) {
+    if (!phoneId) return { wabaId: null, warning: null };
+
+    const baseUrl = `https://graph.facebook.com/${graphVersion}`;
+    const headers = { Authorization: `Bearer ${token}` };
+
+    try {
+        const resp = await axios.get(`${baseUrl}/${phoneId}`, {
+            headers,
+            params: { fields: 'display_phone_number,verified_name' },
+            timeout: 15000
+        });
+        return {
+            wabaId: null,
+            warning: `WHATSAPP_CLOUD_PHONE_ID válido (${resp.data?.display_phone_number || phoneId} - ${resp.data?.verified_name || 'sin nombre'}), pero Meta no expone WABA desde este endpoint. Configura META_WABA_ID o META_TEMPLATE_ID manualmente.`
+        };
+    } catch (error) {
+        return {
+            wabaId: null,
+            warning: `No se pudo autodescubrir WABA con WHATSAPP_CLOUD_PHONE_ID: ${error.response?.data?.error?.message || error.message}`
+        };
+    }
+}
+
+async function fetchMetaTemplateStats({ token, graphVersion, wabaId, phoneId, templateId, templateName, templateLanguage, startDate, endDate }) {
+    const baseUrl = `https://graph.facebook.com/${graphVersion}`;
+    const headers = { Authorization: `Bearer ${token}` };
+
+    let resolvedWabaId = wabaId || null;
+    let resolvedTemplateId = templateId || null;
+    let templateInfo = null;
+    const warnings = [];
+
+    if (!resolvedWabaId && !resolvedTemplateId) {
+        const autoWaba = await resolveWabaIdFromPhoneId({ token, graphVersion, phoneId });
+        resolvedWabaId = autoWaba.wabaId;
+        if (autoWaba.warning) {
+            warnings.push(autoWaba.warning);
+        }
+    }
+
+    if (!resolvedWabaId && !resolvedTemplateId) {
+        warnings.push('Configura META_WABA_ID o META_TEMPLATE_ID para consultar métricas de plantilla. También puedes configurar WHATSAPP_CLOUD_PHONE_ID para autodescubrir la WABA.');
+    }
+    if (!templateName && !resolvedTemplateId) {
+        warnings.push('Configura META_TEMPLATE_NAME para resolver automáticamente la plantilla.');
+    }
+
+    if (!resolvedTemplateId && resolvedWabaId && templateName) {
+        const listResp = await axios.get(`${baseUrl}/${resolvedWabaId}/message_templates`, {
+            headers,
+            params: {
+                name: templateName,
+                language: templateLanguage,
+                fields: 'id,name,language,status,category,quality_score',
+                limit: 50
+            },
+            timeout: 15000
+        });
+
+        const templates = listResp.data?.data || [];
+        const selected = templates.find((t) => String(t.language || '').toLowerCase() === String(templateLanguage || '').toLowerCase()) || templates[0];
+        if (selected) {
+            resolvedTemplateId = selected.id;
+            templateInfo = selected;
+        } else {
+            warnings.push(`No se encontró la plantilla '${templateName}' en la WABA configurada.`);
+        }
+    }
+
+    if (resolvedTemplateId && !templateInfo) {
+        try {
+            const templateResp = await axios.get(`${baseUrl}/${resolvedTemplateId}`, {
+                headers,
+                params: { fields: 'id,name,language,status,category,quality_score' },
+                timeout: 15000
+            });
+            templateInfo = templateResp.data;
+        } catch (e) {
+            warnings.push(`No se pudo leer detalle de plantilla: ${e.response?.data?.error?.message || e.message}`);
+        }
+    }
+
+    const sinceRaw = Math.floor(new Date(`${startDate}T00:00:00`).getTime() / 1000);
+    const untilRaw = Math.floor(new Date(`${endDate}T23:59:59`).getTime() / 1000);
+    const nowEpoch = Math.floor(Date.now() / 1000);
+    const until = Math.min(untilRaw, nowEpoch);
+    const since = Math.min(sinceRaw, until - 60);
+
+    const candidates = [];
+    // Algunos objetos de plantilla no exponen template_analytics/insights directamente.
+    // Usamos la ruta por WABA, que es la fuente estable para este dashboard.
+    if (resolvedWabaId) {
+        candidates.push({
+            source: 'template_analytics_by_waba',
+            url: `${baseUrl}/${resolvedWabaId}/template_analytics`,
+            params: {
+                start: since,
+                end: until,
+                granularity: 'DAILY',
+                template_ids: resolvedTemplateId ? JSON.stringify([String(resolvedTemplateId)]) : undefined,
+                name: resolvedTemplateId ? undefined : templateName,
+                language: resolvedTemplateId ? undefined : templateLanguage
+            }
+        });
+    }
+
+    let analyticsPayload = null;
+    let analyticsSource = null;
+
+    for (const c of candidates) {
+        try {
+            const resp = await axios.get(c.url, {
+                headers,
+                params: c.params,
+                timeout: 20000
+            });
+            analyticsPayload = resp.data;
+            analyticsSource = c.source;
+            break;
+        } catch (e) {
+            warnings.push(`${c.source}: ${e.response?.data?.error?.message || e.message}`);
+        }
+    }
+
+    const sent = analyticsPayload ? aggregateMetric(analyticsPayload, [/^sent$/, /messages?_sent/, /sent_count/, /msg_?sent/]) : null;
+    const delivered = analyticsPayload ? aggregateMetric(analyticsPayload, [/^delivered$/, /messages?_delivered/, /delivered_count/, /msg_?delivered/]) : null;
+    const read = analyticsPayload ? aggregateMetric(analyticsPayload, [/^read$/, /messages?_read/, /read_count/, /msg_?read/]) : null;
+    const uniqueReplies = analyticsPayload ? aggregateMetric(analyticsPayload, [/unique.*repl/, /replies?_unique/, /responses?_unique/, /^replies$/, /^responses$/, /^replied$/]) : null;
+    const spendUSD = analyticsPayload ? aggregateMetric(analyticsPayload, [/spend/, /cost/, /amount_spent/, /usd/]) : null;
+
+    return {
+        template: {
+            id: resolvedTemplateId || null,
+            name: templateInfo?.name || templateName || null,
+            language: templateInfo?.language || templateLanguage || null,
+            status: templateInfo?.status || null,
+            category: templateInfo?.category || null,
+            quality: templateInfo?.quality_score?.score || templateInfo?.quality_score || null
+        },
+        period: { startDate, endDate },
+        source: analyticsSource,
+        available: !!analyticsPayload,
+        wabaId: resolvedWabaId,
+        stats: {
+            sent: toNumberOrNull(sent),
+            delivered: toNumberOrNull(delivered),
+            read: toNumberOrNull(read),
+            uniqueReplies: toNumberOrNull(uniqueReplies),
+            spendUSD: toNumberOrNull(spendUSD),
+            costPerDelivered: toNumberOrNull(spendUSD) !== null && toNumberOrNull(delivered) > 0
+                ? Number((spendUSD / delivered).toFixed(4))
+                : null
+        },
+        warnings
+    };
 }
 
 /**
@@ -892,11 +1105,11 @@ app.get('/api/cloud/stats', async (req, res) => {
             dbStats.total = parseInt(totalResult.rows[0]?.count || 0);
 
             // Mensajes de hoy
-            // Hoy en Colombia (GMT-5): inicio del día allá
+            // Unificado con Analytics: usar timestamp y corte de día Colombia
             const todayResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Bogota')
+                AND timestamp AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.today = parseInt(todayResult.rows[0]?.count || 0);
 
@@ -904,7 +1117,7 @@ app.get('/api/cloud/stats', async (req, res) => {
             const hourResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at >= NOW() - INTERVAL '1 hour'
+                AND timestamp >= NOW() - INTERVAL '1 hour'
             `);
             dbStats.thisHour = parseInt(hourResult.rows[0]?.count || 0);
 
@@ -912,17 +1125,17 @@ app.get('/api/cloud/stats', async (req, res) => {
             const monthResult = await db.query(`
                 SELECT COUNT(*) as count FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Bogota')
+                AND timestamp AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.thisMonth = parseInt(monthResult.rows[0]?.count || 0);
 
             // CONVERSACIONES únicas del mes (número + día = 1 conversación)
             const convMonthResult = await db.query(`
-                SELECT COUNT(DISTINCT phone_number || DATE((created_at AT TIME ZONE 'America/Bogota'))::text) as conversations,
+                SELECT COUNT(DISTINCT phone_number || DATE((timestamp AT TIME ZONE 'America/Bogota'))::text) as conversations,
                        COUNT(DISTINCT phone_number) as unique_numbers
                 FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Bogota')
+                AND timestamp AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.conversations.month = parseInt(convMonthResult.rows[0]?.conversations || 0);
             dbStats.conversations.uniqueNumbers = parseInt(convMonthResult.rows[0]?.unique_numbers || 0);
@@ -932,18 +1145,18 @@ app.get('/api/cloud/stats', async (req, res) => {
                 SELECT COUNT(DISTINCT phone_number) as conversations
                 FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Bogota')
+                AND timestamp AT TIME ZONE 'America/Bogota' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Bogota')
             `);
             dbStats.conversations.today = parseInt(convTodayResult.rows[0]?.conversations || 0);
 
             // Mensajes por día (últimos 7 días)
             const dailyResult = await db.query(`
-                SELECT DATE(created_at) as date, COUNT(*) as count,
+                SELECT DATE(timestamp) as date, COUNT(*) as count,
                        COUNT(DISTINCT phone_number) as conversations
                 FROM messages 
                 WHERE session = 'cloud-api' AND status = 'sent' 
-                AND created_at >= NOW() - INTERVAL '7 days'
-                GROUP BY DATE(created_at) 
+                AND timestamp >= NOW() - INTERVAL '7 days'
+                GROUP BY DATE(timestamp) 
                 ORDER BY date DESC
             `);
             dbStats.daily = dailyResult.rows;
@@ -982,6 +1195,48 @@ app.get('/api/cloud/stats', async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/meta/template-stats
+ * Consulta métricas de plantilla desde Meta Graph API.
+ */
+app.get('/api/meta/template-stats', async (req, res) => {
+    try {
+        const token = config.WHATSAPP_CLOUD_TOKEN;
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'WHATSAPP_CLOUD_TOKEN no configurado para consultar Meta Graph API'
+            });
+        }
+
+        const today = new Date();
+        const sevenDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+        const fmt = (d) => d.toISOString().split('T')[0];
+
+        const startDate = req.query.start_date || fmt(sevenDaysAgo);
+        const endDate = req.query.end_date || fmt(today);
+
+        const data = await fetchMetaTemplateStats({
+            token,
+            graphVersion: config.META_GRAPH_VERSION,
+            wabaId: config.META_WABA_ID,
+            phoneId: config.WHATSAPP_CLOUD_PHONE_ID,
+            templateId: config.META_TEMPLATE_ID,
+            templateName: config.META_TEMPLATE_NAME,
+            templateLanguage: config.META_TEMPLATE_LANGUAGE,
+            startDate,
+            endDate
+        });
+
+        res.json({ success: true, ...data });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.response?.data?.error?.message || error.message
+        });
     }
 });
 
@@ -1448,6 +1703,13 @@ app.post('/api/messages/send', async (req, res) => {
                     : `Mensaje en cola (${result.pendingCount} pendientes, envio en ${result.sendInMinutes} min)`,
                 details: result
             });
+        } else if (result.discarded) {
+            res.status(400).json({
+                success: false,
+                discarded: true,
+                message: result.error,
+                details: result
+            });
         } else {
             res.status(500).json({ success: false, error: result.error });
         }
@@ -1508,6 +1770,13 @@ app.post('/api/session/send-message', async (req, res) => {
                 message: sentNow
                     ? `Mensaje enviado INMEDIATAMENTE por Cloud API`
                     : `Mensaje en cola (${result.pendingCount} pendientes, envio en ${result.sendInMinutes} min)`,
+                details: result
+            });
+        } else if (result.discarded) {
+            res.status(400).json({
+                success: false,
+                discarded: true,
+                message: result.error,
                 details: result
             });
         } else {
@@ -1674,19 +1943,25 @@ app.post('/api/messages/send-bulk', async (req, res) => {
             results.push({
                 phoneNumber,
                 success: result.success,
-                consolidated: true,
-                pendingCount: result.pendingCount
+                discarded: !!result.discarded,
+                consolidated: !!result.success,
+                pendingCount: result.pendingCount || 0,
+                error: result.discarded ? result.error : null
             });
         }
 
         const successCount = results.filter(r => r.success).length;
+        const discardedCount = results.filter(r => r.discarded).length;
         res.json({
-            success: true,
-            consolidated: true,
+            success: discardedCount === 0,
+            consolidated: successCount > 0,
             total: contacts.length,
             queued: successCount,
+            discarded: discardedCount,
             failed: contacts.length - successCount,
-            message: `${successCount} mensajes agregados a consolidacion`,
+            message: discardedCount > 0
+                ? `${successCount} mensajes agregados a consolidacion, ${discardedCount} descartados por plantilla invalida`
+                : `${successCount} mensajes agregados a consolidacion`,
             results
         });
     } catch (error) {
