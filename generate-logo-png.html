@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Generar Logo PNG</title>
+  <style>
+    body { background: #1a1a1a; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: Arial, sans-serif; color: white; }
+    canvas { border: 2px solid #25D366; margin-bottom: 20px; }
+    button { background: #25D366; color: #000; border: none; padding: 14px 32px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #1db954; }
+  </style>
+</head>
+<body>
+  <canvas id="c" width="512" height="512"></canvas>
+  <button onclick="download()">⬇ Descargar logo-512.png</button>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const W = 512, H = 512;
+
+    // Fondo verde oscuro
+    ctx.fillStyle = '#075E54';
+    ctx.fillRect(0, 0, W, H);
+
+    // Círculo central suave
+    const grad = ctx.createRadialGradient(W/2, H/2 - 30, 20, W/2, H/2 - 30, 220);
+    grad.addColorStop(0, 'rgba(37,211,102,0.25)');
+    grad.addColorStop(1, 'rgba(37,211,102,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Icono de pin GPS
+    const cx = W / 2;
+    const cy = H / 2 - 40;
+    const pinR = 90;
+
+    // Cuerpo del pin (círculo + triángulo hacia abajo)
+    ctx.beginPath();
+    ctx.arc(cx, cy - pinR * 0.3, pinR, Math.PI, 0);
+    ctx.lineTo(cx + pinR, cy - pinR * 0.3);
+    ctx.bezierCurveTo(cx + pinR, cy + pinR * 0.5, cx, cy + pinR * 1.4, cx, cy + pinR * 1.4);
+    ctx.bezierCurveTo(cx, cy + pinR * 1.4, cx - pinR, cy + pinR * 0.5, cx - pinR, cy - pinR * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = '#25D366';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Círculo interior del pin (blanco)
+    ctx.beginPath();
+    ctx.arc(cx, cy - pinR * 0.3, pinR * 0.38, 0, Math.PI * 2);
+    ctx.fillStyle = '#075E54';
+    ctx.fill();
+
+    // Punto central del pin
+    ctx.beginPath();
+    ctx.arc(cx, cy - pinR * 0.3, pinR * 0.14, 0, Math.PI * 2);
+    ctx.fillStyle = '#25D366';
+    ctx.fill();
+
+    // Línea decorativa
+    ctx.fillStyle = '#25D366';
+    ctx.fillRect(60, H - 140, W - 120, 4);
+
+    // Texto RASTREAMOS
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '4px';
+    ctx.fillText('RASTREAMOS', cx, H - 90);
+
+    // Subtexto
+    ctx.fillStyle = '#25D366';
+    ctx.font = '22px Arial, sans-serif';
+    ctx.fillText('GPS & Alertas', cx, H - 56);
+
+    function download() {
+      const a = document.createElement('a');
+      a.download = 'logo-512.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }
+  </script>
+</body>
+</html>

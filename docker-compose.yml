@@ -5,6 +5,19 @@ networks:
     driver: bridge
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: wpp-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    networks:
+      - whatsapp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     container_name: wpp-postgres
@@ -40,6 +53,8 @@ services:
       # - .:/app
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - whatsapp-network

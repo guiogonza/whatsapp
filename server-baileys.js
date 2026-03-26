@@ -31,6 +31,43 @@ const { formatPhoneNumber } = require('./lib/session/utils');
 const { checkProxyAvailable } = require('./lib/session/proxy');
 const mt5Detector = require('./lib/session/mt5-detector');
 
+// ---- Caché Redis (opcional - degrada a no-cache si Redis no está disponible) ----
+let redisClient = null;
+(async () => {
+    try {
+        const Redis = require('ioredis');
+        const client = new Redis({
+            host: process.env.REDIS_HOST || 'wpp-redis',
+            port: parseInt(process.env.REDIS_PORT) || 6379,
+            lazyConnect: true,
+            enableOfflineQueue: false,
+            connectTimeout: 3000,
+            maxRetriesPerRequest: 1
+        });
+        await client.connect();
+        redisClient = client;
+        console.log('✅ Redis conectado para caché de analytics');
+    } catch (e) {
+        console.warn('⚠️  Redis no disponible, analytics sin caché:', e.message);
+    }
+})();
+
+async function redisGet(key) {
+    if (!redisClient) return null;
+    try { return await redisClient.get(key); } catch { return null; }
+}
+async function redisSet(key, value, ttlSeconds) {
+    if (!redisClient) return;
+    try { await redisClient.setex(key, ttlSeconds, value); } catch { /* ignore */ }
+}
+async function redisDel(pattern) {
+    if (!redisClient) return;
+    try {
+        const keys = await redisClient.keys(pattern);
+        if (keys.length) await redisClient.del(...keys);
+    } catch { /* ignore */ }
+}
+
 // Inicialización de Express
 const app = express();
 const server = http.createServer(app);
@@ -1815,6 +1852,82 @@ app.get('/api/analytics/sessions-monthly', async (req, res) => {
         const analyticsController = require('./controllers/analyticsController');
         await analyticsController.getSessionsMonthly(req, res);
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/analytics/export-sent - Mensajes enviados del período para Excel/tabla
+ */
+app.get('/api/analytics/export-sent', async (req, res) => {
+    try {
+        const { start_date, end_date, session, limit, offset, status_filter } = req.query;
+        if (!start_date || !end_date) {
+            return res.status(400).json({ success: false, error: 'Se requieren start_date y end_date' });
+        }
+
+        const pageLimit  = limit  ? Math.min(parseInt(limit),  50000) : 50000;
+        const pageOffset = offset ? parseInt(offset) : 0;
+
+        // Clave de caché única por filtros y página
+        const sf = status_filter || 'sent';
+        const cacheKey = `export_sent:${start_date}:${end_date}:${session || 'all'}:${sf}:${pageLimit}:${pageOffset}`;
+        const cached = await redisGet(cacheKey);
+        if (cached) {
+            res.setHeader('X-Cache', 'HIT');
+            return res.json(JSON.parse(cached));
+        }
+
+        // Condición de status según filtro
+        let statusCondition;
+        if (sf === 'received') {
+            statusCondition = "status = 'received'";
+        } else if (sf === 'all') {
+            statusCondition = "(status IN ('sent','success','SENT','SUCCESS','received'))";
+        } else {
+            // 'sent' por defecto
+            statusCondition = "(status IN ('sent','success','SENT','SUCCESS'))";
+        }
+
+        const conditions = [
+            "timestamp >= $1",
+            "timestamp <= $2",
+            statusCondition
+        ];
+        const params = [`${start_date} 00:00:00`, `${end_date} 23:59:59`];
+
+        if (session) {
+            conditions.push(`session = $${params.length + 1}`);
+            params.push(session);
+        }
+
+        const where = `WHERE ${conditions.join(' AND ')}`;
+
+        const [countResult, dataResult] = await Promise.all([
+            database.query(`SELECT COUNT(*) as total FROM messages ${where}`, params),
+            database.query(
+                `SELECT timestamp, phone_number, message_preview, char_count, session, status
+                 FROM messages ${where}
+                 ORDER BY timestamp DESC
+                 LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+                [...params, pageLimit, pageOffset]
+            )
+        ]);
+
+        const total = parseInt(countResult.rows[0].total) || 0;
+        const payload = { success: true, messages: dataResult.rows, total, limit: pageLimit, offset: pageOffset };
+
+        // Cachear 5 min (datos del día), 30 min (días anteriores)
+        const isToday = start_date === end_date && start_date === new Date().toISOString().split('T')[0];
+        await redisSet(cacheKey, JSON.stringify(payload), isToday ? 300 : 1800);
+
+        res.setHeader('X-Cache', 'MISS');
+        res.json(payload);
+    } catch (error) {
+        console.error('Error en /api/analytics/export-sent:', error.message);
+        if (error.message && error.message.includes('does not exist')) {
+            return res.json({ success: true, messages: [], total: 0, limit: 50000, offset: 0 });
+        }
         res.status(500).json({ success: false, error: error.message });
     }
 });

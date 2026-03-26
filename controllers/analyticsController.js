@@ -174,7 +174,73 @@ async function getSessionsMonthly(req, res) {
     }
 }
 
+/**
+ * GET /api/analytics/export-sent
+ * Mensajes enviados del período con paginación opcional.
+ * Sin limit/offset → devuelve todos (hasta 50000) para Excel.
+ * Con limit/offset → devuelve página para la tabla.
+ */
+async function getExportSent(req, res) {
+    try {
+        const { start_date, end_date, session, limit, offset } = req.query;
+
+        if (!start_date || !end_date) {
+            return res.status(400).json({
+                success: false,
+                error: 'Se requieren start_date y end_date'
+            });
+        }
+
+        const baseConditions = ['timestamp >= $1', 'timestamp <= $2',
+            "(status ILIKE 'sent' OR status ILIKE 'success')"];
+        const params = [`${start_date} 00:00:00`, `${end_date} 23:59:59`];
+
+        if (session) {
+            baseConditions.push(`session = $${params.length + 1}`);
+            params.push(session);
+        }
+
+        const whereClause = `WHERE ${baseConditions.join(' AND ')}`;
+
+        // Total count
+        const countResult = await database.query(
+            `SELECT COUNT(*) as total FROM messages ${whereClause}`,
+            params
+        );
+        const total = parseInt(countResult.rows[0].total) || 0;
+
+        // Data con paginación opcional
+        const pageLimit  = limit  ? Math.min(parseInt(limit),  50000) : 50000;
+        const pageOffset = offset ? parseInt(offset) : 0;
+
+        const dataParams = [...params, pageLimit, pageOffset];
+        const dataResult = await database.query(
+            `SELECT timestamp, phone_number, message_preview, char_count, session, status
+             FROM messages
+             ${whereClause}
+             ORDER BY timestamp DESC
+             LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+            dataParams
+        );
+
+        res.json({
+            success: true,
+            messages: dataResult.rows,
+            total,
+            limit: pageLimit,
+            offset: pageOffset
+        });
+    } catch (error) {
+        console.error('Error en analytics/export-sent:', error);
+        if (error.message && error.message.includes('does not exist')) {
+            return res.json({ success: true, messages: [], total: 0, limit: 50000, offset: 0 });
+        }
+        res.status(500).json({ success: false, error: error.message });
+    }
+}
+
 module.exports = {
     getMessages,
-    getSessionsMonthly
+    getSessionsMonthly,
+    getExportSent
 };

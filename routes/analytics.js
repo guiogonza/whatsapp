@@ -12,4 +12,7 @@ router.get('/messages', analyticsController.getMessages);
 // Mensajes por sesión agrupados por mes
 router.get('/sessions-monthly', analyticsController.getSessionsMonthly);
 
+// Exportar mensajes enviados a Excel
+router.get('/export-sent', analyticsController.getExportSent);
+
 module.exports = router;

@@ -31,6 +31,8 @@ function escapeHtml(value) {
 function initAnalytics() {
     if (analyticsInitialized) {
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
         return;
     }
     
@@ -68,59 +70,71 @@ function initAnalytics() {
     // Configurar selector de año
     initYearPicker();
     
-    // Event listeners
+    // Event listeners — cada cambio de filtro refresca gráficas Y tabla
     document.getElementById('analyticsPeriod').addEventListener('change', () => {
         updateAnalyticsRangeOptions();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
-    
     document.getElementById('analyticsDayPicker').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
-    
     document.getElementById('analyticsWeekPicker').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
-    
     document.getElementById('analyticsMonthPicker').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
-    
     document.getElementById('analyticsYearPicker').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
-    
     document.getElementById('analyticsTopN').addEventListener('change', refreshAnalytics);
     document.getElementById('analyticsTopNChart').addEventListener('change', refreshAnalytics);
     document.getElementById('analyticsStartDate').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
     document.getElementById('analyticsEndDate').addEventListener('change', () => {
         updateAnalyticsPeriodInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
-    
-    // Nuevos event listeners para filtros adicionales
     document.getElementById('analyticsSessionFilter').addEventListener('change', () => {
         updateAnalyticsSessionFilterInfo();
         refreshAnalytics();
+        loadSentMessagesTable(0);
+        loadReceivedMessagesTable(0);
     });
     document.getElementById('analyticsTableLimit').addEventListener('change', refreshAnalytics);
+    document.getElementById('sentMessagesStatusFilter').addEventListener('change', () => loadSentMessagesTable(0));
     
     // Cargar lista de sesiones disponibles
     loadAnalyticsSessions();
     
     updateAnalyticsRangeOptions();
     refreshAnalytics();
+    loadSentMessagesTable(0); // carga inicial de la tabla
+    loadReceivedMessagesTable(0); // carga inicial de recibidos
     
-    // Auto-refresh cada 30 segundos
+    // Auto-refresh cada 30 segundos: solo KPIs y gráficas, NO la tabla
     if (analyticsRefreshInterval) clearInterval(analyticsRefreshInterval);
-    analyticsRefreshInterval = setInterval(refreshAnalytics, 30000);
+    analyticsRefreshInterval = setInterval(refreshAnalyticsOnly, 30000);
 }
 
 // Cargar sesiones disponibles para el filtro
@@ -1087,9 +1101,22 @@ async function refreshAnalytics() {
         } else {
             updateAnalyticsTopTable(topRows);
         }
-        
+
     } catch (error) {
         console.error('Error refreshing analytics:', error);
+    }
+}
+
+// Auto-refresh ligero: solo KPIs, gráficas y estado del sistema (sin tabla pesada)
+async function refreshAnalyticsOnly() {
+    try {
+        const [data, health] = await Promise.all([fetchAnalyticsData(), fetchAnalyticsHealth()]);
+        if (!data) return;
+        updateAnalyticsKPIs(data.timeline || []);
+        updateAnalyticsFooter(data.db_stats || {});
+        updateAnalyticsSystemStatus(health);
+    } catch (e) {
+        console.error('Error en auto-refresh analytics:', e);
     }
 }
 
@@ -1116,13 +1143,357 @@ function exportAnalyticsCSV() {
     });
 }
 
+async function exportSentMessagesExcel() {
+    const btn = document.getElementById('btnExportSentExcel') || document.getElementById('btnExportExcel');
+    const originalContent = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Exportando...';
+    }
+
+    try {
+        const { startDate, endDate } = getAnalyticsDateRange();
+        const sessionFilter = document.getElementById('analyticsSessionFilter')?.value || '';
+
+        // Sin limit ni offset → devuelve todo el período (hasta 50000)
+        const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+        if (sessionFilter) params.append('session', sessionFilter);
+
+        const statusFilter = document.getElementById('sentMessagesStatusFilter')?.value || 'sent';
+        params.append('status_filter', statusFilter);
+
+        const res = await fetch(`${API_URL}/api/analytics/export-sent?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error al obtener datos');
+
+        const messages = data.messages || [];
+        if (messages.length === 0) {
+            alert('No hay mensajes para el período y filtros seleccionados.');
+            return;
+        }
+
+        const rows = messages.map(msg => {
+            // pg retorna TIMESTAMP WITHOUT TIMEZONE como UTC — usar timeZone:'UTC' para ver el valor real Colombia
+            const date = new Date(msg.timestamp);
+            return {
+                'Fecha/Hora': date.toLocaleString('es-CO', { timeZone: 'UTC' }),
+                'Estado': msg.status === 'received' ? 'Recibido' : 'Enviado',
+                'Número Enviado': msg.phone_number || '',
+                'Mensaje': msg.message_preview || '',
+                'Caracteres': msg.char_count != null ? Number(msg.char_count) : 0,
+                'Sesión': msg.session || ''
+            };
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 22 },
+            { wch: 12 },
+            { wch: 20 },
+            { wch: 70 },
+            { wch: 12 },
+            { wch: 22 }
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Mensajes');
+
+        const fileName = `mensajes_enviados_${startDate}_${endDate}${sessionFilter ? '_' + sessionFilter : ''}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+    } catch (error) {
+        console.error('Error al exportar Excel:', error);
+        alert('Error al exportar: ' + (error.message || 'Error desconocido'));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
+    }
+}
+
+// ======================== TABLA MENSAJES ENVIADOS DEL PERÍODO ========================
+
+async function loadSentMessagesTable(offset = 0) {
+    const tbody = document.getElementById('sentMessagesTableBody');
+    const countEl = document.getElementById('sentMessagesCount');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-gray-400">Cargando mensajes...</td></tr>';
+    if (countEl) countEl.textContent = '';
+
+    try {
+        const { startDate, endDate } = getAnalyticsDateRange();
+        const sessionFilter = document.getElementById('analyticsSessionFilter')?.value || '';
+        const pageSize = parseInt(document.getElementById('sentMessagesPageSize')?.value || '100');
+
+        const params = new URLSearchParams({
+            start_date: startDate,
+            end_date: endDate,
+            limit: pageSize,
+            offset
+        });
+        if (sessionFilter) params.append('session', sessionFilter);
+        const statusFilter = document.getElementById('sentMessagesStatusFilter')?.value || 'sent';
+        params.append('status_filter', statusFilter);
+
+        const res = await fetch(`${API_URL}/api/analytics/export-sent?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error al obtener datos');
+
+        const messages = data.messages || [];
+        const total = data.total || 0;
+
+        if (countEl) countEl.textContent = total > 0 ? `${total.toLocaleString()} mensajes` : '0 mensajes';
+
+        if (messages.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-400">No hay mensajes para este período y filtro</td></tr>';
+            renderSentMessagesPagination(0, pageSize, offset);
+            return;
+        }
+
+        tbody.innerHTML = messages.map((msg, i) => {
+            // pg retorna TIMESTAMP WITHOUT TIMEZONE como UTC — usar timeZone:'UTC' para mostrar
+            // el valor real almacenado en Colombia local time
+            const date = new Date(msg.timestamp);
+            const dateStr = date.toLocaleDateString('es-CO', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: '2-digit' });
+            const timeStr = date.toLocaleTimeString('es-CO', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const rowBg = i % 2 === 0 ? '' : 'bg-gray-50';
+            const chars = msg.char_count != null ? Number(msg.char_count) : '';
+            const isReceived = msg.status === 'received';
+            const statusBadge = isReceived
+                ? '<span class="px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700">↩ Rcb</span>'
+                : '<span class="px-1.5 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700">↗ Env</span>';
+            const rowHover = isReceived ? 'hover:bg-blue-50' : 'hover:bg-emerald-50';
+            return `
+                <tr class="${rowBg} ${rowHover}">
+                    <td class="py-2 pr-3 text-gray-400 text-xs">${offset + i + 1}</td>
+                    <td class="py-2 pr-3 whitespace-nowrap">
+                        <div class="text-gray-800 text-xs font-medium">${dateStr}</div>
+                        <div class="text-gray-500 text-xs">${timeStr}</div>
+                    </td>
+                    <td class="py-2 pr-3 font-mono text-xs text-blue-700">${escapeHtml(msg.phone_number || '')}</td>
+                    <td class="py-2 pr-3 text-gray-700 text-xs max-w-xs truncate" title="${escapeHtml(msg.message_preview || '')}">${escapeHtml(msg.message_preview || '—')}</td>
+                    <td class="py-2 pr-3 text-right text-gray-600 text-xs">${chars !== '' ? chars.toLocaleString() : '—'}</td>
+                    <td class="py-2 pr-3 text-xs text-purple-700 font-medium">${escapeHtml(msg.session || '')}</td>
+                    <td class="py-2 pr-3">${statusBadge}</td>
+                </tr>
+            `;
+        }).join('');
+
+        renderSentMessagesPagination(total, pageSize, offset);
+
+    } catch (error) {
+        console.error('Error cargando tabla mensajes enviados:', error);
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+function renderSentMessagesPagination(total, limit, offset) {
+    const infoEl = document.getElementById('sentMessagesPaginationInfo');
+    const btnsEl = document.getElementById('sentMessagesPaginationBtns');
+    if (!infoEl || !btnsEl) return;
+
+    const totalPages = Math.ceil(total / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
+    const from = total === 0 ? 0 : offset + 1;
+    const to = Math.min(offset + limit, total);
+
+    infoEl.textContent = total > 0 ? `Mostrando ${from.toLocaleString()}–${to.toLocaleString()} de ${total.toLocaleString()} mensajes` : '';
+
+    if (totalPages <= 1) {
+        btnsEl.innerHTML = '';
+        return;
+    }
+
+    const maxBtns = 7;
+    let start = Math.max(1, currentPage - Math.floor(maxBtns / 2));
+    let end = Math.min(totalPages, start + maxBtns - 1);
+    if (end - start + 1 < maxBtns) start = Math.max(1, end - maxBtns + 1);
+
+    let html = '';
+    if (currentPage > 1) {
+        html += `<button onclick="loadSentMessagesTable(${(currentPage - 2) * limit})" class="px-2 py-1 rounded text-xs bg-gray-100 hover:bg-gray-200">‹ Ant</button>`;
+    }
+    for (let p = start; p <= end; p++) {
+        const active = p === currentPage ? 'bg-emerald-600 text-white' : 'bg-gray-100 hover:bg-gray-200';
+        html += `<button onclick="loadSentMessagesTable(${(p - 1) * limit})" class="px-2 py-1 rounded text-xs ${active}">${p}</button>`;
+    }
+    if (currentPage < totalPages) {
+        html += `<button onclick="loadSentMessagesTable(${currentPage * limit})" class="px-2 py-1 rounded text-xs bg-gray-100 hover:bg-gray-200">Sig ›</button>`;
+    }
+
+    btnsEl.innerHTML = html;
+}
 
 
+// ======================== TABLA MENSAJES RECIBIDOS DEL PERÍODO ========================
 
+async function loadReceivedMessagesTable(offset = 0) {
+    const tbody = document.getElementById('receivedMessagesTableBody');
+    const countEl = document.getElementById('receivedMessagesCount');
+    if (!tbody) return;
 
+    tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-gray-400">Cargando mensajes...</td></tr>';
+    if (countEl) countEl.textContent = '';
 
+    try {
+        const { startDate, endDate } = getAnalyticsDateRange();
+        const sessionFilter = document.getElementById('analyticsSessionFilter')?.value || '';
+        const pageSize = parseInt(document.getElementById('receivedMessagesPageSize')?.value || '100');
 
+        const params = new URLSearchParams({
+            start_date: startDate,
+            end_date: endDate,
+            limit: pageSize,
+            offset,
+            status_filter: 'received'
+        });
+        if (sessionFilter) params.append('session', sessionFilter);
 
+        const res = await fetch(`${API_URL}/api/analytics/export-sent?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error al obtener datos');
+
+        const messages = data.messages || [];
+        const total = data.total || 0;
+
+        if (countEl) countEl.textContent = total > 0 ? `${total.toLocaleString()} mensajes` : '0 mensajes';
+
+        if (messages.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-gray-400">No hay mensajes recibidos para este período</td></tr>';
+            renderReceivedMessagesPagination(0, pageSize, offset);
+            return;
+        }
+
+        tbody.innerHTML = messages.map((msg, i) => {
+            const date = new Date(msg.timestamp);
+            const dateStr = date.toLocaleDateString('es-CO', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: '2-digit' });
+            const timeStr = date.toLocaleTimeString('es-CO', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const rowBg = i % 2 === 0 ? '' : 'bg-gray-50';
+            const chars = msg.char_count != null ? Number(msg.char_count) : '';
+            return `
+                <tr class="${rowBg} hover:bg-blue-50">
+                    <td class="py-2 pr-3 text-gray-400 text-xs">${offset + i + 1}</td>
+                    <td class="py-2 pr-3 whitespace-nowrap">
+                        <div class="text-gray-800 text-xs font-medium">${dateStr}</div>
+                        <div class="text-gray-500 text-xs">${timeStr}</div>
+                    </td>
+                    <td class="py-2 pr-3 font-mono text-xs text-blue-700">${escapeHtml(msg.phone_number || '')}</td>
+                    <td class="py-2 pr-3 text-gray-700 text-xs max-w-xs truncate" title="${escapeHtml(msg.message_preview || '')}">${escapeHtml(msg.message_preview || '—')}</td>
+                    <td class="py-2 pr-3 text-right text-gray-600 text-xs">${chars !== '' ? chars.toLocaleString() : '—'}</td>
+                    <td class="py-2 pr-3 text-xs text-purple-700 font-medium">${escapeHtml(msg.session || '')}</td>
+                </tr>
+            `;
+        }).join('');
+
+        renderReceivedMessagesPagination(total, pageSize, offset);
+
+    } catch (error) {
+        console.error('Error cargando tabla mensajes recibidos:', error);
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+function renderReceivedMessagesPagination(total, limit, offset) {
+    const infoEl = document.getElementById('receivedMessagesPaginationInfo');
+    const btnsEl = document.getElementById('receivedMessagesPaginationBtns');
+    if (!infoEl || !btnsEl) return;
+
+    const totalPages = Math.ceil(total / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
+    const from = total === 0 ? 0 : offset + 1;
+    const to = Math.min(offset + limit, total);
+
+    infoEl.textContent = total > 0 ? `Mostrando ${from.toLocaleString()}–${to.toLocaleString()} de ${total.toLocaleString()} mensajes` : '';
+
+    if (totalPages <= 1) {
+        btnsEl.innerHTML = '';
+        return;
+    }
+
+    const maxBtns = 7;
+    let start = Math.max(1, currentPage - Math.floor(maxBtns / 2));
+    let end = Math.min(totalPages, start + maxBtns - 1);
+    if (end - start + 1 < maxBtns) start = Math.max(1, end - maxBtns + 1);
+
+    let html = '';
+    if (currentPage > 1) {
+        html += `<button onclick="loadReceivedMessagesTable(${(currentPage - 2) * limit})" class="px-2 py-1 rounded text-xs bg-gray-100 hover:bg-gray-200">‹ Ant</button>`;
+    }
+    for (let p = start; p <= end; p++) {
+        const active = p === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200';
+        html += `<button onclick="loadReceivedMessagesTable(${(p - 1) * limit})" class="px-2 py-1 rounded text-xs ${active}">${p}</button>`;
+    }
+    if (currentPage < totalPages) {
+        html += `<button onclick="loadReceivedMessagesTable(${currentPage * limit})" class="px-2 py-1 rounded text-xs bg-gray-100 hover:bg-gray-200">Sig ›</button>`;
+    }
+
+    btnsEl.innerHTML = html;
+}
+
+async function exportReceivedMessagesExcel() {
+    const btn = document.getElementById('btnExportReceivedExcel');
+    const originalContent = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Exportando...';
+    }
+
+    try {
+        const { startDate, endDate } = getAnalyticsDateRange();
+        const sessionFilter = document.getElementById('analyticsSessionFilter')?.value || '';
+
+        const params = new URLSearchParams({ start_date: startDate, end_date: endDate, status_filter: 'received' });
+        if (sessionFilter) params.append('session', sessionFilter);
+
+        const res = await fetch(`${API_URL}/api/analytics/export-sent?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error al obtener datos');
+
+        const messages = data.messages || [];
+        if (messages.length === 0) {
+            alert('No hay mensajes recibidos para el período seleccionado.');
+            return;
+        }
+
+        const rows = messages.map(msg => {
+            const date = new Date(msg.timestamp);
+            return {
+                'Fecha/Hora': date.toLocaleString('es-CO', { timeZone: 'UTC' }),
+                'De (Número)': msg.phone_number || '',
+                'Mensaje': msg.message_preview || '',
+                'Caracteres': msg.char_count != null ? Number(msg.char_count) : 0,
+                'Sesión': msg.session || ''
+            };
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{ wch: 22 }, { wch: 20 }, { wch: 70 }, { wch: 12 }, { wch: 22 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Mensajes Recibidos');
+
+        const fileName = `mensajes_recibidos_${startDate}_${endDate}${sessionFilter ? '_' + sessionFilter : ''}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+    } catch (error) {
+        console.error('Error al exportar Excel recibidos:', error);
+        alert('Error al exportar: ' + (error.message || 'Error desconocido'));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
+    }
+}
 
 
 
