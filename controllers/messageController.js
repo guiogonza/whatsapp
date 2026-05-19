@@ -11,7 +11,8 @@ const database = require('../database-postgres');
  */
 async function sendMessage(req, res) {
     try {
-        const { phoneNumber, message, sessionName } = req.body;
+        const { message, sessionName } = req.body;
+        const phoneNumber = req.body.phoneNumber || req.body.to || req.query.to || req.query.phoneNumber;
 
         if (!phoneNumber || !message) {
             return res.status(400).json({
@@ -32,8 +33,23 @@ async function sendMessage(req, res) {
             }
             result = await sessionManager.sendMessageWithRetry(session, phoneNumber, message);
         } else {
-            // Enviar con rotación
-            result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
+            // Enviar con rotación Baileys
+            const activeSessions = sessionManager.getActiveSessions();
+            if (activeSessions && activeSessions.length > 0) {
+                result = await sessionManager.sendMessageWithRotation(phoneNumber, message);
+            } else {
+                result = { success: false, error: 'No hay sesiones Baileys activas' };
+            }
+
+            // Fallback a Cloud API si Baileys falla o no hay sesiones
+            if (!result.success) {
+                const cloudApi = require('../lib/session/whatsapp-cloud-api');
+                if (cloudApi.isConfigured()) {
+                    console.log(`⚠️ Baileys no disponible (${result.error}), usando Cloud API como fallback`);
+                    const cloudResult = await cloudApi.sendMessage(phoneNumber, message);
+                    result = { ...cloudResult, fallback: 'cloud-api' };
+                }
+            }
         }
 
         res.json(result);

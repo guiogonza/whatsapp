@@ -1657,7 +1657,8 @@ function cleanGPSMessage(message) {
  */
 app.post('/api/messages/send', async (req, res) => {
     try {
-        const { phoneNumber, message } = req.body;
+        const { message } = req.body;
+        const phoneNumber = req.body.phoneNumber || req.body.to || req.query.to || req.query.phoneNumber;
 
         if (!phoneNumber || !message) {
             return res.status(400).json({
@@ -1669,50 +1670,9 @@ app.post('/api/messages/send', async (req, res) => {
         // Limpiar formato de mensaje GPS
         const cleanedMessage = cleanGPSMessage(message);
 
-        // 🎯 DETECCIÓN FX: Si el mensaje contiene keywords MT5, enviar inmediatamente por FX
-        if (mt5Detector.isMT5Alert(cleanedMessage)) {
-            console.log(`📊 API detectó mensaje FX: "${cleanedMessage.substring(0, 50)}..."`);
-            
-            try {
-                const fxResult = await sessionManager.sendViaFX(phoneNumber, cleanedMessage);
-                if (fxResult.success) {
-                    return res.json({
-                        success: true,
-                        consolidated: false,
-                        fx: true,
-                        message: `Mensaje enviado INMEDIATAMENTE por sesión FX: ${fxResult.fxSession}`,
-                        details: fxResult
-                    });
-                } else {
-                    console.log(`⚠️ No se pudo enviar por FX: ${fxResult.error}, enviando a consolidación`);
-                }
-            } catch (fxError) {
-                console.log(`⚠️ Error al enviar por FX: ${fxError.message}, enviando a consolidación`);
-            }
-        }
-
-        // Si no es FX o falló el envío FX, enviar a consolidación normal
-        const result = await sessionManager.addToConsolidation(phoneNumber, cleanedMessage);
-        if (result.success) {
-            const sentNow = result.sentImmediately;
-            res.json({
-                success: true,
-                consolidated: !sentNow,
-                message: sentNow
-                    ? `Mensaje enviado INMEDIATAMENTE por Cloud API`
-                    : `Mensaje en cola (${result.pendingCount} pendientes, envio en ${result.sendInMinutes} min)`,
-                details: result
-            });
-        } else if (result.discarded) {
-            res.status(400).json({
-                success: false,
-                discarded: true,
-                message: result.error,
-                details: result
-            });
-        } else {
-            res.status(500).json({ success: false, error: result.error });
-        }
+        // Enviar directo por Cloud API (con fallback a Baileys si está disponible)
+        const result = await sessionManager.sendMessageHybrid(phoneNumber, cleanedMessage);
+        res.json(result);
     } catch (error) {
         res.status(500).json({
             success: false,
