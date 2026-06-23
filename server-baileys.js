@@ -2838,6 +2838,9 @@ app.get('/api/database/status', async (req, res) => {
 const fxRouter = require('./routes/fx');
 app.use('/api/fx', fxRouter);
 
+const operationalRouter = require('./routes/operational');
+app.use('/api/operational', operationalRouter);
+
 // ======================== HEALTH CHECK ========================
 
 app.get('/health', (req, res) => {
@@ -2988,6 +2991,10 @@ async function initialize() {
 
         // Iniciar procesador de consolidación de mensajes (persistente en BD)
         sessionManager.startConsolidationProcessor();
+
+        // Iniciar seguimiento diario de operatividad GPSwox
+        const operational = require('./lib/session/gpswox-operational');
+        operational.startDailyScheduler(sessionManager);
 
         console.log('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Sistema iniciado correctamente\n');
 

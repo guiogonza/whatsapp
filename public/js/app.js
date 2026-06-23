@@ -1,5 +1,5 @@
 // ======================== VARIABLES GLOBALES ========================
-const API_URL = window.location.origin;
+const API_URL = window.location.protocol === 'file:' ? 'http://164.68.118.86:3010' : window.location.origin;
 let sessions = [];
 let bulkCurrentTab = 'numbers';
 let currentRotationSession = null;
@@ -186,7 +186,8 @@ function showSection(sectionId) {
         settings: { title: 'Configuración', subtitle: 'Ajustes del sistema' },
         database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' },
         webhooks: { title: 'Centro de Mensajes', subtitle: 'Mensajes entrantes de WhatsApp Cloud API' },
-        'gpswox-messages': { title: 'Mensajes GPSwox', subtitle: 'Historial de conversaciones del bot GPSwox' },
+        operational: { title: 'Operatividad', subtitle: 'Seguimiento diario de vehiculos por sede' },
+        'gpswox-messages': { title: 'Mensajes Plataforma GPS', subtitle: 'Historial de conversaciones del bot de la plataforma GPS' },
         'fx-messages': { title: 'Mensajes FX', subtitle: 'Historial de mensajes reenviados por sesiones FX' }
     };
     
@@ -205,6 +206,7 @@ function showSection(sectionId) {
         loadSearchSessions();
     }
     if (sectionId === 'conversation') populateConversationSessions();
+    if (sectionId === 'operational') loadOperational();
     if (sectionId === 'gpswox-messages') loadGPSwoxMessages();
     if (sectionId === 'fx-messages') loadFXMessages();
 }
@@ -2876,7 +2878,7 @@ async function loadGPSwoxMessages() {
         }
     } catch (error) {
         console.error('Error loading GPSwox messages:', error);
-        showToast('Error cargando mensajes de GPSwox', 'error');
+        showToast('Error cargando mensajes de la plataforma GPS', 'error');
     }
 }
 
@@ -3061,6 +3063,345 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ======================== OPERATIVIDAD GPSWOX ========================
+let operationalSites = [];
+let operationalStatuses = [];
+let editingOperationalResponsibleId = null;
+
+async function loadOperational() {
+    await Promise.all([
+        loadOperationalCatalogs(),
+        loadOperationalVehicles(),
+        loadOperationalReport()
+    ]);
+}
+
+async function loadOperationalCatalogs() {
+    try {
+        const [sitesResponse, statusesResponse] = await Promise.all([
+            fetch(`${API_URL}/api/operational/sites`),
+            fetch(`${API_URL}/api/operational/statuses`)
+        ]);
+        const sitesData = await sitesResponse.json();
+        const statusesData = await statusesResponse.json();
+        if (!sitesData.success) throw new Error(sitesData.error || 'Error cargando sedes');
+        if (!statusesData.success) throw new Error(statusesData.error || 'Error cargando estados');
+
+        operationalSites = sitesData.sites || [];
+        operationalStatuses = statusesData.statuses || [];
+        renderOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error operatividad: ${error.message}`, 'error');
+    }
+}
+
+function renderOperationalCatalogs() {
+    const siteOptions = operationalSites
+        .filter(site => site.active)
+        .map(site => `<option value="${site.id}">${escapeHtml(site.name)}</option>`)
+        .join('');
+
+    const nonOperationalStatusOptions = operationalStatuses
+        .filter(status => status.active && !status.is_operational)
+        .map(status => `<option value="${status.id}">${escapeHtml(status.name)}</option>`)
+        .join('');
+
+    const siteSelect = document.getElementById('operationalSiteSelect');
+    const responsibleSiteSelect = document.getElementById('responsibleSiteSelect');
+    const statusSelect = document.getElementById('operationalStatusSelect');
+    if (siteSelect) siteSelect.innerHTML = siteOptions;
+    if (responsibleSiteSelect) responsibleSiteSelect.innerHTML = siteOptions;
+    if (statusSelect) statusSelect.innerHTML = nonOperationalStatusOptions;
+
+    const list = document.getElementById('operationalSitesList');
+    if (!list) return;
+    list.innerHTML = operationalSites.map(site => {
+        const responsibles = (site.responsibles || [])
+            .filter(resp => resp.active)
+            .map(resp => `
+                <div class="text-xs text-gray-600 flex items-center justify-between gap-2">
+                    <span>${escapeHtml(resp.name)} - ${escapeHtml(resp.phone_number)}</span>
+                    <span class="flex gap-2">
+                        <button onclick="editOperationalResponsible(${resp.id})" class="text-blue-600 hover:underline">Editar</button>
+                        <button onclick="deactivateOperationalResponsible(${resp.id})" class="text-red-600 hover:underline">Baja</button>
+                    </span>
+                </div>
+            `)
+            .join('');
+        return `
+            <div class="border rounded-lg px-3 py-2">
+                <div class="font-medium">${escapeHtml(site.name)}</div>
+                ${responsibles || '<div class="text-xs text-gray-400">Sin responsable activo</div>'}
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadOperationalVehicles() {
+    const tbody = document.getElementById('operationalVehiclesTable');
+    if (!tbody) return;
+    try {
+        const onlyNonOperational = document.getElementById('operationalOnlyNonOperational')?.checked !== false;
+        const response = await fetch(`${API_URL}/api/operational/vehicles?onlyNonOperational=${onlyNonOperational}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando vehiculos');
+
+        const vehicles = data.vehicles || [];
+        if (vehicles.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">No hay vehiculos registrados</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = vehicles.map(vehicle => `
+            <tr class="hover:bg-gray-50 border-b">
+                <td class="px-3 py-2 text-xs font-medium">${escapeHtml(vehicle.plate)}</td>
+                <td class="px-3 py-2 text-xs">${escapeHtml(vehicle.site_name)}</td>
+                <td class="px-3 py-2 text-xs">
+                    <span class="${vehicle.is_operational ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'} px-2 py-1 rounded">${escapeHtml(vehicle.status_name)}</span>
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-700">${escapeHtml(vehicle.last_observation || '')}</td>
+                <td class="px-3 py-2 text-xs text-center">
+                    <button onclick="setOperationalVehicleOperative(${vehicle.id})" class="bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200">Operativo</button>
+                    <button onclick="deactivateOperationalVehicle(${vehicle.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Baja</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function loadOperationalReport() {
+    const tbody = document.getElementById('operationalReportTable');
+    if (!tbody) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/report`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando historial');
+
+        const rows = data.report || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-500">Sin historial</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.slice(0, 100).map(row => {
+            const date = row.changed_at ? new Date(row.changed_at).toLocaleString('es-CO') : '';
+            const change = `${row.old_status || '-'} -> ${row.new_status || '-'}`;
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(date)}</td>
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate)}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(change)}</td>
+                    <td class="px-3 py-2 text-xs text-gray-700">${escapeHtml(row.observation || '')}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function saveOperationalVehicle() {
+    try {
+        const plate = document.getElementById('operationalPlate')?.value.trim();
+        const siteId = document.getElementById('operationalSiteSelect')?.value;
+        const statusId = document.getElementById('operationalStatusSelect')?.value;
+        const observation = document.getElementById('operationalObservation')?.value.trim();
+        if (!plate || !siteId || !statusId) {
+            showToast('Placa, sede y estado son requeridos', 'warning');
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/api/operational/vehicles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plate, siteId, statusId, observation })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando vehiculo');
+
+        document.getElementById('operationalPlate').value = '';
+        document.getElementById('operationalObservation').value = '';
+        showToast('Vehiculo guardado', 'success');
+        await Promise.all([loadOperationalVehicles(), loadOperationalReport()]);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function saveOperationalSite() {
+    try {
+        const name = document.getElementById('operationalNewSite')?.value.trim();
+        if (!name) {
+            showToast('Nombre de sede requerido', 'warning');
+            return;
+        }
+        const response = await fetch(`${API_URL}/api/operational/sites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando sede');
+        document.getElementById('operationalNewSite').value = '';
+        showToast('Sede guardada', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function saveOperationalResponsible() {
+    try {
+        const siteId = document.getElementById('responsibleSiteSelect')?.value;
+        const name = document.getElementById('responsibleName')?.value.trim();
+        const phoneNumber = document.getElementById('responsiblePhone')?.value.trim();
+        if (!siteId || !name || !phoneNumber) {
+            showToast('Sede, nombre y telefono son requeridos', 'warning');
+            return;
+        }
+        const url = editingOperationalResponsibleId
+            ? `${API_URL}/api/operational/responsibles/${editingOperationalResponsibleId}`
+            : `${API_URL}/api/operational/responsibles`;
+        const response = await fetch(url, {
+            method: editingOperationalResponsibleId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteId, name, phoneNumber })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando responsable');
+        clearOperationalResponsibleForm();
+        showToast('Responsable guardado', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+function editOperationalResponsible(responsibleId) {
+    for (const site of operationalSites) {
+        const responsible = (site.responsibles || []).find(resp => resp.id === responsibleId);
+        if (!responsible) continue;
+
+        editingOperationalResponsibleId = responsible.id;
+        document.getElementById('responsibleSiteSelect').value = site.id;
+        document.getElementById('responsibleName').value = responsible.name || '';
+        document.getElementById('responsiblePhone').value = responsible.phone_number || '';
+        showToast('Editando responsable seleccionado', 'info');
+        return;
+    }
+}
+
+function clearOperationalResponsibleForm() {
+    editingOperationalResponsibleId = null;
+    const name = document.getElementById('responsibleName');
+    const phone = document.getElementById('responsiblePhone');
+    if (name) name.value = '';
+    if (phone) phone.value = '';
+}
+
+async function setOperationalVehicleOperative(vehicleId) {
+    try {
+        const operativeStatus = operationalStatuses.find(status => status.is_operational);
+        if (!operativeStatus) {
+            showToast('No existe estado Operativo configurado', 'error');
+            return;
+        }
+        const observation = prompt('Observacion para marcar operativo:', 'Operativo') || 'Operativo';
+        const response = await fetch(`${API_URL}/api/operational/vehicles/${vehicleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ statusId: operativeStatus.id, observation })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error actualizando vehiculo');
+        showToast('Vehiculo marcado como operativo', 'success');
+        await Promise.all([loadOperationalVehicles(), loadOperationalReport()]);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deactivateOperationalVehicle(vehicleId) {
+    if (!confirm('Desactivar este vehiculo del seguimiento?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/vehicles/${vehicleId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error desactivando vehiculo');
+        showToast('Vehiculo desactivado', 'success');
+        await loadOperationalVehicles();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deactivateOperationalResponsible(responsibleId) {
+    if (!confirm('Desactivar este responsable?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/responsibles/${responsibleId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error desactivando responsable');
+        showToast('Responsable desactivado', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function sendOperationalDaily() {
+    if (!confirm('Enviar ahora el seguimiento de operatividad a los responsables con vehiculos no operativos?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/send-daily`, { method: 'POST' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error enviando seguimiento');
+        showToast(`Seguimiento enviado a ${(data.sent || []).length} responsables`, 'success');
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function downloadOperationalReport() {
+    try {
+        const response = await fetch(`${API_URL}/api/operational/report`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error descargando reporte');
+
+        const rows = (data.report || []).map(row => ({
+            Fecha: row.changed_at ? new Date(row.changed_at).toLocaleString('es-CO') : '',
+            Sede: row.site_name || '',
+            Placa: row.plate || '',
+            'Estado anterior': row.old_status || '',
+            'Estado nuevo': row.new_status || '',
+            Observacion: row.observation || '',
+            Origen: row.source || '',
+            Telefono: row.changed_by_phone || ''
+        }));
+
+        if (typeof XLSX !== 'undefined') {
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Operatividad');
+            XLSX.writeFile(workbook, `reporte-operatividad-${new Date().toISOString().slice(0, 10)}.xlsx`);
+            return;
+        }
+
+        const csvRows = [
+            Object.keys(rows[0] || { Fecha: '', Sede: '', Placa: '', 'Estado anterior': '', 'Estado nuevo': '', Observacion: '', Origen: '', Telefono: '' }),
+            ...rows.map(row => Object.values(row))
+        ];
+        const csv = csvRows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `reporte-operatividad-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
 }
 
 let metaInitialized = false;

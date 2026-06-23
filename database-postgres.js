@@ -206,6 +206,166 @@ async function createTables() {
             END $$;
         `);
 
+        // Tablas para seguimiento diario de operatividad por sede
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_sites (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL UNIQUE,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_statuses (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(50) NOT NULL UNIQUE,
+                is_operational BOOLEAN NOT NULL DEFAULT FALSE,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_site_responsibles (
+                id SERIAL PRIMARY KEY,
+                site_id INTEGER NOT NULL REFERENCES operational_sites(id) ON DELETE CASCADE,
+                name VARCHAR(150) NOT NULL,
+                phone_number VARCHAR(50) NOT NULL,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(site_id, phone_number)
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_vehicles (
+                id SERIAL PRIMARY KEY,
+                plate VARCHAR(30) NOT NULL UNIQUE,
+                gpswox_device_id INTEGER,
+                site_id INTEGER NOT NULL REFERENCES operational_sites(id),
+                status_id INTEGER NOT NULL REFERENCES operational_statuses(id),
+                last_observation TEXT,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_by_phone VARCHAR(50),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_followups (
+                id SERIAL PRIMARY KEY,
+                followup_date DATE NOT NULL,
+                site_id INTEGER NOT NULL REFERENCES operational_sites(id),
+                responsible_id INTEGER REFERENCES operational_site_responsibles(id),
+                phone_number VARCHAR(50) NOT NULL,
+                message TEXT,
+                sent_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                status VARCHAR(30) NOT NULL DEFAULT 'sent',
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(followup_date, site_id, phone_number)
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_followup_items (
+                id SERIAL PRIMARY KEY,
+                followup_id INTEGER NOT NULL REFERENCES operational_followups(id) ON DELETE CASCADE,
+                vehicle_id INTEGER NOT NULL REFERENCES operational_vehicles(id),
+                item_number INTEGER NOT NULL,
+                previous_status_id INTEGER REFERENCES operational_statuses(id),
+                current_status_id INTEGER REFERENCES operational_statuses(id),
+                observation TEXT,
+                response_text TEXT,
+                answered_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(followup_id, item_number)
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_vehicle_history (
+                id SERIAL PRIMARY KEY,
+                vehicle_id INTEGER NOT NULL REFERENCES operational_vehicles(id) ON DELETE CASCADE,
+                old_status_id INTEGER REFERENCES operational_statuses(id),
+                new_status_id INTEGER NOT NULL REFERENCES operational_statuses(id),
+                old_site_id INTEGER REFERENCES operational_sites(id),
+                new_site_id INTEGER REFERENCES operational_sites(id),
+                observation TEXT,
+                source VARCHAR(50) NOT NULL DEFAULT 'bot',
+                changed_by_phone VARCHAR(50),
+                changed_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        `);
+
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_operational_vehicles_site ON operational_vehicles(site_id);
+            CREATE INDEX IF NOT EXISTS idx_operational_vehicles_status ON operational_vehicles(status_id);
+            CREATE INDEX IF NOT EXISTS idx_operational_followups_date ON operational_followups(followup_date DESC);
+            CREATE INDEX IF NOT EXISTS idx_operational_history_vehicle ON operational_vehicle_history(vehicle_id, changed_at DESC);
+        `);
+
+        await client.query(`
+            INSERT INTO operational_sites (name)
+            VALUES ('Jamundi'), ('Buga'), ('Tulua'), ('Zarzal')
+            ON CONFLICT (name) DO NOTHING
+        `);
+
+        await client.query(`
+            INSERT INTO operational_statuses (name, is_operational)
+            VALUES
+                ('Back-up', FALSE),
+                ('Inoperativo', FALSE),
+                ('Siniestro', FALSE),
+                ('Taller', FALSE),
+                ('Operativo', TRUE)
+            ON CONFLICT (name) DO NOTHING
+        `);
+
+        await client.query(`
+            INSERT INTO operational_site_responsibles (site_id, name, phone_number)
+            SELECT s.id, v.name, v.phone_number
+            FROM (VALUES
+                ('Jamundi', 'Danillo Espinosa', '573172487991'),
+                ('Buga', 'Guiovanny Gonzalez', '573183499539')
+            ) AS v(site_name, name, phone_number)
+            JOIN operational_sites s ON LOWER(s.name) = LOWER(v.site_name)
+            ON CONFLICT (site_id, phone_number) DO UPDATE
+            SET name = EXCLUDED.name,
+                active = TRUE,
+                updated_at = NOW()
+        `);
+
+        await client.query(`
+            UPDATE operational_site_responsibles short_phone
+            SET active = FALSE,
+                updated_at = NOW()
+            WHERE short_phone.phone_number ~ '^3[0-9]{9}$'
+              AND EXISTS (
+                  SELECT 1
+                  FROM operational_site_responsibles full_phone
+                  WHERE full_phone.site_id = short_phone.site_id
+                    AND full_phone.phone_number = '57' || short_phone.phone_number
+              )
+        `);
+
+        await client.query(`
+            UPDATE operational_site_responsibles short_phone
+            SET phone_number = '57' || phone_number,
+                updated_at = NOW()
+            WHERE short_phone.phone_number ~ '^3[0-9]{9}$'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM operational_site_responsibles full_phone
+                  WHERE full_phone.site_id = short_phone.site_id
+                    AND full_phone.phone_number = '57' || short_phone.phone_number
+              )
+        `);
+
         await client.query('COMMIT');
         console.log('✅ Tablas de PostgreSQL creadas/verificadas');
         

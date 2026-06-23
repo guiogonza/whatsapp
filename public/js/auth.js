@@ -1,5 +1,6 @@
 // ======================== CONFIGURACIÓN Y AUTENTICACIÓN ========================
 const CREDENTIALS = { username: 'admin', password: 'guio123*' };
+const AUTH_API_URL = window.location.protocol === 'file:' ? 'http://164.68.118.86:3010' : window.location.origin;
 let SESSION_TIMEOUT = 10 * 60 * 1000; // Valor por defecto 10 minutos
 const SESSION_KEY = 'wpp_dashboard_session';
 let sessionTimer = null;
@@ -9,7 +10,7 @@ let timeRemaining = SESSION_TIMEOUT;
 // Cargar configuración de timeout del servidor
 async function loadSessionTimeoutConfig() {
     try {
-        const response = await fetch('/api/settings/session-timeout');
+        const response = await fetch(`${AUTH_API_URL}/api/settings/session-timeout`);
         if (response.ok) {
             const data = await response.json();
             SESSION_TIMEOUT = data.timeout * 60 * 1000; // Convertir minutos a milisegundos

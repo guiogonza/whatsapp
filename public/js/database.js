@@ -1,6 +1,6 @@
 // ======================== BASE DE DATOS MONITOR ========================
 
-const DB_API_URL = window.location.origin;
+const DB_API_URL = window.location.protocol === 'file:' ? 'http://164.68.118.86:3010' : window.location.origin;
 let dbRefreshInterval = null;
 
 /**

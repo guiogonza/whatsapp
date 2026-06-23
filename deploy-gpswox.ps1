@@ -81,6 +81,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Info "  📄 lib/session/gpswox-session.js"
 scp -i $KEY "lib/session/gpswox-session.js" "${SERVER}:${REMOTE_DIR}/lib/session/"
+scp -i $KEY "lib/session/gpswox-operational.js" "${SERVER}:${REMOTE_DIR}/lib/session/"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "❌ Error copiando gpswox-session.js"
     exit 1
@@ -88,6 +89,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Info "  📄 lib/session/utils.js"
 scp -i $KEY "lib/session/utils.js" "${SERVER}:${REMOTE_DIR}/lib/session/"
+scp -i $KEY "routes/operational.js" "${SERVER}:${REMOTE_DIR}/routes/"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "❌ Error copiando utils.js"
     exit 1
