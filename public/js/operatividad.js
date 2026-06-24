@@ -3,10 +3,20 @@ const API_URL = window.location.protocol === 'file:' ? 'http://164.68.118.86:301
 let operationalSites = [];
 let operationalStatuses = [];
 let editingOperationalResponsibleId = null;
+let editingDocumentExpirationId = null;
 const operationalPaging = {
     vehicles: { page: 1, limit: 10 },
     report: { page: 1, limit: 10 },
-    followups: { page: 1, limit: 10 }
+    followups: { page: 1, limit: 10 },
+    documents: { page: 1, limit: 10 }
+};
+
+const documentTypeLabels = {
+    soat: 'SOAT',
+    tecnomecanica: 'Tecnomecanica',
+    poliza: 'Poliza',
+    extintor: 'Extintor',
+    cambio_aceite: 'Cambio aceite'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -45,8 +55,28 @@ async function loadOperational() {
         loadOperationalCatalogs(),
         loadOperationalVehicles(),
         loadOperationalReport(),
-        loadOperationalFollowups()
+        loadOperationalFollowups(),
+        loadDocumentExpirations()
     ]);
+}
+
+function showOperationalTab(tab) {
+    const mainPanel = document.getElementById('operational-panel-main');
+    const documentsPanel = document.getElementById('operational-panel-documents');
+    const mainTab = document.getElementById('operational-tab-main');
+    const documentsTab = document.getElementById('operational-tab-documents');
+    if (!mainPanel || !documentsPanel || !mainTab || !documentsTab) return;
+
+    const showDocuments = tab === 'documents';
+    mainPanel.classList.toggle('hidden', showDocuments);
+    documentsPanel.classList.toggle('hidden', !showDocuments);
+    mainTab.className = showDocuments
+        ? 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-600 hover:text-purple-700'
+        : 'px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700';
+    documentsTab.className = showDocuments
+        ? 'px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700'
+        : 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-600 hover:text-purple-700';
+    if (showDocuments) loadDocumentExpirations();
 }
 
 async function loadOperationalCatalogs() {
@@ -250,11 +280,65 @@ async function loadOperationalFollowups() {
     }
 }
 
+async function loadDocumentExpirations() {
+    const tbody = document.getElementById('documentExpirationsTable');
+    if (!tbody) return;
+    try {
+        const paging = operationalPaging.documents;
+        const search = document.getElementById('documentSearch')?.value.trim() || '';
+        const params = new URLSearchParams({
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        if (search) params.set('search', search);
+
+        const response = await fetch(`${API_URL}/api/operational/document-expirations?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando vencimientos');
+
+        const rows = data.documents || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-500">Sin vencimientos registrados</td></tr>';
+            renderPagination('documents', data.pagination, loadDocumentExpirations);
+            return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+            const days = Number(row.days_remaining);
+            const daysClass = days < 0
+                ? 'bg-red-100 text-red-800'
+                : (days <= 30 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800');
+            const daysText = days < 0 ? `Vencido ${Math.abs(days)} dias` : `${days} dias`;
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(documentTypeLabels[row.document_type] || row.document_type || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.expiry_date_co || '')}</td>
+                    <td class="px-3 py-2 text-xs"><span class="${daysClass} px-2 py-1 rounded">${escapeHtml(daysText)}</span></td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.last_change_date_co || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.last_change_km || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.next_change_km || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.observation || '')}</td>
+                    <td class="px-3 py-2 text-xs text-center whitespace-nowrap">
+                        <button onclick="editDocumentExpiration(${row.id}, '${escapeHtml(row.plate || '')}', '${escapeHtml(row.document_type || '')}', '${String(row.expiry_date || '').slice(0, 10)}', '${String(row.last_change_date || '').slice(0, 10)}', '${escapeHtml(row.last_change_km || '')}', '${escapeHtml(row.next_change_km || '')}', '${escapeHtml(row.observation || '').replace(/'/g, '&#39;')}')" class="bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200">Editar</button>
+                        <button onclick="deleteDocumentExpiration(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        renderPagination('documents', data.pagination, loadDocumentExpirations);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
 function renderPagination(key, pagination, reloadFn) {
     const tableIds = {
         vehicles: 'operationalVehiclesTable',
         report: 'operationalReportTable',
-        followups: 'operationalFollowupsTable'
+        followups: 'operationalFollowupsTable',
+        documents: 'documentExpirationsTable'
     };
     const tbody = document.getElementById(tableIds[key]);
     if (!tbody || !pagination) return;
@@ -487,6 +571,130 @@ async function deleteOperationalFollowup(followupId) {
     }
 }
 
+function clearDocumentExpirationForm() {
+    editingDocumentExpirationId = null;
+    [
+        'documentPlate',
+        'documentExpiryDate',
+        'documentObservation',
+        'documentLastChangeDate',
+        'documentLastChangeKm',
+        'documentNextChangeKm'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const type = document.getElementById('documentType');
+    if (type) type.value = 'soat';
+}
+
+function editDocumentExpiration(id, plate, documentType, expiryDate, lastChangeDate, lastChangeKm, nextChangeKm, observation) {
+    editingDocumentExpirationId = id;
+    document.getElementById('documentPlate').value = plate || '';
+    document.getElementById('documentType').value = documentType || 'soat';
+    document.getElementById('documentExpiryDate').value = expiryDate || '';
+    document.getElementById('documentLastChangeDate').value = lastChangeDate || '';
+    document.getElementById('documentLastChangeKm').value = lastChangeKm || '';
+    document.getElementById('documentNextChangeKm').value = nextChangeKm || '';
+    document.getElementById('documentObservation').value = observation || '';
+    showOperationalTab('documents');
+    showToast('Editando vencimiento seleccionado', 'info');
+}
+
+async function saveDocumentExpiration() {
+    try {
+        const plate = document.getElementById('documentPlate').value.trim();
+        const documentType = document.getElementById('documentType').value;
+        const expiryDate = document.getElementById('documentExpiryDate').value;
+        const lastChangeDate = document.getElementById('documentLastChangeDate').value;
+        const lastChangeKm = document.getElementById('documentLastChangeKm').value;
+        const nextChangeKm = document.getElementById('documentNextChangeKm').value;
+        const observation = document.getElementById('documentObservation').value.trim();
+        if (!plate || !documentType || !expiryDate) {
+            showToast('Placa, documento y fecha de vencimiento son requeridos', 'warning');
+            return;
+        }
+
+        const url = editingDocumentExpirationId
+            ? `${API_URL}/api/operational/document-expirations/${editingDocumentExpirationId}`
+            : `${API_URL}/api/operational/document-expirations`;
+        const response = await fetch(url, {
+            method: editingDocumentExpirationId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                plate,
+                documentType,
+                expiryDate,
+                lastChangeDate: lastChangeDate || null,
+                lastChangeKm: lastChangeKm || null,
+                nextChangeKm: nextChangeKm || null,
+                observation
+            })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando vencimiento');
+
+        clearDocumentExpirationForm();
+        showToast('Vencimiento guardado', 'success');
+        await loadDocumentExpirations();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteDocumentExpiration(id) {
+    if (!confirm('Eliminar este vencimiento?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/document-expirations/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando vencimiento');
+        showToast('Vencimiento eliminado', 'success');
+        await loadDocumentExpirations();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function downloadDocumentExpirationsReport() {
+    try {
+        const response = await fetch(`${API_URL}/api/operational/document-expirations`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error descargando vencimientos');
+        const rows = (data.documents || []).map(row => ({
+            Placa: row.plate || '',
+            Documento: documentTypeLabels[row.document_type] || row.document_type || '',
+            Vencimiento: row.expiry_date_co || '',
+            'Dias faltantes': row.days_remaining,
+            'Fecha ultimo cambio aceite': row.last_change_date_co || '',
+            'Km ultimo cambio aceite': row.last_change_km || '',
+            'Km proximo cambio aceite': row.next_change_km || '',
+            Observacion: row.observation || ''
+        }));
+
+        if (typeof XLSX !== 'undefined') {
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Vencimientos');
+            XLSX.writeFile(workbook, `vencimientos-documentos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+            return;
+        }
+
+        const csvRows = [
+            Object.keys(rows[0] || { Placa: '', Documento: '', Vencimiento: '', 'Dias faltantes': '', Observacion: '' }),
+            ...rows.map(row => Object.values(row))
+        ];
+        const csv = csvRows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `vencimientos-documentos-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
 async function sendOperationalDaily() {
     if (!confirm('Enviar ahora el seguimiento de operatividad a los responsables con vehiculos no operativos?')) return;
     try {
@@ -501,14 +709,17 @@ async function sendOperationalDaily() {
 
 async function downloadOperationalReport() {
     try {
-        const [historyResponse, followupsResponse] = await Promise.all([
+        const [historyResponse, followupsResponse, documentsResponse] = await Promise.all([
             fetch(`${API_URL}/api/operational/report`),
-            fetch(`${API_URL}/api/operational/followups?date=all`)
+            fetch(`${API_URL}/api/operational/followups?date=all`),
+            fetch(`${API_URL}/api/operational/document-expirations`)
         ]);
         const data = await historyResponse.json();
         const followupsData = await followupsResponse.json();
+        const documentsData = await documentsResponse.json();
         if (!data.success) throw new Error(data.error || 'Error descargando reporte');
         if (!followupsData.success) throw new Error(followupsData.error || 'Error descargando seguimientos');
+        if (!documentsData.success) throw new Error(documentsData.error || 'Error descargando vencimientos');
 
         const rows = (data.report || []).map(row => ({
             'Fecha GMT-5': row.changed_at_co || '',
@@ -533,12 +744,24 @@ async function downloadOperationalReport() {
             'Hora respuesta GMT-5': row.response_at_co || ''
         }));
 
+        const documentRows = (documentsData.documents || []).map(row => ({
+            Placa: row.plate || '',
+            Documento: documentTypeLabels[row.document_type] || row.document_type || '',
+            Vencimiento: row.expiry_date_co || '',
+            'Dias faltantes': row.days_remaining,
+            'Fecha ultimo cambio aceite': row.last_change_date_co || '',
+            'Km ultimo cambio aceite': row.last_change_km || '',
+            'Km proximo cambio aceite': row.next_change_km || '',
+            Observacion: row.observation || ''
+        }));
+
         if (typeof XLSX !== 'undefined') {
             const worksheet = XLSX.utils.json_to_sheet(rows);
             const followupWorksheet = XLSX.utils.json_to_sheet(followupRows);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial');
             XLSX.utils.book_append_sheet(workbook, followupWorksheet, 'Seguimientos');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(documentRows), 'Vencimientos');
             XLSX.writeFile(workbook, `reporte-operatividad-${new Date().toISOString().slice(0, 10)}.xlsx`);
             return;
         }
