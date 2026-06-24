@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operatividad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-900">
+    <div class="min-h-screen">
+        <header class="bg-white border-b">
+            <div class="w-full px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 class="text-2xl font-bold">🚗 Operatividad</h1>
+                    <p class="text-sm text-gray-600">Seguimiento diario de vehiculos por sede</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="sendOperationalDaily()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">
+                        Enviar seguimiento ahora
+                    </button>
+                    <button onclick="downloadOperationalReport()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">
+                        Descargar reporte
+                    </button>
+                    <button onclick="loadOperational()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+                        Actualizar
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white border rounded-lg p-4">
+                    <h2 class="font-semibold mb-3">Agregar vehiculo</h2>
+                    <div class="space-y-3">
+                        <input id="operationalPlate" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Placa, ej: ABC123">
+                        <select id="operationalSiteSelect" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                        <select id="operationalStatusSelect" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                        <textarea id="operationalObservation" class="w-full border rounded-lg px-3 py-2 text-sm" rows="3" placeholder="Observacion"></textarea>
+                        <button onclick="saveOperationalVehicle()" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 text-sm">
+                            Validar y guardar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white border rounded-lg p-4">
+                    <h2 class="font-semibold mb-3">Sedes</h2>
+                    <div class="flex gap-2 mb-3">
+                        <input id="operationalNewSite" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="Nueva sede">
+                        <button onclick="saveOperationalSite()" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">
+                            Crear
+                        </button>
+                    </div>
+                    <div id="operationalSitesList" class="space-y-2 text-sm"></div>
+                </div>
+
+                <div class="bg-white border rounded-lg p-4">
+                    <h2 class="font-semibold mb-3">Responsables</h2>
+                    <div class="space-y-3">
+                        <select id="responsibleSiteSelect" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                        <input id="responsibleName" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nombre responsable">
+                        <input id="responsiblePhone" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Telefono WhatsApp">
+                        <div class="flex gap-2">
+                            <button onclick="saveOperationalResponsible()" class="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm">
+                                Guardar responsable
+                            </button>
+                            <button onclick="clearOperationalResponsibleForm()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 text-sm">
+                                Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div class="bg-white border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="font-semibold">Vehiculos</h2>
+                        <label class="text-sm flex items-center gap-2">
+                            <input id="operationalOnlyNonOperational" type="checkbox" checked onchange="loadOperationalVehicles()">
+                            Solo no operativos
+                        </label>
+                    </div>
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Sede</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Estado</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Observacion</th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="operationalVehiclesTable">
+                                <tr><td colspan="5" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white border rounded-lg p-4">
+                    <h2 class="font-semibold mb-3">Historial</h2>
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha (GMT-5)</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Cambio</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Obs</th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="operationalReportTable">
+                                <tr><td colspan="5" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-white border rounded-lg p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold">Respuestas seguimiento 8 a. m.</h2>
+                    <button onclick="loadOperationalFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
+                        Actualizar respuestas
+                    </button>
+                </div>
+                <div class="overflow-x-auto border rounded-lg">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Tipo</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Sede</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Responsable</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Telefono</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Respuesta</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Vehiculos</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Ejecucion (GMT-5)</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Hora respuesta (GMT-5)</th>
+                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="operationalFollowupsTable">
+                            <tr><td colspan="10" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+    <script>
+        (() => {
+            const IDLE_LIMIT_MS = 10 * 60 * 1000;
+            const TOUCH_INTERVAL_MS = 60 * 1000;
+            let idleTimer = null;
+            let lastTouchAt = 0;
+
+            async function closeIdleSession() {
+                try {
+                    await fetch('/operatividad-logout', { method: 'POST', credentials: 'same-origin' });
+                } finally {
+                    window.location.href = '/operatividad-login';
+                }
+            }
+
+            async function keepSessionAlive() {
+                const now = Date.now();
+                if (now - lastTouchAt < TOUCH_INTERVAL_MS) return;
+                lastTouchAt = now;
+
+                try {
+                    const response = await fetch('/operatividad-touch', { method: 'POST', credentials: 'same-origin' });
+                    if (response.status === 401) window.location.href = '/operatividad-login';
+                } catch (error) {
+                    // Si la red falla, el temporizador local seguira cerrando la sesion por inactividad.
+                }
+            }
+
+            function registerActivity() {
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(closeIdleSession, IDLE_LIMIT_MS);
+                keepSessionAlive();
+            }
+
+            ['click', 'keydown', 'mousemove', 'touchstart', 'scroll'].forEach((eventName) => {
+                document.addEventListener(eventName, registerActivity, { passive: true });
+            });
+
+            registerActivity();
+        })();
+    </script>
+    <script src="/js/operatividad.js"></script>
+</body>
+</html>

@@ -1,0 +1,560 @@
+const API_URL = window.location.protocol === 'file:' ? 'http://164.68.118.86:3010' : window.location.origin;
+
+let operationalSites = [];
+let operationalStatuses = [];
+let editingOperationalResponsibleId = null;
+const operationalPaging = {
+    vehicles: { page: 1, limit: 10 },
+    report: { page: 1, limit: 10 },
+    followups: { page: 1, limit: 10 }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadOperational();
+});
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+        alert(message);
+        return;
+    }
+
+    const colors = {
+        success: 'bg-green-600',
+        error: 'bg-red-600',
+        warning: 'bg-yellow-600',
+        info: 'bg-gray-800'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow text-sm max-w-sm`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4500);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+}
+
+async function loadOperational() {
+    await Promise.all([
+        loadOperationalCatalogs(),
+        loadOperationalVehicles(),
+        loadOperationalReport(),
+        loadOperationalFollowups()
+    ]);
+}
+
+async function loadOperationalCatalogs() {
+    try {
+        const [sitesResponse, statusesResponse] = await Promise.all([
+            fetch(`${API_URL}/api/operational/sites`),
+            fetch(`${API_URL}/api/operational/statuses`)
+        ]);
+        const sitesData = await sitesResponse.json();
+        const statusesData = await statusesResponse.json();
+        if (!sitesData.success) throw new Error(sitesData.error || 'Error cargando sedes');
+        if (!statusesData.success) throw new Error(statusesData.error || 'Error cargando estados');
+
+        operationalSites = sitesData.sites || [];
+        operationalStatuses = statusesData.statuses || [];
+        renderOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error operatividad: ${error.message}`, 'error');
+    }
+}
+
+function renderOperationalCatalogs() {
+    const siteOptions = operationalSites
+        .filter(site => site.active)
+        .map(site => `<option value="${site.id}">${escapeHtml(site.name)}</option>`)
+        .join('');
+
+    const nonOperationalStatusOptions = operationalStatuses
+        .filter(status => status.active && !status.is_operational)
+        .map(status => `<option value="${status.id}">${escapeHtml(status.name)}</option>`)
+        .join('');
+
+    document.getElementById('operationalSiteSelect').innerHTML = siteOptions;
+    document.getElementById('responsibleSiteSelect').innerHTML = siteOptions;
+    document.getElementById('operationalStatusSelect').innerHTML = nonOperationalStatusOptions;
+
+    const list = document.getElementById('operationalSitesList');
+    list.innerHTML = operationalSites.map(site => {
+        const responsibles = (site.responsibles || [])
+            .filter(resp => resp.active)
+            .map(resp => `
+                <div class="text-xs text-gray-600 flex items-center justify-between gap-2">
+                    <span>${escapeHtml(resp.name)} - ${escapeHtml(resp.phone_number)}</span>
+                    <span class="flex gap-2">
+                        <button onclick="editOperationalResponsible(${resp.id})" class="text-blue-600 hover:underline">Editar</button>
+                        <button onclick="deactivateOperationalResponsible(${resp.id})" class="text-red-600 hover:underline">Eliminar</button>
+                    </span>
+                </div>
+            `)
+            .join('');
+        return `
+            <div class="border rounded-lg px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="font-medium">${escapeHtml(site.name)}</div>
+                    <button onclick="deactivateOperationalSite(${site.id})" class="text-xs text-red-600 hover:underline">Eliminar</button>
+                </div>
+                ${responsibles || '<div class="text-xs text-gray-400">Sin responsable activo</div>'}
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadOperationalVehicles() {
+    const tbody = document.getElementById('operationalVehiclesTable');
+    try {
+        const onlyNonOperational = document.getElementById('operationalOnlyNonOperational').checked !== false;
+        const paging = operationalPaging.vehicles;
+        const params = new URLSearchParams({
+            onlyNonOperational,
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        const response = await fetch(`${API_URL}/api/operational/vehicles?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando vehiculos');
+
+        const vehicles = data.vehicles || [];
+        if (vehicles.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">No hay vehiculos registrados</td></tr>';
+            renderPagination('vehicles', data.pagination, loadOperationalVehicles);
+            return;
+        }
+
+        tbody.innerHTML = vehicles.map(vehicle => `
+            <tr class="hover:bg-gray-50 border-b">
+                <td class="px-3 py-2 text-xs font-medium">${escapeHtml(vehicle.plate)}</td>
+                <td class="px-3 py-2 text-xs">${escapeHtml(vehicle.site_name)}</td>
+                <td class="px-3 py-2 text-xs">
+                    <span class="${vehicle.is_operational ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'} px-2 py-1 rounded">${escapeHtml(vehicle.status_name)}</span>
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-700">${escapeHtml(vehicle.last_observation || '')}</td>
+                <td class="px-3 py-2 text-xs text-center whitespace-nowrap">
+                    <button onclick="setOperationalVehicleOperative(${vehicle.id})" class="bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200">Operativo</button>
+                    <button onclick="deactivateOperationalVehicle(${vehicle.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Eliminar</button>
+                </td>
+            </tr>
+        `).join('');
+        renderPagination('vehicles', data.pagination, loadOperationalVehicles);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function loadOperationalReport() {
+    const tbody = document.getElementById('operationalReportTable');
+    try {
+        const paging = operationalPaging.report;
+        const params = new URLSearchParams({
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        const response = await fetch(`${API_URL}/api/operational/report?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando historial');
+
+        const rows = data.report || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">Sin historial</td></tr>';
+            renderPagination('report', data.pagination, loadOperationalReport);
+            return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+            const date = row.changed_at_co || '';
+            const change = `${row.old_status || '-'} -> ${row.new_status || '-'}`;
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(date)}</td>
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate)}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(change)}</td>
+                    <td class="px-3 py-2 text-xs text-gray-700">${escapeHtml(row.observation || '')}</td>
+                    <td class="px-3 py-2 text-xs text-center">
+                        <button onclick="deleteOperationalHistory(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        renderPagination('report', data.pagination, loadOperationalReport);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function loadOperationalFollowups() {
+    const tbody = document.getElementById('operationalFollowupsTable');
+    try {
+        const paging = operationalPaging.followups;
+        const params = new URLSearchParams({
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        const response = await fetch(`${API_URL}/api/operational/followups?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando respuestas');
+
+        const rows = data.followups || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-6 text-gray-500">Sin seguimientos enviados hoy</td></tr>';
+            renderPagination('followups', data.pagination, loadOperationalFollowups);
+            return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+            const followupDate = row.followup_date_co || '';
+            const sentAt = row.sent_at_co || '';
+            const answeredAt = row.response_at_co || '-';
+            const isPending = row.response_status === 'Pendiente';
+            const badge = isPending
+                ? 'bg-red-100 text-red-800'
+                : (row.response_status === 'Cancelado' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-800');
+            const typeBadge = row.send_type === 'manual'
+                ? 'bg-blue-100 text-blue-800'
+                : 'bg-slate-100 text-slate-800';
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs">${escapeHtml(followupDate)}</td>
+                    <td class="px-3 py-2 text-xs">
+                        <span class="${typeBadge} px-2 py-1 rounded">${escapeHtml(row.send_type_label || row.send_type || '')}</span>
+                    </td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '')}</td>
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.responsible_name || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.phone_number || '')}</td>
+                    <td class="px-3 py-2 text-xs">
+                        <span class="${badge} px-2 py-1 rounded">${escapeHtml(row.response_status)}</span>
+                    </td>
+                    <td class="px-3 py-2 text-xs">${row.answered_count || 0}/${row.vehicle_count || 0}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(sentAt)}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(answeredAt)}</td>
+                    <td class="px-3 py-2 text-xs text-center">
+                        <button onclick="deleteOperationalFollowup(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        renderPagination('followups', data.pagination, loadOperationalFollowups);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+function renderPagination(key, pagination, reloadFn) {
+    const tableIds = {
+        vehicles: 'operationalVehiclesTable',
+        report: 'operationalReportTable',
+        followups: 'operationalFollowupsTable'
+    };
+    const tbody = document.getElementById(tableIds[key]);
+    if (!tbody || !pagination) return;
+
+    const tableWrapper = tbody.closest('.overflow-x-auto');
+    if (!tableWrapper) return;
+
+    let container = document.getElementById(`pagination-${key}`);
+    if (!container) {
+        container = document.createElement('div');
+        container.id = `pagination-${key}`;
+        container.className = 'flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-gray-600';
+        tableWrapper.insertAdjacentElement('afterend', container);
+    }
+
+    const start = pagination.total === 0 ? 0 : ((pagination.page - 1) * pagination.limit) + 1;
+    const end = Math.min(pagination.page * pagination.limit, pagination.total);
+    container.innerHTML = `
+        <div>${start}-${end} de ${pagination.total}</div>
+        <div class="flex items-center gap-2">
+            <select class="border rounded px-2 py-1 bg-white" data-page-size="${key}">
+                ${[10, 25, 50, 100].map(size => `<option value="${size}" ${pagination.limit === size ? 'selected' : ''}>${size}</option>`).join('')}
+            </select>
+            <button class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-page-prev="${key}" ${pagination.hasPrev ? '' : 'disabled'}>Anterior</button>
+            <span>Pagina ${pagination.page} de ${pagination.totalPages}</span>
+            <button class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-page-next="${key}" ${pagination.hasNext ? '' : 'disabled'}>Siguiente</button>
+        </div>
+    `;
+
+    container.querySelector(`[data-page-size="${key}"]`).onchange = (event) => {
+        operationalPaging[key].limit = Number(event.target.value);
+        operationalPaging[key].page = 1;
+        reloadFn();
+    };
+    container.querySelector(`[data-page-prev="${key}"]`).onclick = () => {
+        if (operationalPaging[key].page > 1) {
+            operationalPaging[key].page -= 1;
+            reloadFn();
+        }
+    };
+    container.querySelector(`[data-page-next="${key}"]`).onclick = () => {
+        if (pagination.hasNext) {
+            operationalPaging[key].page += 1;
+            reloadFn();
+        }
+    };
+}
+
+async function saveOperationalVehicle() {
+    try {
+        const plate = document.getElementById('operationalPlate').value.trim();
+        const siteId = document.getElementById('operationalSiteSelect').value;
+        const statusId = document.getElementById('operationalStatusSelect').value;
+        const observation = document.getElementById('operationalObservation').value.trim();
+        if (!plate || !siteId || !statusId) {
+            showToast('Placa, sede y estado son requeridos', 'warning');
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/api/operational/vehicles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plate, siteId, statusId, observation })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando vehiculo');
+
+        document.getElementById('operationalPlate').value = '';
+        document.getElementById('operationalObservation').value = '';
+        showToast('Vehiculo guardado', 'success');
+        await Promise.all([loadOperationalVehicles(), loadOperationalReport()]);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function saveOperationalSite() {
+    try {
+        const name = document.getElementById('operationalNewSite').value.trim();
+        if (!name) {
+            showToast('Nombre de sede requerido', 'warning');
+            return;
+        }
+        const response = await fetch(`${API_URL}/api/operational/sites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando sede');
+        document.getElementById('operationalNewSite').value = '';
+        showToast('Sede guardada', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deactivateOperationalSite(siteId) {
+    if (!confirm('Eliminar esta sede? No se borran los historiales ya creados.')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/sites/${siteId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando sede');
+        showToast('Sede eliminada', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function saveOperationalResponsible() {
+    try {
+        const siteId = document.getElementById('responsibleSiteSelect').value;
+        const name = document.getElementById('responsibleName').value.trim();
+        const phoneNumber = document.getElementById('responsiblePhone').value.trim();
+        if (!siteId || !name || !phoneNumber) {
+            showToast('Sede, nombre y telefono son requeridos', 'warning');
+            return;
+        }
+        const url = editingOperationalResponsibleId
+            ? `${API_URL}/api/operational/responsibles/${editingOperationalResponsibleId}`
+            : `${API_URL}/api/operational/responsibles`;
+        const response = await fetch(url, {
+            method: editingOperationalResponsibleId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteId, name, phoneNumber })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando responsable');
+        clearOperationalResponsibleForm();
+        showToast('Responsable guardado', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+function editOperationalResponsible(responsibleId) {
+    for (const site of operationalSites) {
+        const responsible = (site.responsibles || []).find(resp => resp.id === responsibleId);
+        if (!responsible) continue;
+
+        editingOperationalResponsibleId = responsible.id;
+        document.getElementById('responsibleSiteSelect').value = site.id;
+        document.getElementById('responsibleName').value = responsible.name || '';
+        document.getElementById('responsiblePhone').value = responsible.phone_number || '';
+        showToast('Editando responsable seleccionado', 'info');
+        return;
+    }
+}
+
+function clearOperationalResponsibleForm() {
+    editingOperationalResponsibleId = null;
+    document.getElementById('responsibleName').value = '';
+    document.getElementById('responsiblePhone').value = '';
+}
+
+async function setOperationalVehicleOperative(vehicleId) {
+    try {
+        const operativeStatus = operationalStatuses.find(status => status.is_operational);
+        if (!operativeStatus) {
+            showToast('No existe estado Operativo configurado', 'error');
+            return;
+        }
+        const observation = prompt('Observacion para marcar operativo:', 'Operativo') || 'Operativo';
+        const response = await fetch(`${API_URL}/api/operational/vehicles/${vehicleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ statusId: operativeStatus.id, observation })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error actualizando vehiculo');
+        showToast('Vehiculo marcado como operativo', 'success');
+        await Promise.all([loadOperationalVehicles(), loadOperationalReport()]);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deactivateOperationalVehicle(vehicleId) {
+    if (!confirm('Eliminar este vehiculo del seguimiento?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/vehicles/${vehicleId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error desactivando vehiculo');
+        showToast('Vehiculo eliminado', 'success');
+        await loadOperationalVehicles();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deactivateOperationalResponsible(responsibleId) {
+    if (!confirm('Eliminar este responsable?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/responsibles/${responsibleId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error desactivando responsable');
+        showToast('Responsable eliminado', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteOperationalHistory(historyId) {
+    if (!confirm('Eliminar este registro del historial?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/report/${historyId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando historial');
+        showToast('Registro de historial eliminado', 'success');
+        await loadOperationalReport();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteOperationalFollowup(followupId) {
+    if (!confirm('Eliminar este registro de seguimiento?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/followups/${followupId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando seguimiento');
+        showToast('Seguimiento eliminado', 'success');
+        await loadOperationalFollowups();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function sendOperationalDaily() {
+    if (!confirm('Enviar ahora el seguimiento de operatividad a los responsables con vehiculos no operativos?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/send-daily`, { method: 'POST' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error enviando seguimiento');
+        showToast(`Seguimiento enviado a ${(data.sent || []).length} responsables`, 'success');
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function downloadOperationalReport() {
+    try {
+        const [historyResponse, followupsResponse] = await Promise.all([
+            fetch(`${API_URL}/api/operational/report`),
+            fetch(`${API_URL}/api/operational/followups?date=all`)
+        ]);
+        const data = await historyResponse.json();
+        const followupsData = await followupsResponse.json();
+        if (!data.success) throw new Error(data.error || 'Error descargando reporte');
+        if (!followupsData.success) throw new Error(followupsData.error || 'Error descargando seguimientos');
+
+        const rows = (data.report || []).map(row => ({
+            'Fecha GMT-5': row.changed_at_co || '',
+            Sede: row.site_name || '',
+            Placa: row.plate || '',
+            'Estado anterior': row.old_status || '',
+            'Estado nuevo': row.new_status || '',
+            Observacion: row.observation || '',
+            Origen: row.source || '',
+            Telefono: row.changed_by_phone || ''
+        }));
+
+        const followupRows = (followupsData.followups || []).map(row => ({
+            Fecha: row.followup_date_co || '',
+            Tipo: row.send_type_label || row.send_type || '',
+            Sede: row.site_name || '',
+            Responsable: row.responsible_name || '',
+            Telefono: row.phone_number || '',
+            Respuesta: row.response_status || '',
+            Vehiculos: `${row.answered_count || 0}/${row.vehicle_count || 0}`,
+            'Ejecucion GMT-5': row.sent_at_co || '',
+            'Hora respuesta GMT-5': row.response_at_co || ''
+        }));
+
+        if (typeof XLSX !== 'undefined') {
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const followupWorksheet = XLSX.utils.json_to_sheet(followupRows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial');
+            XLSX.utils.book_append_sheet(workbook, followupWorksheet, 'Seguimientos');
+            XLSX.writeFile(workbook, `reporte-operatividad-${new Date().toISOString().slice(0, 10)}.xlsx`);
+            return;
+        }
+
+        const csvRows = [
+            Object.keys(rows[0] || { 'Fecha GMT-5': '', Sede: '', Placa: '', 'Estado anterior': '', 'Estado nuevo': '', Observacion: '', Origen: '', Telefono: '' }),
+            ...rows.map(row => Object.values(row))
+        ];
+        const csv = csvRows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `reporte-operatividad-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}

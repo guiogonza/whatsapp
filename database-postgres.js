@@ -263,11 +263,11 @@ async function createTables() {
                 responsible_id INTEGER REFERENCES operational_site_responsibles(id),
                 phone_number VARCHAR(50) NOT NULL,
                 message TEXT,
+                send_type VARCHAR(20) NOT NULL DEFAULT 'automatico',
                 sent_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 status VARCHAR(30) NOT NULL DEFAULT 'sent',
-                created_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(followup_date, site_id, phone_number)
+                created_at TIMESTAMP DEFAULT NOW()
             )
         `);
 
@@ -303,10 +303,44 @@ async function createTables() {
         `);
 
         await client.query(`
+            CREATE TABLE IF NOT EXISTS operational_document_expirations (
+                id SERIAL PRIMARY KEY,
+                plate VARCHAR(30) NOT NULL,
+                document_type VARCHAR(40) NOT NULL,
+                expiry_date DATE NOT NULL,
+                last_change_date DATE,
+                last_change_km INTEGER,
+                next_change_km INTEGER,
+                observation TEXT,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_by VARCHAR(50),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(plate, document_type)
+            )
+        `);
+
+        await client.query(`
             CREATE INDEX IF NOT EXISTS idx_operational_vehicles_site ON operational_vehicles(site_id);
             CREATE INDEX IF NOT EXISTS idx_operational_vehicles_status ON operational_vehicles(status_id);
             CREATE INDEX IF NOT EXISTS idx_operational_followups_date ON operational_followups(followup_date DESC);
             CREATE INDEX IF NOT EXISTS idx_operational_history_vehicle ON operational_vehicle_history(vehicle_id, changed_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_operational_documents_plate ON operational_document_expirations(plate);
+            CREATE INDEX IF NOT EXISTS idx_operational_documents_expiry ON operational_document_expirations(expiry_date);
+        `);
+
+        await client.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'operational_followups' AND column_name = 'send_type') THEN
+                    ALTER TABLE operational_followups ADD COLUMN send_type VARCHAR(20) NOT NULL DEFAULT 'automatico';
+                END IF;
+            END $$;
+        `);
+
+        await client.query(`
+            ALTER TABLE operational_followups DROP CONSTRAINT IF EXISTS operational_followups_followup_date_site_id_phone_number_key;
+            CREATE INDEX IF NOT EXISTS idx_operational_followups_lookup ON operational_followups(followup_date, site_id, phone_number, send_type);
         `);
 
         await client.query(`

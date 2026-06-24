@@ -64,14 +64,14 @@ router.get('/status', async (req, res) => {
             stats.unique_phones = 0;
         }
         
-        // Alertas GPSwox
+        // Alertas plataformagps
         try {
             const gpswoxResult = await database.query(`
                 SELECT COUNT(*) as count FROM gpswox_messages
             `);
             stats.gpswox_alerts = parseInt(gpswoxResult.rows[0]?.count) || 0;
         } catch (err) {
-            console.log('Error contando alertas GPSwox:', err.message);
+            console.log('Error contando alertas plataformagps:', err.message);
             stats.gpswox_alerts = 0;
         }
         

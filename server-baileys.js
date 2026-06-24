@@ -14,6 +14,7 @@ const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
+const crypto = require('crypto');
 
 // ConfiguraciÃƒÂƒÃ‚ÂƒÃƒÂ‚Ã‚Â³n
 const config = require('./config');
@@ -85,6 +86,7 @@ let notificationInterval = null;
 // ======================== MIDDLEWARE ========================
 
 app.use(express.json({ limit: '16mb' }));
+app.use(express.urlencoded({ extended: false }));
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -106,6 +108,177 @@ function authenticateAPI(req, res, next) {
     next();
 }
 app.use(authenticateAPI);
+
+// Login simple para la pagina de operatividad
+const OPERATIONAL_LOGIN_USER = 'hesego';
+const OPERATIONAL_LOGIN_PASSWORD = 'alejandro123*';
+const OPERATIONAL_AUTH_COOKIE = 'operatividad_auth';
+const OPERATIONAL_AUTH_TTL_MS = 10 * 60 * 1000;
+const OPERATIONAL_AUTH_SECRET = process.env.OPERATIONAL_AUTH_SECRET || process.env.JWT_SECRET || process.env.API_KEY || 'operatividad-login-secret';
+
+function parseCookies(req) {
+    const header = req.headers.cookie || '';
+    return header.split(';').reduce((cookies, part) => {
+        const index = part.indexOf('=');
+        if (index === -1) return cookies;
+        const key = part.slice(0, index).trim();
+        const value = part.slice(index + 1).trim();
+        if (key) cookies[key] = decodeURIComponent(value);
+        return cookies;
+    }, {});
+}
+
+function signOperationalAuth(value) {
+    return crypto.createHmac('sha256', OPERATIONAL_AUTH_SECRET).update(value).digest('hex');
+}
+
+function createOperationalAuthToken() {
+    const issuedAt = Date.now().toString();
+    return `${issuedAt}.${signOperationalAuth(`${issuedAt}:${OPERATIONAL_LOGIN_USER}`)}`;
+}
+
+function setOperationalAuthCookie(req, res) {
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.cookie(OPERATIONAL_AUTH_COOKIE, createOperationalAuthToken(), {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure,
+        maxAge: OPERATIONAL_AUTH_TTL_MS
+    });
+}
+
+function isOperationalAuthenticated(req) {
+    const token = parseCookies(req)[OPERATIONAL_AUTH_COOKIE];
+    if (!token) return false;
+
+    const [issuedAt, signature] = token.split('.');
+    const issuedNumber = Number(issuedAt);
+    if (!issuedAt || !signature || !Number.isFinite(issuedNumber)) return false;
+    if ((Date.now() - issuedNumber) > OPERATIONAL_AUTH_TTL_MS) return false;
+
+    const expected = signOperationalAuth(`${issuedAt}:${OPERATIONAL_LOGIN_USER}`);
+    const providedBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expected);
+    return providedBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+function renderOperationalLogin(errorMessage = '') {
+    const errorHtml = errorMessage ? `<div class="error">${errorMessage}</div>` : '';
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Operatividad</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            color: #0f172a;
+        }
+        .login {
+            width: min(420px, calc(100vw - 32px));
+            background: #fff;
+            border: 1px solid #dbe2ea;
+            border-radius: 8px;
+            padding: 28px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        }
+        h1 { margin: 0 0 6px; font-size: 24px; }
+        p { margin: 0 0 22px; color: #64748b; }
+        label { display: block; margin: 14px 0 6px; font-weight: 700; font-size: 14px; }
+        input {
+            width: 100%;
+            height: 42px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 0 12px;
+            font-size: 15px;
+        }
+        button {
+            width: 100%;
+            margin-top: 20px;
+            height: 44px;
+            border: 0;
+            border-radius: 6px;
+            background: #1f2937;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .error {
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: #fee2e2;
+            color: #991b1b;
+            font-weight: 700;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <form class="login" method="post" action="/operatividad-login">
+        <h1>Operatividad</h1>
+        <p>Ingresa tus credenciales para continuar.</p>
+        ${errorHtml}
+        <label for="username">Usuario</label>
+        <input id="username" name="username" autocomplete="username" required autofocus>
+        <label for="password">Contrasena</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Ingresar</button>
+    </form>
+</body>
+</html>`;
+}
+
+app.get(['/operatividad-login', '/operatividad-login.html'], (req, res) => {
+    if (isOperationalAuthenticated(req)) return res.redirect('/operatividad.html');
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(renderOperationalLogin());
+});
+
+app.post('/operatividad-login', (req, res) => {
+    const username = String(req.body.username || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+
+    if (username !== OPERATIONAL_LOGIN_USER || password !== OPERATIONAL_LOGIN_PASSWORD) {
+        res.status(401);
+        res.setHeader('Cache-Control', 'no-store');
+        return res.type('html').send(renderOperationalLogin('Usuario o contrasena incorrectos'));
+    }
+
+    setOperationalAuthCookie(req, res);
+    res.redirect('/operatividad.html');
+});
+
+app.post('/operatividad-touch', (req, res) => {
+    if (!isOperationalAuthenticated(req)) {
+        return res.status(401).json({ success: false, error: 'Sesion vencida' });
+    }
+    setOperationalAuthCookie(req, res);
+    res.json({ success: true });
+});
+
+app.all('/operatividad-logout', (req, res) => {
+    res.clearCookie(OPERATIONAL_AUTH_COOKIE);
+    res.redirect('/operatividad-login');
+});
+
+app.use((req, res, next) => {
+    const protectedPaths = ['/operatividad.html', '/js/operatividad.js'];
+    if (!protectedPaths.includes(req.path)) return next();
+    if (isOperationalAuthenticated(req)) {
+        setOperationalAuthCookie(req, res);
+        return next();
+    }
+    return res.redirect('/operatividad-login');
+});
 
 // Configurar charset UTF-8 para archivos estáticos
 app.use(express.static(config.PUBLIC_PATH, {
@@ -1349,13 +1522,13 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
     }
 });
 
-// ======================== RUTAS - GPSWOX ========================
+// ======================== RUTAS - plataformagps ========================
 
-// Importar módulo GPSwox
+// Importar módulo plataformagps
 const gpswoxSession = require('./lib/session/gpswox-session');
 
 /**
- * POST /api/gpswox/session/create - Crea una sesión dedicada GPSwox
+ * POST /api/gpswox/session/create - Crea una sesión dedicada plataformagps
  * Body opcional: { "sessionName": "gpswox-session-2" }
  */
 app.post('/api/gpswox/session/create', async (req, res) => {
@@ -1377,7 +1550,7 @@ app.post('/api/gpswox/session/create', async (req, res) => {
         if (existingSession) {
             return res.status(400).json({
                 success: false,
-                error: `La sesión GPSwox '${sessionName}' ya existe`,
+                error: `La sesión plataformagps '${sessionName}' ya existe`,
                 sessionName: sessionName,
                 state: existingSession.state
             });
@@ -1388,7 +1561,7 @@ app.post('/api/gpswox/session/create', async (req, res) => {
         
         res.json({
             success: true,
-            message: `Sesión GPSwox '${sessionName}' creada exitosamente`,
+            message: `Sesión plataformagps '${sessionName}' creada exitosamente`,
             sessionName: sessionName,
             dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode(),
             qrEndpoint: `/api/sessions/${sessionName}/qr`
@@ -1402,7 +1575,7 @@ app.post('/api/gpswox/session/create', async (req, res) => {
 });
 
 /**
- * POST /api/gpswox/sessions/create-all - Crea todas las sesiones GPSwox configuradas
+ * POST /api/gpswox/sessions/create-all - Crea todas las sesiones plataformagps configuradas
  */
 app.post('/api/gpswox/sessions/create-all', async (req, res) => {
     try {
@@ -1421,7 +1594,7 @@ app.post('/api/gpswox/sessions/create-all', async (req, res) => {
         
         res.json({
             success: true,
-            message: `Procesadas ${sessionNames.length} sesiones GPSwox`,
+            message: `Procesadas ${sessionNames.length} sesiones plataformagps`,
             sessions: results
         });
     } catch (error) {
@@ -1433,7 +1606,7 @@ app.post('/api/gpswox/sessions/create-all', async (req, res) => {
 });
 
 /**
- * GET /api/gpswox/session/status - Obtiene el estado de la sesión GPSwox
+ * GET /api/gpswox/session/status - Obtiene el estado de la sesión plataformagps
  */
 app.get('/api/gpswox/session/status', (req, res) => {
     try {
@@ -1445,7 +1618,7 @@ app.get('/api/gpswox/session/status', (req, res) => {
                 success: true,
                 exists: false,
                 sessionName: sessionName,
-                message: 'La sesión GPSwox no existe. Usa POST /api/gpswox/session/create para crearla.'
+                message: 'La sesión plataformagps no existe. Usa POST /api/gpswox/session/create para crearla.'
             });
         }
 
@@ -1471,7 +1644,7 @@ app.get('/api/gpswox/session/status', (req, res) => {
 });
 
 /**
- * GET /api/gpswox/conversations - Obtiene estadísticas de conversaciones GPSwox activas
+ * GET /api/gpswox/conversations - Obtiene estadísticas de conversaciones plataformagps activas
  */
 app.get('/api/gpswox/conversations', (req, res) => {
     try {
@@ -1524,7 +1697,7 @@ app.get('/api/gpswox/conversation/:phoneNumber', (req, res) => {
 });
 
 /**
- * GET /api/gpswox/messages - Obtiene los mensajes de GPSwox desde la base de datos
+ * GET /api/gpswox/messages - Obtiene los mensajes de plataformagps desde la base de datos
  */
 app.get('/api/gpswox/messages', async (req, res) => {
     try {
@@ -1539,7 +1712,7 @@ app.get('/api/gpswox/messages', async (req, res) => {
             count: messages.length
         });
     } catch (error) {
-        console.error('Error obteniendo mensajes GPSwox:', error);
+        console.error('Error obteniendo mensajes plataformagps:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1548,7 +1721,7 @@ app.get('/api/gpswox/messages', async (req, res) => {
 });
 
 /**
- * GET /api/gpswox/stats - Obtiene estadísticas de mensajes GPSwox
+ * GET /api/gpswox/stats - Obtiene estadísticas de mensajes plataformagps
  */
 app.get('/api/gpswox/stats', async (req, res) => {
     try {
@@ -1559,7 +1732,7 @@ app.get('/api/gpswox/stats', async (req, res) => {
             stats: stats
         });
     } catch (error) {
-        console.error('Error obteniendo estadísticas GPSwox:', error);
+        console.error('Error obteniendo estadísticas plataformagps:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -2992,7 +3165,7 @@ async function initialize() {
         // Iniciar procesador de consolidación de mensajes (persistente en BD)
         sessionManager.startConsolidationProcessor();
 
-        // Iniciar seguimiento diario de operatividad GPSwox
+        // Iniciar seguimiento diario de operatividad plataformagps
         const operational = require('./lib/session/gpswox-operational');
         operational.startDailyScheduler(sessionManager);
 

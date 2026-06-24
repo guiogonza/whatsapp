@@ -101,7 +101,7 @@ function renderDatabaseConnected(data) {
                 </div>
                 <div>
                     <div style="font-size: 1.5rem; font-weight: bold; color: #ca8a04;">${(data.stats?.gpswox_alerts || 0).toLocaleString()}</div>
-                    <div style="font-size: 0.75rem; color: #4b5563;">Alertas GPSwox</div>
+                    <div style="font-size: 0.75rem; color: #4b5563;">Alertas plataformagps</div>
                 </div>
                 <div>
                     <div style="font-size: 1.5rem; font-weight: bold; color: #16a34a;">${(data.stats?.fx_forwards || 0).toLocaleString()}</div>

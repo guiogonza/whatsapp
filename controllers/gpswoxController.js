@@ -1,13 +1,13 @@
 /**
- * Controller de GPSwox
- * Maneja las operaciones relacionadas con el módulo GPSwox
+ * Controller de plataformagps
+ * Maneja las operaciones relacionadas con el módulo plataformagps
  */
 
 const gpswoxSession = require('../lib/session/gpswox-session');
 const sessionManager = require('../lib/session');
 
 /**
- * POST /api/gpswox/session/create - Crea una sesión dedicada GPSwox
+ * POST /api/gpswox/session/create - Crea una sesión dedicada plataformagps
  */
 async function createGPSwoxSession(req, res) {
     try {
@@ -27,7 +27,7 @@ async function createGPSwoxSession(req, res) {
         if (existing) {
             return res.status(409).json({
                 success: false,
-                error: `La sesión GPSwox '${sessionName}' ya existe`
+                error: `La sesión plataformagps '${sessionName}' ya existe`
                 // QR disponible via /api/sessions/${sessionName}/qr
             });
         }
@@ -37,13 +37,13 @@ async function createGPSwoxSession(req, res) {
 
         res.json({
             success: true,
-            message: `Sesión GPSwox '${sessionName}' creada exitosamente`,
+            message: `Sesión plataformagps '${sessionName}' creada exitosamente`,
             sessionName,
             dedicatedMode: gpswoxSession.isGPSwoxDedicatedMode()
             // QR se obtiene via /api/sessions/${sessionName}/qr después de unos segundos
         });
     } catch (error) {
-        console.error('Error creando sesión GPSwox:', error);
+        console.error('Error creando sesión plataformagps:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -52,7 +52,7 @@ async function createGPSwoxSession(req, res) {
 }
 
 /**
- * POST /api/gpswox/sessions/create-all - Crea todas las sesiones GPSwox configuradas
+ * POST /api/gpswox/sessions/create-all - Crea todas las sesiones plataformagps configuradas
  */
 async function createAllGPSwoxSessions(req, res) {
     try {
@@ -186,7 +186,7 @@ function deleteConversation(req, res) {
 }
 
 /**
- * GET /api/gpswox/stats - Estadísticas de GPSwox
+ * GET /api/gpswox/stats - Estadísticas de plataformagps
  */
 function getStats(req, res) {
     try {
@@ -201,7 +201,7 @@ function getStats(req, res) {
 }
 
 /**
- * GET /api/gpswox/messages - Obtener mensajes GPSwox
+ * GET /api/gpswox/messages - Obtener mensajes plataformagps
  */
 async function getGPSwoxMessages(req, res) {
     try {
@@ -245,7 +245,7 @@ async function getGPSwoxMessages(req, res) {
 }
 
 /**
- * GET /api/gpswox/message-stats - Estadísticas de mensajes GPSwox
+ * GET /api/gpswox/message-stats - Estadísticas de mensajes plataformagps
  */
 async function getGPSwoxMessageStats(req, res) {
     try {

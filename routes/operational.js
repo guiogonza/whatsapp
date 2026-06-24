@@ -53,12 +53,20 @@ router.get('/statuses', async (req, res) => {
 
 router.get('/vehicles', async (req, res) => {
     try {
-        const vehicles = await operational.listVehicles({
+        const result = await operational.listVehicles({
             siteId: req.query.siteId || null,
             statusId: req.query.statusId || null,
-            onlyNonOperational: req.query.onlyNonOperational === 'true'
+            onlyNonOperational: req.query.onlyNonOperational === 'true',
+            search: req.query.search || null,
+            paginate: req.query.paginate === 'true',
+            page: req.query.page,
+            limit: req.query.limit
         });
-        res.json({ success: true, vehicles });
+        if (req.query.paginate === 'true') {
+            res.json({ success: true, vehicles: result.rows, pagination: result.pagination });
+            return;
+        }
+        res.json({ success: true, vehicles: result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -78,7 +86,7 @@ router.post('/vehicles', async (req, res) => {
         if (!device) {
             return res.status(404).json({
                 success: false,
-                error: `La placa ${plate} no existe en la plataforma GPS`
+                error: `La placa ${plate} no existe en plataformagps`
             });
         }
 
@@ -117,6 +125,51 @@ router.delete('/vehicles/:id', async (req, res) => {
     }
 });
 
+router.get('/document-expirations', async (req, res) => {
+    try {
+        const result = await operational.listDocumentExpirations({
+            ...req.query,
+            paginate: req.query.paginate === 'true'
+        });
+        if (req.query.paginate === 'true') {
+            res.json({ success: true, documents: result.rows, pagination: result.pagination });
+            return;
+        }
+        res.json({ success: true, documents: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.post('/document-expirations', async (req, res) => {
+    try {
+        const document = await operational.upsertDocumentExpiration(req.body);
+        res.json({ success: true, document });
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+router.put('/document-expirations/:id', async (req, res) => {
+    try {
+        const document = await operational.updateDocumentExpiration(req.params.id, req.body);
+        if (!document) return res.status(404).json({ success: false, error: 'Vencimiento no encontrado' });
+        res.json({ success: true, document });
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+router.delete('/document-expirations/:id', async (req, res) => {
+    try {
+        const document = await operational.deleteDocumentExpiration(req.params.id);
+        if (!document) return res.status(404).json({ success: false, error: 'Vencimiento no encontrado' });
+        res.json({ success: true, document });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 router.post('/responsibles', async (req, res) => {
     try {
         const responsible = await operational.upsertResponsible(req.body);
@@ -148,8 +201,51 @@ router.delete('/responsibles/:id', async (req, res) => {
 
 router.get('/report', async (req, res) => {
     try {
-        const report = await operational.getReport(req.query);
-        res.json({ success: true, report });
+        const result = await operational.getReport({
+            ...req.query,
+            paginate: req.query.paginate === 'true'
+        });
+        if (req.query.paginate === 'true') {
+            res.json({ success: true, report: result.rows, pagination: result.pagination });
+            return;
+        }
+        res.json({ success: true, report: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.delete('/report/:id', async (req, res) => {
+    try {
+        const entry = await operational.deleteHistoryEntry(req.params.id);
+        if (!entry) return res.status(404).json({ success: false, error: 'Registro de historial no encontrado' });
+        res.json({ success: true, entry });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.get('/followups', async (req, res) => {
+    try {
+        const result = await operational.getFollowupReport({
+            ...req.query,
+            paginate: req.query.paginate === 'true'
+        });
+        if (req.query.paginate === 'true') {
+            res.json({ success: true, followups: result.rows, pagination: result.pagination });
+            return;
+        }
+        res.json({ success: true, followups: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.delete('/followups/:id', async (req, res) => {
+    try {
+        const followup = await operational.deleteFollowup(req.params.id);
+        if (!followup) return res.status(404).json({ success: false, error: 'Seguimiento no encontrado' });
+        res.json({ success: true, followup });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -158,7 +254,7 @@ router.get('/report', async (req, res) => {
 router.post('/send-daily', async (req, res) => {
     try {
         const sessionManager = require('../sessionManager-baileys');
-        const sent = await operational.sendDailyPrompts(sessionManager);
+        const sent = await operational.sendDailyPrompts(sessionManager, { sendType: 'manual' });
         res.json({ success: true, sent });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

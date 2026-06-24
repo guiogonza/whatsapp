@@ -187,7 +187,7 @@ function showSection(sectionId) {
         database: { title: 'Base de Datos PostgreSQL', subtitle: 'Estado y monitoreo de la base de datos' },
         webhooks: { title: 'Centro de Mensajes', subtitle: 'Mensajes entrantes de WhatsApp Cloud API' },
         operational: { title: 'Operatividad', subtitle: 'Seguimiento diario de vehiculos por sede' },
-        'gpswox-messages': { title: 'Mensajes Plataforma GPS', subtitle: 'Historial de conversaciones del bot de la plataforma GPS' },
+        'gpswox-messages': { title: 'Mensajes plataformagps', subtitle: 'Historial de conversaciones del bot de plataformagps' },
         'fx-messages': { title: 'Mensajes FX', subtitle: 'Historial de mensajes reenviados por sesiones FX' }
     };
     
@@ -612,13 +612,13 @@ function updateNetworkInfo() {
 function updateSessionsList() {
     const container = document.getElementById('sessionsList');
     
-    // Filtrar TODAS las sesiones GPSwox y FX de la lista (se muestran en sus secciones dedicadas)
+    // Filtrar TODAS las sesiones plataformagps y FX de la lista (se muestran en sus secciones dedicadas)
     // Usar filtrado dinámico en lugar de nombres hardcodeados
     const displaySessions = sessions.filter(s => 
         !s.name.startsWith('gpswox-') && !s.name.startsWith('fx-')
     );
     
-    // Actualizar sesiones dedicadas FX y GPSwox
+    // Actualizar sesiones dedicadas FX y plataformagps
     updateDedicatedFXSessions();
     updateDedicatedGPSwoxSessions();
     
@@ -948,7 +948,7 @@ function updateSessionsCount() {
 }
 
 function populateSessionSelects() {
-    // Filtrar sesiones listas Y excluir TODAS las sesiones GPSwox/FX de envíos masivos
+    // Filtrar sesiones listas Y excluir TODAS las sesiones plataformagps/FX de envíos masivos
     const readySessions = sessions.filter(s => s.state === 'READY');
     const readySessionsForMessaging = readySessions.filter(s => 
         !s.name.startsWith('gpswox-') && !s.name.startsWith('fx-')
@@ -2526,17 +2526,17 @@ async function loadOpenAIBalance() {
         balanceDiv.className = 'bg-red-50 border border-red-200 rounded-lg p-3 mb-4';
     }
 }
-    // ======================== GPSWOX MULTI-SESSION MANAGEMENT ========================
+    // ======================== plataformagps MULTI-SESSION MANAGEMENT ========================
 
     const gpswoxQRIntervals = {};
     const gpswoxStatusIntervals = {};
     
-    // Obtener dinámicamente los nombres de sesiones GPSwox
+    // Obtener dinámicamente los nombres de sesiones plataformagps
     function getGPSwoxSessionNames() {
         return sessions.filter(s => s.name.startsWith('gpswox-')).map(s => s.name);
     }
 
-    // Actualiza el estado visual de una tarjeta GPSwox
+    // Actualiza el estado visual de una tarjeta plataformagps
     function updateGPSwoxCardUI(name, state, phoneNumber) {
         const badge = document.getElementById(`badge-${name}`);
         const qrContainer = document.getElementById(`qr-container-${name}`);
@@ -2583,7 +2583,7 @@ async function loadOpenAIBalance() {
         }
     }
 
-    // Carga el estado actual de todas las sesiones GPSwox
+    // Carga el estado actual de todas las sesiones plataformagps
     async function loadGPSwoxSessions() {
         const gpswoxNames = getGPSwoxSessionNames();
         for (const name of gpswoxNames) {
@@ -2638,7 +2638,7 @@ async function loadOpenAIBalance() {
         }
     }
 
-    // Crear una sesión GPSwox específica por nombre
+    // Crear una sesión plataformagps específica por nombre
     async function createGPSwoxByName(name) {
         const btn = document.getElementById(`create-btn-${name}`);
         if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Creando...'; }
@@ -2852,13 +2852,13 @@ async function loadOpenAIBalance() {
     // Inicializar al cargar
     loadFXSessions();
 
-// ======================== MENSAJES GPSWOX ========================
+// ======================== MENSAJES plataformagps ========================
 
 // Configuración
 const GPSWOX_MESSAGES_LIMIT = 200;
 
 /**
- * Carga los mensajes de GPSwox desde la base de datos
+ * Carga los mensajes de plataformagps desde la base de datos
  */
 async function loadGPSwoxMessages() {
     try {
@@ -2877,13 +2877,13 @@ async function loadGPSwoxMessages() {
             showToast('Error cargando mensajes: ' + data.error, 'error');
         }
     } catch (error) {
-        console.error('Error loading GPSwox messages:', error);
-        showToast('Error cargando mensajes de la plataforma GPS', 'error');
+        console.error('Error loading plataformagps messages:', error);
+        showToast('Error cargando mensajes de plataformagps', 'error');
     }
 }
 
 /**
- * Muestra los mensajes de GPSwox en la tabla
+ * Muestra los mensajes de plataformagps en la tabla
  */
 function displayGPSwoxMessages(messages) {
     const tbody = document.getElementById('gpswoxMessagesTable');
@@ -2942,7 +2942,7 @@ function getStateBadge(state) {
 }
 
 /**
- * Carga las estadísticas de mensajes GPSwox
+ * Carga las estadísticas de mensajes plataformagps
  */
 async function loadGPSwoxStats() {
     try {
@@ -2956,7 +2956,7 @@ async function loadGPSwoxStats() {
             document.getElementById('gpswoxErrors').textContent = data.stats.errors || 0;
         }
     } catch (error) {
-        console.error('Error loading GPSwox stats:', error);
+        console.error('Error loading plataformagps stats:', error);
     }
 }
 
@@ -3065,17 +3065,53 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ======================== OPERATIVIDAD GPSWOX ========================
+// ======================== OPERATIVIDAD plataformagps ========================
 let operationalSites = [];
 let operationalStatuses = [];
 let editingOperationalResponsibleId = null;
+let editingDocumentExpirationId = null;
+const operationalPaging = {
+    vehicles: { page: 1, limit: 10 },
+    report: { page: 1, limit: 10 },
+    followups: { page: 1, limit: 10 },
+    documents: { page: 1, limit: 10 }
+};
+
+const documentTypeLabels = {
+    soat: 'SOAT',
+    tecnomecanica: 'Tecnomecanica',
+    poliza: 'Poliza',
+    extintor: 'Extintor',
+    cambio_aceite: 'Cambio aceite'
+};
 
 async function loadOperational() {
     await Promise.all([
         loadOperationalCatalogs(),
         loadOperationalVehicles(),
-        loadOperationalReport()
+        loadOperationalReport(),
+        loadOperationalFollowups(),
+        loadDocumentExpirations()
     ]);
+}
+
+function showOperationalTab(tab) {
+    const mainPanel = document.getElementById('operational-panel-main');
+    const documentsPanel = document.getElementById('operational-panel-documents');
+    const mainTab = document.getElementById('operational-tab-main');
+    const documentsTab = document.getElementById('operational-tab-documents');
+    if (!mainPanel || !documentsPanel || !mainTab || !documentsTab) return;
+
+    const showDocuments = tab === 'documents';
+    mainPanel.classList.toggle('hidden', showDocuments);
+    documentsPanel.classList.toggle('hidden', !showDocuments);
+    mainTab.className = showDocuments
+        ? 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-600 hover:text-purple-700'
+        : 'px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700';
+    documentsTab.className = showDocuments
+        ? 'px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700'
+        : 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-600 hover:text-purple-700';
+    if (showDocuments) loadDocumentExpirations();
 }
 
 async function loadOperationalCatalogs() {
@@ -3125,14 +3161,17 @@ function renderOperationalCatalogs() {
                     <span>${escapeHtml(resp.name)} - ${escapeHtml(resp.phone_number)}</span>
                     <span class="flex gap-2">
                         <button onclick="editOperationalResponsible(${resp.id})" class="text-blue-600 hover:underline">Editar</button>
-                        <button onclick="deactivateOperationalResponsible(${resp.id})" class="text-red-600 hover:underline">Baja</button>
+                        <button onclick="deactivateOperationalResponsible(${resp.id})" class="text-red-600 hover:underline">Eliminar</button>
                     </span>
                 </div>
             `)
             .join('');
         return `
             <div class="border rounded-lg px-3 py-2">
-                <div class="font-medium">${escapeHtml(site.name)}</div>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="font-medium">${escapeHtml(site.name)}</div>
+                    <button onclick="deactivateOperationalSite(${site.id})" class="text-xs text-red-600 hover:underline">Eliminar</button>
+                </div>
                 ${responsibles || '<div class="text-xs text-gray-400">Sin responsable activo</div>'}
             </div>
         `;
@@ -3144,13 +3183,21 @@ async function loadOperationalVehicles() {
     if (!tbody) return;
     try {
         const onlyNonOperational = document.getElementById('operationalOnlyNonOperational')?.checked !== false;
-        const response = await fetch(`${API_URL}/api/operational/vehicles?onlyNonOperational=${onlyNonOperational}`);
+        const paging = operationalPaging.vehicles;
+        const params = new URLSearchParams({
+            onlyNonOperational,
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        const response = await fetch(`${API_URL}/api/operational/vehicles?${params}`);
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error cargando vehiculos');
 
         const vehicles = data.vehicles || [];
         if (vehicles.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">No hay vehiculos registrados</td></tr>';
+            renderOperationalPagination('vehicles', data.pagination, loadOperationalVehicles);
             return;
         }
 
@@ -3164,10 +3211,11 @@ async function loadOperationalVehicles() {
                 <td class="px-3 py-2 text-xs text-gray-700">${escapeHtml(vehicle.last_observation || '')}</td>
                 <td class="px-3 py-2 text-xs text-center">
                     <button onclick="setOperationalVehicleOperative(${vehicle.id})" class="bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200">Operativo</button>
-                    <button onclick="deactivateOperationalVehicle(${vehicle.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Baja</button>
+                    <button onclick="deactivateOperationalVehicle(${vehicle.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Eliminar</button>
                 </td>
             </tr>
         `).join('');
+        renderOperationalPagination('vehicles', data.pagination, loadOperationalVehicles);
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
@@ -3177,18 +3225,25 @@ async function loadOperationalReport() {
     const tbody = document.getElementById('operationalReportTable');
     if (!tbody) return;
     try {
-        const response = await fetch(`${API_URL}/api/operational/report`);
+        const paging = operationalPaging.report;
+        const params = new URLSearchParams({
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        const response = await fetch(`${API_URL}/api/operational/report?${params}`);
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error cargando historial');
 
         const rows = data.report || [];
         if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-500">Sin historial</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">Sin historial</td></tr>';
+            renderOperationalPagination('report', data.pagination, loadOperationalReport);
             return;
         }
 
-        tbody.innerHTML = rows.slice(0, 100).map(row => {
-            const date = row.changed_at ? new Date(row.changed_at).toLocaleString('es-CO') : '';
+        tbody.innerHTML = rows.map(row => {
+            const date = row.changed_at_co || '';
             const change = `${row.old_status || '-'} -> ${row.new_status || '-'}`;
             return `
                 <tr class="hover:bg-gray-50 border-b">
@@ -3196,12 +3251,182 @@ async function loadOperationalReport() {
                     <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate)}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(change)}</td>
                     <td class="px-3 py-2 text-xs text-gray-700">${escapeHtml(row.observation || '')}</td>
+                    <td class="px-3 py-2 text-xs text-center">
+                        <button onclick="deleteOperationalHistory(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200">Eliminar</button>
+                    </td>
                 </tr>
             `;
         }).join('');
+        renderOperationalPagination('report', data.pagination, loadOperationalReport);
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
+}
+
+async function loadOperationalFollowups() {
+    const tbody = document.getElementById('operationalFollowupsTable');
+    if (!tbody) return;
+    try {
+        const paging = operationalPaging.followups;
+        const params = new URLSearchParams({
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        const response = await fetch(`${API_URL}/api/operational/followups?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando respuestas');
+
+        const rows = data.followups || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-6 text-gray-500">Sin seguimientos enviados hoy</td></tr>';
+            renderOperationalPagination('followups', data.pagination, loadOperationalFollowups);
+            return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+            const followupDate = row.followup_date_co || '';
+            const sentAt = row.sent_at_co || '';
+            const answeredAt = row.response_at_co || '-';
+            const isPending = row.response_status === 'Pendiente';
+            const badge = isPending
+                ? 'bg-red-100 text-red-800'
+                : (row.response_status === 'Cancelado' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-800');
+            const typeBadge = row.send_type === 'manual'
+                ? 'bg-blue-100 text-blue-800'
+                : 'bg-slate-100 text-slate-800';
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs">${escapeHtml(followupDate)}</td>
+                    <td class="px-3 py-2 text-xs">
+                        <span class="${typeBadge} px-2 py-1 rounded">${escapeHtml(row.send_type_label || row.send_type || '')}</span>
+                    </td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '')}</td>
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.responsible_name || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.phone_number || '')}</td>
+                    <td class="px-3 py-2 text-xs">
+                        <span class="${badge} px-2 py-1 rounded">${escapeHtml(row.response_status)}</span>
+                    </td>
+                    <td class="px-3 py-2 text-xs">${row.answered_count || 0}/${row.vehicle_count || 0}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(sentAt)}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(answeredAt)}</td>
+                    <td class="px-3 py-2 text-xs text-center">
+                        <button onclick="deleteOperationalFollowup(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        renderOperationalPagination('followups', data.pagination, loadOperationalFollowups);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function loadDocumentExpirations() {
+    const tbody = document.getElementById('documentExpirationsTable');
+    if (!tbody) return;
+    try {
+        const paging = operationalPaging.documents;
+        const search = document.getElementById('documentSearch')?.value.trim() || '';
+        const params = new URLSearchParams({
+            paginate: 'true',
+            page: paging.page,
+            limit: paging.limit
+        });
+        if (search) params.set('search', search);
+
+        const response = await fetch(`${API_URL}/api/operational/document-expirations?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando vencimientos');
+
+        const rows = data.documents || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-500">Sin vencimientos registrados</td></tr>';
+            renderOperationalPagination('documents', data.pagination, loadDocumentExpirations);
+            return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+            const days = Number(row.days_remaining);
+            const daysClass = days < 0
+                ? 'bg-red-100 text-red-800'
+                : (days <= 30 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800');
+            const daysText = days < 0 ? `Vencido ${Math.abs(days)} dias` : `${days} dias`;
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(documentTypeLabels[row.document_type] || row.document_type || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.expiry_date_co || '')}</td>
+                    <td class="px-3 py-2 text-xs"><span class="${daysClass} px-2 py-1 rounded">${escapeHtml(daysText)}</span></td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.last_change_date_co || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.last_change_km || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.next_change_km || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.observation || '')}</td>
+                    <td class="px-3 py-2 text-xs text-center">
+                        <button onclick="editDocumentExpiration(${row.id}, '${escapeHtml(row.plate || '')}', '${escapeHtml(row.document_type || '')}', '${String(row.expiry_date || '').slice(0, 10)}', '${String(row.last_change_date || '').slice(0, 10)}', '${escapeHtml(row.last_change_km || '')}', '${escapeHtml(row.next_change_km || '')}', '${escapeHtml(row.observation || '').replace(/'/g, '&#39;')}')" class="bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200">Editar</button>
+                        <button onclick="deleteDocumentExpiration(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        renderOperationalPagination('documents', data.pagination, loadDocumentExpirations);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+function renderOperationalPagination(key, pagination, reloadFn) {
+    const tableIds = {
+        vehicles: 'operationalVehiclesTable',
+        report: 'operationalReportTable',
+        followups: 'operationalFollowupsTable',
+        documents: 'documentExpirationsTable'
+    };
+    const tbody = document.getElementById(tableIds[key]);
+    if (!tbody || !pagination) return;
+
+    const tableWrapper = tbody.closest('.overflow-x-auto');
+    if (!tableWrapper) return;
+
+    let container = document.getElementById(`pagination-${key}`);
+    if (!container) {
+        container = document.createElement('div');
+        container.id = `pagination-${key}`;
+        container.className = 'flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-gray-600';
+        tableWrapper.insertAdjacentElement('afterend', container);
+    }
+
+    const start = pagination.total === 0 ? 0 : ((pagination.page - 1) * pagination.limit) + 1;
+    const end = Math.min(pagination.page * pagination.limit, pagination.total);
+    container.innerHTML = `
+        <div>${start}-${end} de ${pagination.total}</div>
+        <div class="flex items-center gap-2">
+            <select class="border rounded px-2 py-1 bg-white" data-page-size="${key}">
+                ${[10, 25, 50, 100].map(size => `<option value="${size}" ${pagination.limit === size ? 'selected' : ''}>${size}</option>`).join('')}
+            </select>
+            <button class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-page-prev="${key}" ${pagination.hasPrev ? '' : 'disabled'}>Anterior</button>
+            <span>Pagina ${pagination.page} de ${pagination.totalPages}</span>
+            <button class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-page-next="${key}" ${pagination.hasNext ? '' : 'disabled'}>Siguiente</button>
+        </div>
+    `;
+
+    container.querySelector(`[data-page-size="${key}"]`).onchange = (event) => {
+        operationalPaging[key].limit = Number(event.target.value);
+        operationalPaging[key].page = 1;
+        reloadFn();
+    };
+    container.querySelector(`[data-page-prev="${key}"]`).onclick = () => {
+        if (operationalPaging[key].page > 1) {
+            operationalPaging[key].page -= 1;
+            reloadFn();
+        }
+    };
+    container.querySelector(`[data-page-next="${key}"]`).onclick = () => {
+        if (pagination.hasNext) {
+            operationalPaging[key].page += 1;
+            reloadFn();
+        }
+    };
 }
 
 async function saveOperationalVehicle() {
@@ -3248,6 +3473,19 @@ async function saveOperationalSite() {
         if (!data.success) throw new Error(data.error || 'Error guardando sede');
         document.getElementById('operationalNewSite').value = '';
         showToast('Sede guardada', 'success');
+        await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deactivateOperationalSite(siteId) {
+    if (!confirm('Eliminar esta sede? No se borran los historiales ya creados.')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/sites/${siteId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando sede');
+        showToast('Sede eliminada', 'success');
         await loadOperationalCatalogs();
     } catch (error) {
         showToast(`Error: ${error.message}`, 'error');
@@ -3326,12 +3564,12 @@ async function setOperationalVehicleOperative(vehicleId) {
 }
 
 async function deactivateOperationalVehicle(vehicleId) {
-    if (!confirm('Desactivar este vehiculo del seguimiento?')) return;
+    if (!confirm('Eliminar este vehiculo del seguimiento?')) return;
     try {
         const response = await fetch(`${API_URL}/api/operational/vehicles/${vehicleId}`, { method: 'DELETE' });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error desactivando vehiculo');
-        showToast('Vehiculo desactivado', 'success');
+        showToast('Vehiculo eliminado', 'success');
         await loadOperationalVehicles();
     } catch (error) {
         showToast(`Error: ${error.message}`, 'error');
@@ -3339,13 +3577,164 @@ async function deactivateOperationalVehicle(vehicleId) {
 }
 
 async function deactivateOperationalResponsible(responsibleId) {
-    if (!confirm('Desactivar este responsable?')) return;
+    if (!confirm('Eliminar este responsable?')) return;
     try {
         const response = await fetch(`${API_URL}/api/operational/responsibles/${responsibleId}`, { method: 'DELETE' });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error desactivando responsable');
-        showToast('Responsable desactivado', 'success');
+        showToast('Responsable eliminado', 'success');
         await loadOperationalCatalogs();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteOperationalHistory(historyId) {
+    if (!confirm('Eliminar este registro del historial?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/report/${historyId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando historial');
+        showToast('Registro de historial eliminado', 'success');
+        await loadOperationalReport();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteOperationalFollowup(followupId) {
+    if (!confirm('Eliminar este registro de seguimiento?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/followups/${followupId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando seguimiento');
+        showToast('Seguimiento eliminado', 'success');
+        await loadOperationalFollowups();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+function clearDocumentExpirationForm() {
+    editingDocumentExpirationId = null;
+    const ids = [
+        'documentPlate',
+        'documentExpiryDate',
+        'documentObservation',
+        'documentLastChangeDate',
+        'documentLastChangeKm',
+        'documentNextChangeKm'
+    ];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const type = document.getElementById('documentType');
+    if (type) type.value = 'soat';
+}
+
+function editDocumentExpiration(id, plate, documentType, expiryDate, lastChangeDate, lastChangeKm, nextChangeKm, observation) {
+    editingDocumentExpirationId = id;
+    document.getElementById('documentPlate').value = plate || '';
+    document.getElementById('documentType').value = documentType || 'soat';
+    document.getElementById('documentExpiryDate').value = expiryDate || '';
+    document.getElementById('documentLastChangeDate').value = lastChangeDate || '';
+    document.getElementById('documentLastChangeKm').value = lastChangeKm || '';
+    document.getElementById('documentNextChangeKm').value = nextChangeKm || '';
+    document.getElementById('documentObservation').value = observation || '';
+    showOperationalTab('documents');
+    showToast('Editando vencimiento seleccionado', 'info');
+}
+
+async function saveDocumentExpiration() {
+    try {
+        const plate = document.getElementById('documentPlate')?.value.trim();
+        const documentType = document.getElementById('documentType')?.value;
+        const expiryDate = document.getElementById('documentExpiryDate')?.value;
+        const lastChangeDate = document.getElementById('documentLastChangeDate')?.value;
+        const lastChangeKm = document.getElementById('documentLastChangeKm')?.value;
+        const nextChangeKm = document.getElementById('documentNextChangeKm')?.value;
+        const observation = document.getElementById('documentObservation')?.value.trim();
+        if (!plate || !documentType || !expiryDate) {
+            showToast('Placa, documento y fecha de vencimiento son requeridos', 'warning');
+            return;
+        }
+
+        const url = editingDocumentExpirationId
+            ? `${API_URL}/api/operational/document-expirations/${editingDocumentExpirationId}`
+            : `${API_URL}/api/operational/document-expirations`;
+        const response = await fetch(url, {
+            method: editingDocumentExpirationId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                plate,
+                documentType,
+                expiryDate,
+                lastChangeDate: lastChangeDate || null,
+                lastChangeKm: lastChangeKm || null,
+                nextChangeKm: nextChangeKm || null,
+                observation
+            })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error guardando vencimiento');
+
+        clearDocumentExpirationForm();
+        showToast('Vencimiento guardado', 'success');
+        await loadDocumentExpirations();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteDocumentExpiration(id) {
+    if (!confirm('Eliminar este vencimiento?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/document-expirations/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando vencimiento');
+        showToast('Vencimiento eliminado', 'success');
+        await loadDocumentExpirations();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function downloadDocumentExpirationsReport() {
+    try {
+        const response = await fetch(`${API_URL}/api/operational/document-expirations`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error descargando vencimientos');
+        const rows = (data.documents || []).map(row => ({
+            Placa: row.plate || '',
+            Documento: documentTypeLabels[row.document_type] || row.document_type || '',
+            Vencimiento: row.expiry_date_co || '',
+            'Dias faltantes': row.days_remaining,
+            'Fecha ultimo cambio aceite': row.last_change_date_co || '',
+            'Km ultimo cambio aceite': row.last_change_km || '',
+            'Km proximo cambio aceite': row.next_change_km || '',
+            Observacion: row.observation || ''
+        }));
+
+        if (typeof XLSX !== 'undefined') {
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Vencimientos');
+            XLSX.writeFile(workbook, `vencimientos-documentos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+            return;
+        }
+
+        const csvRows = [
+            Object.keys(rows[0] || { Placa: '', Documento: '', Vencimiento: '', 'Dias faltantes': '', Observacion: '' }),
+            ...rows.map(row => Object.values(row))
+        ];
+        const csv = csvRows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `vencimientos-documentos-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
     } catch (error) {
         showToast(`Error: ${error.message}`, 'error');
     }
@@ -3365,12 +3754,20 @@ async function sendOperationalDaily() {
 
 async function downloadOperationalReport() {
     try {
-        const response = await fetch(`${API_URL}/api/operational/report`);
-        const data = await response.json();
+        const [historyResponse, followupsResponse, documentsResponse] = await Promise.all([
+            fetch(`${API_URL}/api/operational/report`),
+            fetch(`${API_URL}/api/operational/followups?date=all`),
+            fetch(`${API_URL}/api/operational/document-expirations`)
+        ]);
+        const data = await historyResponse.json();
+        const followupsData = await followupsResponse.json();
+        const documentsData = await documentsResponse.json();
         if (!data.success) throw new Error(data.error || 'Error descargando reporte');
+        if (!followupsData.success) throw new Error(followupsData.error || 'Error descargando seguimientos');
+        if (!documentsData.success) throw new Error(documentsData.error || 'Error descargando vencimientos');
 
         const rows = (data.report || []).map(row => ({
-            Fecha: row.changed_at ? new Date(row.changed_at).toLocaleString('es-CO') : '',
+            'Fecha GMT-5': row.changed_at_co || '',
             Sede: row.site_name || '',
             Placa: row.plate || '',
             'Estado anterior': row.old_status || '',
@@ -3380,16 +3777,42 @@ async function downloadOperationalReport() {
             Telefono: row.changed_by_phone || ''
         }));
 
+        const followupRows = (followupsData.followups || []).map(row => ({
+            Fecha: row.followup_date_co || '',
+            Tipo: row.send_type_label || row.send_type || '',
+            Sede: row.site_name || '',
+            Responsable: row.responsible_name || '',
+            Telefono: row.phone_number || '',
+            Respuesta: row.response_status || '',
+            Vehiculos: `${row.answered_count || 0}/${row.vehicle_count || 0}`,
+            'Ejecucion GMT-5': row.sent_at_co || '',
+            'Hora respuesta GMT-5': row.response_at_co || ''
+        }));
+
+        const documentRows = (documentsData.documents || []).map(row => ({
+            Placa: row.plate || '',
+            Documento: documentTypeLabels[row.document_type] || row.document_type || '',
+            Vencimiento: row.expiry_date_co || '',
+            'Dias faltantes': row.days_remaining,
+            'Fecha ultimo cambio aceite': row.last_change_date_co || '',
+            'Km ultimo cambio aceite': row.last_change_km || '',
+            'Km proximo cambio aceite': row.next_change_km || '',
+            Observacion: row.observation || ''
+        }));
+
         if (typeof XLSX !== 'undefined') {
             const worksheet = XLSX.utils.json_to_sheet(rows);
+            const followupWorksheet = XLSX.utils.json_to_sheet(followupRows);
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Operatividad');
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial');
+            XLSX.utils.book_append_sheet(workbook, followupWorksheet, 'Seguimientos');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(documentRows), 'Vencimientos');
             XLSX.writeFile(workbook, `reporte-operatividad-${new Date().toISOString().slice(0, 10)}.xlsx`);
             return;
         }
 
         const csvRows = [
-            Object.keys(rows[0] || { Fecha: '', Sede: '', Placa: '', 'Estado anterior': '', 'Estado nuevo': '', Observacion: '', Origen: '', Telefono: '' }),
+            Object.keys(rows[0] || { 'Fecha GMT-5': '', Sede: '', Placa: '', 'Estado anterior': '', 'Estado nuevo': '', Observacion: '', Origen: '', Telefono: '' }),
             ...rows.map(row => Object.values(row))
         ];
         const csv = csvRows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');

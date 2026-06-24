@@ -107,7 +107,7 @@
                     </li>
                     <li>
                         <button id="nav-gpswox-messages" onclick="showSection('gpswox-messages')" class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">
-                            <span>📋</span><span>Mensajes Plataforma GPS</span>
+                            <span>📋</span><span>Mensajes plataformagps</span>
                         </button>
                     </li>
                     <li>
@@ -289,10 +289,10 @@
                     <p id="createSessionStatus" class="mt-2 text-sm"></p>
                 </div>
 
-                <!-- SESIONES GPSWOX DEDICADAS -->
+                <!-- SESIONES plataformagps DEDICADAS -->
                 <div class="mb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-purple-900">🚗 Sesiones Plataforma GPS (Registro de Vehículos)</h3>
+                        <h3 class="text-lg font-semibold text-purple-900">🚗 Sesiones plataformagps (Registro de Vehículos)</h3>
                     </div>
                     <p class="text-sm text-gray-700 mb-3">
                         Sesiones dedicadas exclusivamente para recibir solicitudes de registro de vehículos. 
@@ -302,7 +302,7 @@
                         <!-- Tarjeta 1: gpswox-session -->
                         <div id="gpswox-card-gpswox-session" class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200">
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-md font-semibold text-purple-900">🚗 Plataforma GPS 1</h4>
+                                <h4 class="text-md font-semibold text-purple-900">🚗 plataformagps 1</h4>
                                 <span id="badge-gpswox-session" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactiva</span>
                             </div>
                             <div id="info-gpswox-session" class="bg-white rounded-lg p-2 text-xs text-gray-600 space-y-1 mb-3">
@@ -331,7 +331,7 @@
                         <!-- Tarjeta 2: gpswox-session-2 -->
                         <div id="gpswox-card-gpswox-session-2" class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200">
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-md font-semibold text-purple-900">🚗 Plataforma GPS 2</h4>
+                                <h4 class="text-md font-semibold text-purple-900">🚗 plataformagps 2</h4>
                                 <span id="badge-gpswox-session-2" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactiva</span>
                             </div>
                             <div id="info-gpswox-session-2" class="bg-white rounded-lg p-2 text-xs text-gray-600 space-y-1 mb-3">
@@ -360,7 +360,7 @@
                         <!-- Tarjeta 3: gpswox-session-3 -->
                         <div id="gpswox-card-gpswox-session-3" class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow p-5 border-2 border-purple-200">
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-md font-semibold text-purple-900">🚗 Plataforma GPS 3</h4>
+                                <h4 class="text-md font-semibold text-purple-900">🚗 plataformagps 3</h4>
                                 <span id="badge-gpswox-session-3" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactiva</span>
                             </div>
                             <div id="info-gpswox-session-3" class="bg-white rounded-lg p-2 text-xs text-gray-600 space-y-1 mb-3">
@@ -1548,6 +1548,16 @@
                         </div>
                     </div>
 
+                    <div class="flex flex-wrap gap-2 mb-6 border-b">
+                        <button id="operational-tab-main" onclick="showOperationalTab('main')" class="px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700">
+                            Operatividad
+                        </button>
+                        <button id="operational-tab-documents" onclick="showOperationalTab('documents')" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-600 hover:text-purple-700">
+                            Vencimientos documentos
+                        </button>
+                    </div>
+
+                    <div id="operational-panel-main">
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div class="border rounded-lg p-4">
                             <h3 class="font-semibold mb-3">Agregar vehiculo</h3>
@@ -1556,7 +1566,7 @@
                                 <select id="operationalSiteSelect" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
                                 <select id="operationalStatusSelect" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
                                 <textarea id="operationalObservation" class="w-full border rounded-lg px-3 py-2 text-sm" rows="3" placeholder="Observacion"></textarea>
-                                <button onclick="saveOperationalVehicle()" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 text-sm">Validar en plataforma GPS</button>
+                                <button onclick="saveOperationalVehicle()" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 text-sm">Validar y guardar</button>
                             </div>
                         </div>
 
@@ -1620,25 +1630,131 @@
                                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
                                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Cambio</th>
                                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Obs</th>
+                                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody id="operationalReportTable">
-                                        <tr><td colspan="4" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                                        <tr><td colspan="5" class="text-center py-6 text-gray-500">Cargando...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
+
+                    <div class="mt-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-semibold">Respuestas seguimiento 8 a. m.</h3>
+                            <button onclick="loadOperationalFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
+                                Actualizar respuestas
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto border rounded-lg">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Tipo</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Sede</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Responsable</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Telefono</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Respuesta</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Vehiculos</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Ejecucion (GMT-5)</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Hora respuesta (GMT-5)</th>
+                                        <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="operationalFollowupsTable">
+                                    <tr><td colspan="10" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    </div>
+
+                    <div id="operational-panel-documents" class="hidden space-y-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 border rounded-lg p-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Placa</label>
+                                <input id="documentPlate" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="ABC123">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Documento</label>
+                                <select id="documentType" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                    <option value="soat">SOAT</option>
+                                    <option value="tecnomecanica">Tecnomecanica</option>
+                                    <option value="poliza">Poliza</option>
+                                    <option value="extintor">Extintor</option>
+                                    <option value="cambio_aceite">Cambio aceite</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Fecha vencimiento</label>
+                                <input id="documentExpiryDate" type="date" class="w-full border rounded-lg px-3 py-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Observacion</label>
+                                <input id="documentObservation" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Opcional">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Fecha ultimo cambio aceite</label>
+                                <input id="documentLastChangeDate" type="date" class="w-full border rounded-lg px-3 py-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Km ultimo cambio</label>
+                                <input id="documentLastChangeKm" type="number" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="53901">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Km proximo cambio</label>
+                                <input id="documentNextChangeKm" type="number" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="55901">
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <button onclick="saveDocumentExpiration()" class="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm">Guardar</button>
+                                <button onclick="clearDocumentExpirationForm()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 text-sm">Limpiar</button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex gap-2">
+                                <input id="documentSearch" class="border rounded-lg px-3 py-2 text-sm" placeholder="Buscar placa o documento">
+                                <button onclick="loadDocumentExpirations()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm">Consultar</button>
+                            </div>
+                            <button onclick="downloadDocumentExpirationsReport()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">
+                                Exportar Excel
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto border rounded-lg">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Documento</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Vencimiento</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Dias faltantes</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Ultimo aceite</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Km ultimo</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Km proximo</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Observacion</th>
+                                        <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="documentExpirationsTable">
+                                    <tr><td colspan="9" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <!-- ======================== SECCIÓN: MENSAJES GPSWOX ======================== -->
+            <!-- ======================== SECCIÓN: MENSAJES plataformagps ======================== -->
             <section id="section-gpswox-messages" class="section-content space-y-6">
                 <div class="bg-white rounded-lg shadow-sm p-6">
                     <div class="flex items-center justify-between mb-6">
                         <div>
-                            <h2 class="text-xl font-semibold">📋 Mensajes Plataforma GPS</h2>
-                            <p class="text-sm text-gray-600">Historial de conversaciones del bot de la plataforma GPS</p>
+                            <h2 class="text-xl font-semibold">📋 Mensajes plataformagps</h2>
+                            <p class="text-sm text-gray-600">Historial de conversaciones del bot de plataformagps</p>
                         </div>
                         <div class="flex gap-2">
                             <input type="text" id="gpswoxPhoneFilter" placeholder="Filtrar por teléfono..." class="border rounded-lg px-3 py-2 text-sm">
