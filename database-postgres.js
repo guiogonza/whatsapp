@@ -306,8 +306,9 @@ async function createTables() {
             CREATE TABLE IF NOT EXISTS operational_document_expirations (
                 id SERIAL PRIMARY KEY,
                 plate VARCHAR(30) NOT NULL,
+                site_name VARCHAR(120),
                 document_type VARCHAR(40) NOT NULL,
-                expiry_date DATE NOT NULL,
+                expiry_date DATE,
                 last_change_date DATE,
                 last_change_km INTEGER,
                 next_change_km INTEGER,
@@ -327,6 +328,16 @@ async function createTables() {
             CREATE INDEX IF NOT EXISTS idx_operational_history_vehicle ON operational_vehicle_history(vehicle_id, changed_at DESC);
             CREATE INDEX IF NOT EXISTS idx_operational_documents_plate ON operational_document_expirations(plate);
             CREATE INDEX IF NOT EXISTS idx_operational_documents_expiry ON operational_document_expirations(expiry_date);
+            CREATE INDEX IF NOT EXISTS idx_operational_documents_site ON operational_document_expirations(site_name);
+        `);
+
+        await client.query(`
+            ALTER TABLE operational_document_expirations
+            ADD COLUMN IF NOT EXISTS site_name VARCHAR(120)
+        `);
+        await client.query(`
+            ALTER TABLE operational_document_expirations
+            ALTER COLUMN expiry_date DROP NOT NULL
         `);
 
         await client.query(`

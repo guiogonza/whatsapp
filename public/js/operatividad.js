@@ -42,6 +42,7 @@ const operationalSortableTables = {
     documentExpirationsTable: [
         { type: 'text' },
         { type: 'text' },
+        { type: 'text' },
         { type: 'date' },
         { type: 'number' },
         { type: 'date' },
@@ -552,20 +553,24 @@ async function loadDocumentExpirations() {
 
         const rows = data.documents || [];
         if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-500">Sin vencimientos registrados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-6 text-gray-500">Sin vencimientos registrados</td></tr>';
             renderPagination('documents', data.pagination, loadDocumentExpirations);
             return;
         }
 
         tbody.innerHTML = rows.map(row => {
             const days = Number(row.days_remaining);
-            const daysClass = days < 0
+            const hasDays = Number.isFinite(days);
+            const daysClass = !hasDays
+                ? 'bg-gray-100 text-gray-700'
+                : (days < 0
                 ? 'bg-red-100 text-red-800'
-                : (days <= 30 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800');
-            const daysText = days < 0 ? `Vencido ${Math.abs(days)} dias` : `${days} dias`;
+                : (days <= 30 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'));
+            const daysText = !hasDays ? '-' : (days < 0 ? `Vencido ${Math.abs(days)} dias` : `${days} dias`);
             return `
                 <tr class="hover:bg-gray-50 border-b">
                     <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '')}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(documentTypeLabels[row.document_type] || row.document_type || '')}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(row.expiry_date_co || '')}</td>
                     <td class="px-3 py-2 text-xs"><span class="${daysClass} px-2 py-1 rounded">${escapeHtml(daysText)}</span></td>
@@ -583,7 +588,7 @@ async function loadDocumentExpirations() {
         applyOperationalTableSort('documentExpirationsTable');
         renderPagination('documents', data.pagination, loadDocumentExpirations);
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
 }
 
