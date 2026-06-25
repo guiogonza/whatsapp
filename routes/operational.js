@@ -241,6 +241,15 @@ router.get('/followups', async (req, res) => {
     }
 });
 
+router.get('/followups/:id/items', async (req, res) => {
+    try {
+        const items = await operational.getFollowupItemsReport(req.params.id);
+        res.json({ success: true, items });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 router.delete('/followups/:id', async (req, res) => {
     try {
         const followup = await operational.deleteFollowup(req.params.id);

@@ -268,15 +268,75 @@ async function loadOperationalFollowups() {
                     <td class="px-3 py-2 text-xs">${row.answered_count || 0}/${row.vehicle_count || 0}</td>
                     <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(sentAt)}</td>
                     <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(answeredAt)}</td>
-                    <td class="px-3 py-2 text-xs text-center">
+                    <td class="px-3 py-2 text-xs text-center whitespace-nowrap">
+                        <button onclick="toggleFollowupItems(${row.id})" class="bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200">Ver detalle</button>
                         <button onclick="deleteOperationalFollowup(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200">Eliminar</button>
                     </td>
+                </tr>
+                <tr id="followup-items-${row.id}" class="hidden bg-slate-50">
+                    <td colspan="10" class="px-3 py-3 text-xs text-gray-600">Cargando detalle...</td>
                 </tr>
             `;
         }).join('');
         renderPagination('followups', data.pagination, loadOperationalFollowups);
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function toggleFollowupItems(followupId) {
+    const row = document.getElementById(`followup-items-${followupId}`);
+    if (!row) return;
+    if (!row.classList.contains('hidden')) {
+        row.classList.add('hidden');
+        return;
+    }
+
+    row.classList.remove('hidden');
+    const cell = row.querySelector('td');
+    try {
+        const response = await fetch(`${API_URL}/api/operational/followups/${followupId}/items`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando detalle');
+        const items = data.items || [];
+        if (items.length === 0) {
+            cell.innerHTML = '<div class="text-gray-500">Este seguimiento no tiene placas asociadas.</div>';
+            return;
+        }
+
+        cell.innerHTML = `
+            <div class="font-semibold mb-2">Historial de respuestas del seguimiento</div>
+            <div class="overflow-x-auto border rounded bg-white">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-2 py-2 text-left border-b">#</th>
+                            <th class="px-2 py-2 text-left border-b">Placa</th>
+                            <th class="px-2 py-2 text-left border-b">Estado anterior</th>
+                            <th class="px-2 py-2 text-left border-b">Estado actual</th>
+                            <th class="px-2 py-2 text-left border-b">Respuesta</th>
+                            <th class="px-2 py-2 text-left border-b">Observacion</th>
+                            <th class="px-2 py-2 text-left border-b">Hora respuesta</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map(item => `
+                            <tr class="border-b">
+                                <td class="px-2 py-2">${item.item_number}</td>
+                                <td class="px-2 py-2 font-medium">${escapeHtml(item.plate || '')}</td>
+                                <td class="px-2 py-2">${escapeHtml(item.previous_status_name || '-')}</td>
+                                <td class="px-2 py-2">${escapeHtml(item.current_status_name || '-')}</td>
+                                <td class="px-2 py-2">${escapeHtml(item.response_text || item.response_status || 'Pendiente')}</td>
+                                <td class="px-2 py-2">${escapeHtml(item.observation || '')}</td>
+                                <td class="px-2 py-2">${escapeHtml(item.answered_at_co || '-')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        cell.innerHTML = `<div class="text-red-600">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
