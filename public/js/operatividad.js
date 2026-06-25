@@ -52,7 +52,24 @@ function setFollowupDateFilter(value) {
     operationalPaging.followups.page = 1;
     const input = document.getElementById('followupDateFilter');
     if (input) input.value = followupDateFilter === 'all' ? '' : followupDateFilter;
+    updateFollowupFilterUI();
     loadOperationalFollowups();
+}
+
+function loadAllOperationalFollowups() {
+    setFollowupDateFilter('all');
+}
+
+function updateFollowupFilterUI() {
+    const allBtn = document.getElementById('followupAllBtn');
+    if (!allBtn) return;
+    if (followupDateFilter === 'all') {
+        allBtn.className = 'bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 text-sm';
+        allBtn.textContent = 'Todos activos';
+    } else {
+        allBtn.className = 'bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm';
+        allBtn.textContent = 'Todos';
+    }
 }
 
 function escapeHtml(text) {
@@ -237,6 +254,7 @@ async function loadOperationalReport() {
 async function loadOperationalFollowups() {
     const tbody = document.getElementById('operationalFollowupsTable');
     try {
+        updateFollowupFilterUI();
         const paging = operationalPaging.followups;
         const params = new URLSearchParams({
             paginate: 'true',

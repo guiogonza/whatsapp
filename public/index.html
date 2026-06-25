@@ -1646,7 +1646,7 @@
                             <h3 class="font-semibold">Respuestas seguimiento 8 a. m.</h3>
                             <div class="flex flex-wrap items-center gap-2">
                                 <input id="followupDateFilter" type="date" class="border rounded-lg px-3 py-2 text-sm" onchange="setFollowupDateFilter(this.value)">
-                                <button onclick="setFollowupDateFilter('all')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
+                                <button id="followupAllBtn" onclick="loadAllOperationalFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
                                     Todos
                                 </button>
                                 <button onclick="loadOperationalFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
@@ -1906,7 +1906,7 @@
 
     <!-- Scripts externos -->
     <script src="js/auth.js?v=8"></script>
-    <script src="js/app.js?v=8"></script>
+    <script src="js/app.js?v=9"></script>
     <script src="js/analytics.js?v=9"></script>
     <script src="js/database.js?v=8"></script>
 </body>
