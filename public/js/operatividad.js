@@ -259,7 +259,8 @@ async function loadOperationalFollowups() {
         const params = new URLSearchParams({
             paginate: 'true',
             page: paging.page,
-            limit: paging.limit
+            limit: paging.limit,
+            date: followupDateFilter
         });
         const response = await fetch(`${API_URL}/api/operational/followups?${params}`);
         const data = await response.json();
