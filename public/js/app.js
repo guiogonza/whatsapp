@@ -3077,6 +3077,46 @@ const operationalPaging = {
     followups: { page: 1, limit: 10 },
     documents: { page: 1, limit: 10 }
 };
+const operationalSortState = {};
+const operationalSortableTables = {
+    operationalVehiclesTable: [
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'text' },
+        null
+    ],
+    operationalReportTable: [
+        { type: 'datetime' },
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'text' },
+        null
+    ],
+    operationalFollowupsTable: [
+        { type: 'date' },
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'fraction' },
+        { type: 'datetime' },
+        { type: 'datetime' },
+        null
+    ],
+    documentExpirationsTable: [
+        { type: 'text' },
+        { type: 'text' },
+        { type: 'date' },
+        { type: 'number' },
+        { type: 'date' },
+        { type: 'number' },
+        { type: 'number' },
+        { type: 'text' },
+        null
+    ]
+};
 
 const documentTypeLabels = {
     soat: 'SOAT',
@@ -3087,6 +3127,7 @@ const documentTypeLabels = {
 };
 
 async function loadOperational() {
+    setupOperationalTableSorting();
     const followupDateInput = document.getElementById('followupDateFilter');
     if (followupDateInput && !followupDateInput.value && followupDateFilter !== 'all') {
         followupDateInput.value = followupDateFilter;
@@ -3098,6 +3139,124 @@ async function loadOperational() {
         loadOperationalFollowups(),
         loadDocumentExpirations()
     ]);
+}
+
+function normalizeOperationalSortText(value) {
+    return String(value || '')
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+}
+
+function parseOperationalSortDate(value) {
+    const text = String(value || '').trim();
+    if (!text || text === '-') return 0;
+
+    const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (match) {
+        const [, day, month, year, hour = '0', minute = '0', second = '0'] = match;
+        return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)).getTime();
+    }
+
+    const timestamp = Date.parse(text);
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function getOperationalSortValue(row, columnIndex, type) {
+    const text = row.cells[columnIndex]?.innerText || '';
+    if (type === 'number') {
+        const value = Number(text.replace(/[^\d.-]/g, ''));
+        return Number.isNaN(value) ? -Infinity : value;
+    }
+    if (type === 'fraction') {
+        const match = text.match(/(\d+)\s*\/\s*(\d+)/);
+        if (!match) return 0;
+        return Number(match[1]) + (Number(match[2]) / 100000);
+    }
+    if (type === 'date' || type === 'datetime') return parseOperationalSortDate(text);
+    return normalizeOperationalSortText(text);
+}
+
+function compareOperationalSortValues(a, b) {
+    if (typeof a === 'number' && typeof b === 'number') return a - b;
+    return String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' });
+}
+
+function updateOperationalSortIndicators(tbodyId, columnIndex, direction) {
+    const tbody = document.getElementById(tbodyId);
+    const table = tbody?.closest('table');
+    if (!table) return;
+
+    table.querySelectorAll('thead th .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+    });
+
+    const th = table.querySelectorAll('thead th')[columnIndex];
+    const indicator = th?.querySelector('.sort-indicator');
+    if (indicator) indicator.textContent = direction === 'asc' ? ' ▲' : ' ▼';
+}
+
+function applyOperationalTableSort(tbodyId) {
+    const state = operationalSortState[tbodyId];
+    if (!state) return;
+
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+
+    const sortableRows = Array.from(tbody.children)
+        .filter(row => row.cells.length > state.columnIndex && !row.querySelector('td[colspan]'))
+        .map(row => ({
+            row,
+            detailRow: row.nextElementSibling?.id?.startsWith('followup-items-') ? row.nextElementSibling : null
+        }));
+
+    if (sortableRows.length < 2) {
+        updateOperationalSortIndicators(tbodyId, state.columnIndex, state.direction);
+        return;
+    }
+
+    sortableRows.sort((rowA, rowB) => {
+        const valueA = getOperationalSortValue(rowA.row, state.columnIndex, state.type);
+        const valueB = getOperationalSortValue(rowB.row, state.columnIndex, state.type);
+        const result = compareOperationalSortValues(valueA, valueB);
+        return state.direction === 'asc' ? result : -result;
+    });
+
+    sortableRows.forEach(({ row, detailRow }) => {
+        tbody.appendChild(row);
+        if (detailRow) tbody.appendChild(detailRow);
+    });
+    updateOperationalSortIndicators(tbodyId, state.columnIndex, state.direction);
+}
+
+function sortOperationalTable(tbodyId, columnIndex, type) {
+    const previous = operationalSortState[tbodyId];
+    const direction = previous?.columnIndex === columnIndex && previous.direction === 'asc' ? 'desc' : 'asc';
+    operationalSortState[tbodyId] = { columnIndex, direction, type };
+    applyOperationalTableSort(tbodyId);
+}
+
+function setupOperationalTableSorting() {
+    Object.entries(operationalSortableTables).forEach(([tbodyId, columns]) => {
+        const tbody = document.getElementById(tbodyId);
+        const table = tbody?.closest('table');
+        if (!table || table.dataset.sortableReady === 'true') return;
+
+        table.querySelectorAll('thead th').forEach((th, index) => {
+            const config = columns[index];
+            if (!config) return;
+
+            th.classList.add('cursor-pointer', 'select-none', 'hover:bg-gray-100');
+            th.title = 'Ordenar';
+            th.addEventListener('click', () => sortOperationalTable(tbodyId, index, config.type));
+            if (!th.querySelector('.sort-indicator')) {
+                th.insertAdjacentHTML('beforeend', '<span class="sort-indicator text-purple-600"></span>');
+            }
+        });
+
+        table.dataset.sortableReady = 'true';
+    });
 }
 
 function showOperationalTab(tab) {
@@ -3245,6 +3404,7 @@ async function loadOperationalVehicles() {
                 </td>
             </tr>
         `).join('');
+        applyOperationalTableSort('operationalVehiclesTable');
         renderOperationalPagination('vehicles', data.pagination, loadOperationalVehicles);
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
@@ -3288,6 +3448,7 @@ async function loadOperationalReport() {
                 </tr>
             `;
         }).join('');
+        applyOperationalTableSort('operationalReportTable');
         renderOperationalPagination('report', data.pagination, loadOperationalReport);
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
@@ -3353,6 +3514,7 @@ async function loadOperationalFollowups() {
                 </tr>
             `;
         }).join('');
+        applyOperationalTableSort('operationalFollowupsTable');
         renderOperationalPagination('followups', data.pagination, loadOperationalFollowups);
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
@@ -3462,6 +3624,7 @@ async function loadDocumentExpirations() {
                 </tr>
             `;
         }).join('');
+        applyOperationalTableSort('documentExpirationsTable');
         renderOperationalPagination('documents', data.pagination, loadDocumentExpirations);
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
