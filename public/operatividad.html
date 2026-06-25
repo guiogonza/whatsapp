@@ -19,6 +19,9 @@
                     <button onclick="sendOperationalDaily()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">
                         Enviar seguimiento ahora
                     </button>
+                    <button onclick="sendDocumentDaily()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 text-sm">
+                        Enviar seguimiento docs
+                    </button>
                     <button onclick="downloadOperationalReport()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">
                         Descargar reporte
                     </button>
@@ -64,7 +67,7 @@
                             Crear
                         </button>
                     </div>
-                    <div id="operationalSitesList" class="space-y-2 text-sm"></div>
+                    <div id="operationalSitesList" class="space-y-2 text-sm max-h-80 overflow-y-auto pr-1"></div>
                 </div>
 
                 <div class="bg-white border rounded-lg p-4">
@@ -87,12 +90,16 @@
 
             <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div class="bg-white border rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <h2 class="font-semibold">Vehiculos</h2>
                         <label class="text-sm flex items-center gap-2">
                             <input id="operationalOnlyNonOperational" type="checkbox" checked onchange="loadOperationalVehicles()">
                             Solo no operativos
                         </label>
+                    </div>
+                    <div class="flex gap-2 mb-3">
+                        <input id="vehiclePlateFilterInput" type="text" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="Filtrar por placa..." oninput="setVehiclePlateFilter(this.value)">
+                        <button onclick="setVehiclePlateFilter('')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Todos</button>
                     </div>
                     <div class="overflow-x-auto border rounded-lg">
                         <table class="w-full border-collapse">
@@ -113,7 +120,14 @@
                 </div>
 
                 <div class="bg-white border rounded-lg p-4">
-                    <h2 class="font-semibold mb-3">Historial</h2>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <h2 class="font-semibold">Historial</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input id="reportDateFilterInput" type="date" class="border rounded-lg px-3 py-2 text-sm" onchange="setReportDateFilter(this.value)">
+                            <input id="reportPlateFilterInput" type="text" class="border rounded-lg px-3 py-2 text-sm w-32" placeholder="Placa..." oninput="setReportPlateFilter(this.value)">
+                            <button id="reportAllBtn" onclick="loadAllReportHistory()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Todos</button>
+                        </div>
+                    </div>
                     <div class="overflow-x-auto border rounded-lg">
                         <table class="w-full border-collapse">
                             <thead>
@@ -164,6 +178,36 @@
                         </thead>
                         <tbody id="operationalFollowupsTable">
                             <tr><td colspan="10" class="text-center py-6 text-gray-500">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="bg-white border rounded-lg p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold">Seguimiento documentos 9 a. m.</h2>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input id="docFollowupDateFilter" type="date" class="border rounded-lg px-3 py-2 text-sm" onchange="setDocFollowupDateFilter(this.value)">
+                        <button id="docFollowupAllBtn" onclick="loadAllDocumentFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Todos</button>
+                        <button onclick="loadDocumentFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Actualizar</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto border rounded-lg">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Tipo</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Sede</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Responsable</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Telefono</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Docs alertados</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Ejecucion (GMT-5)</th>
+                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-700 border-b">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="documentFollowupsTable">
+                            <tr><td colspan="8" class="text-center py-6 text-gray-500">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>

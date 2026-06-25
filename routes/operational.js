@@ -270,4 +270,40 @@ router.post('/send-daily', async (req, res) => {
     }
 });
 
+router.post('/send-document-daily', async (req, res) => {
+    try {
+        const sessionManager = require('../sessionManager-baileys');
+        const sent = await operational.sendDocumentFollowups(sessionManager, { sendType: 'manual' });
+        res.json({ success: true, sent });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.get('/document-followups', async (req, res) => {
+    try {
+        const result = await operational.getDocumentFollowupReport({
+            ...req.query,
+            paginate: req.query.paginate === 'true'
+        });
+        if (req.query.paginate === 'true') {
+            res.json({ success: true, followups: result.rows, pagination: result.pagination });
+            return;
+        }
+        res.json({ success: true, followups: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.delete('/document-followups/:id', async (req, res) => {
+    try {
+        const followup = await operational.deleteDocumentFollowup(req.params.id);
+        if (!followup) return res.status(404).json({ success: false, error: 'Seguimiento no encontrado' });
+        res.json({ success: true, followup });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

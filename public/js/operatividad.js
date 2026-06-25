@@ -5,10 +5,15 @@ let operationalStatuses = [];
 let editingOperationalResponsibleId = null;
 let editingDocumentExpirationId = null;
 let followupDateFilter = new Date().toISOString().slice(0, 10);
+let reportDateFilter = new Date().toISOString().slice(0, 10);
+let reportPlateFilter = '';
+let vehiclePlateFilter = '';
+let docFollowupDateFilter = new Date().toISOString().slice(0, 10);
 const operationalPaging = {
     vehicles: { page: 1, limit: 10 },
     report: { page: 1, limit: 10 },
     followups: { page: 1, limit: 10 },
+    docFollowups: { page: 1, limit: 10 },
     documents: { page: 1, limit: 10 }
 };
 const operationalSortState = {};
@@ -64,6 +69,10 @@ const documentTypeLabels = {
 document.addEventListener('DOMContentLoaded', () => {
     const followupDateInput = document.getElementById('followupDateFilter');
     if (followupDateInput) followupDateInput.value = followupDateFilter;
+    const reportDateInput = document.getElementById('reportDateFilterInput');
+    if (reportDateInput) reportDateInput.value = reportDateFilter;
+    const docFollowupDateInput = document.getElementById('docFollowupDateFilter');
+    if (docFollowupDateInput) docFollowupDateInput.value = docFollowupDateFilter;
     setupOperationalTableSorting();
     loadOperational();
 });
@@ -100,6 +109,50 @@ function setFollowupDateFilter(value) {
 
 function loadAllOperationalFollowups() {
     setFollowupDateFilter('all');
+}
+
+function setReportDateFilter(value) {
+    reportDateFilter = value || new Date().toISOString().slice(0, 10);
+    operationalPaging.report.page = 1;
+    const input = document.getElementById('reportDateFilterInput');
+    if (input) input.value = reportDateFilter === 'all' ? '' : reportDateFilter;
+    updateReportFilterUI();
+    loadOperationalReport();
+}
+
+function setReportPlateFilter(value) {
+    reportPlateFilter = (value || '').trim().toUpperCase();
+    operationalPaging.report.page = 1;
+    loadOperationalReport();
+}
+
+function loadAllReportHistory() {
+    reportDateFilter = 'all';
+    reportPlateFilter = '';
+    operationalPaging.report.page = 1;
+    const dateInput = document.getElementById('reportDateFilterInput');
+    if (dateInput) dateInput.value = '';
+    const plateInput = document.getElementById('reportPlateFilterInput');
+    if (plateInput) plateInput.value = '';
+    updateReportFilterUI();
+    loadOperationalReport();
+}
+
+function updateReportFilterUI() {
+    const allBtn = document.getElementById('reportAllBtn');
+    if (!allBtn) return;
+    const isAll = reportDateFilter === 'all' && !reportPlateFilter;
+    allBtn.className = isAll
+        ? 'bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 text-sm'
+        : 'bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm';
+}
+
+function setVehiclePlateFilter(value) {
+    vehiclePlateFilter = (value || '').trim().toUpperCase();
+    operationalPaging.vehicles.page = 1;
+    const input = document.getElementById('vehiclePlateFilterInput');
+    if (input) input.value = vehiclePlateFilter;
+    loadOperationalVehicles();
 }
 
 function updateFollowupFilterUI() {
@@ -244,6 +297,7 @@ async function loadOperational() {
         loadOperationalVehicles(),
         loadOperationalReport(),
         loadOperationalFollowups(),
+        loadDocumentFollowups(),
         loadDocumentExpirations()
     ]);
 }
@@ -289,7 +343,7 @@ async function loadOperationalCatalogs() {
 function renderOperationalCatalogs() {
     const siteOptions = operationalSites
         .filter(site => site.active)
-        .map(site => `<option value="${site.id}">${escapeHtml(site.name)}</option>`)
+        .map(site => `<option value="${site.id}">${escapeHtml(site.name).toUpperCase()}</option>`)
         .join('');
 
     const nonOperationalStatusOptions = operationalStatuses
@@ -318,7 +372,7 @@ function renderOperationalCatalogs() {
         return `
             <div class="border rounded-lg px-3 py-2">
                 <div class="flex items-center justify-between gap-2">
-                    <div class="font-medium">${escapeHtml(site.name)}</div>
+                    <div class="font-medium">${escapeHtml(site.name).toUpperCase()}</div>
                     <button onclick="deactivateOperationalSite(${site.id})" class="text-xs text-red-600 hover:underline">Eliminar</button>
                 </div>
                 ${responsibles || '<div class="text-xs text-gray-400">Sin responsable activo</div>'}
@@ -338,6 +392,7 @@ async function loadOperationalVehicles() {
             page: paging.page,
             limit: paging.limit
         });
+        if (vehiclePlateFilter) params.set('search', vehiclePlateFilter);
         const response = await fetch(`${API_URL}/api/operational/vehicles?${params}`);
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error cargando vehiculos');
@@ -352,7 +407,7 @@ async function loadOperationalVehicles() {
         tbody.innerHTML = vehicles.map(vehicle => `
             <tr class="hover:bg-gray-50 border-b">
                 <td class="px-3 py-2 text-xs font-medium">${escapeHtml(vehicle.plate)}</td>
-                <td class="px-3 py-2 text-xs">${escapeHtml(vehicle.site_name)}</td>
+                <td class="px-3 py-2 text-xs">${escapeHtml(vehicle.site_name).toUpperCase()}</td>
                 <td class="px-3 py-2 text-xs">
                     <span class="${vehicle.is_operational ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'} px-2 py-1 rounded">${escapeHtml(vehicle.status_name)}</span>
                 </td>
@@ -377,9 +432,13 @@ async function loadOperationalReport() {
         const params = new URLSearchParams({
             paginate: 'true',
             page: paging.page,
-            limit: paging.limit,
-            date: followupDateFilter
+            limit: paging.limit
         });
+        if (reportDateFilter && reportDateFilter !== 'all') {
+            params.set('dateFrom', reportDateFilter);
+            params.set('dateTo', reportDateFilter);
+        }
+        if (reportPlateFilter) params.set('search', reportPlateFilter);
         const response = await fetch(`${API_URL}/api/operational/report?${params}`);
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error cargando historial');
@@ -452,7 +511,7 @@ async function loadOperationalFollowups() {
                     <td class="px-3 py-2 text-xs">
                         <span class="${typeBadge} px-2 py-1 rounded">${escapeHtml(row.send_type_label || row.send_type || '')}</span>
                     </td>
-                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '').toUpperCase()}</td>
                     <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.responsible_name || '')}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(row.phone_number || '')}</td>
                     <td class="px-3 py-2 text-xs">
@@ -570,7 +629,7 @@ async function loadDocumentExpirations() {
             return `
                 <tr class="hover:bg-gray-50 border-b">
                     <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.plate || '')}</td>
-                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.site_name || '').toUpperCase()}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(documentTypeLabels[row.document_type] || row.document_type || '')}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(row.expiry_date_co || '')}</td>
                     <td class="px-3 py-2 text-xs"><span class="${daysClass} px-2 py-1 rounded">${escapeHtml(daysText)}</span></td>
@@ -676,7 +735,7 @@ async function saveOperationalVehicle() {
 
 async function saveOperationalSite() {
     try {
-        const name = document.getElementById('operationalNewSite').value.trim();
+        const name = document.getElementById('operationalNewSite').value.trim().toUpperCase();
         if (!name) {
             showToast('Nombre de sede requerido', 'warning');
             return;
@@ -961,6 +1020,94 @@ async function sendOperationalDaily() {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Error enviando seguimiento');
         showToast(`Seguimiento enviado a ${(data.sent || []).length} responsables`, 'success');
+        await loadOperationalFollowups();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function sendDocumentDaily() {
+    if (!confirm('Enviar ahora el seguimiento de documentos y cambios de aceite a los responsables?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/send-document-daily`, { method: 'POST' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error enviando seguimiento documentos');
+        showToast(`Seguimiento documentos enviado a ${(data.sent || []).length} responsables`, 'success');
+        await loadDocumentFollowups();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+function setDocFollowupDateFilter(value) {
+    docFollowupDateFilter = value || new Date().toISOString().slice(0, 10);
+    operationalPaging.docFollowups.page = 1;
+    const input = document.getElementById('docFollowupDateFilter');
+    if (input) input.value = docFollowupDateFilter === 'all' ? '' : docFollowupDateFilter;
+    const allBtn = document.getElementById('docFollowupAllBtn');
+    if (allBtn) {
+        allBtn.className = docFollowupDateFilter === 'all'
+            ? 'bg-teal-600 text-white px-3 py-2 rounded-lg hover:bg-teal-700 text-sm'
+            : 'bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm';
+        allBtn.textContent = docFollowupDateFilter === 'all' ? 'Todos activos' : 'Todos';
+    }
+    loadDocumentFollowups();
+}
+
+function loadAllDocumentFollowups() {
+    setDocFollowupDateFilter('all');
+}
+
+async function loadDocumentFollowups() {
+    const tbody = document.getElementById('documentFollowupsTable');
+    if (!tbody) return;
+    try {
+        const paging = operationalPaging.docFollowups;
+        const params = new URLSearchParams({ paginate: 'true', page: paging.page, limit: paging.limit });
+        if (docFollowupDateFilter && docFollowupDateFilter !== 'all') params.set('date', docFollowupDateFilter);
+        const response = await fetch(`${API_URL}/api/operational/document-followups?${params}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error cargando seguimientos documentos');
+
+        const rows = data.followups || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-500">Sin seguimientos de documentos enviados</td></tr>';
+            renderPagination('docFollowups', data.pagination, loadDocumentFollowups);
+            return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+            const typeBadge = row.send_type === 'manual' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800';
+            const typeLabel = row.send_type === 'manual' ? 'Manual' : 'Automatico';
+            return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.followup_date_co || '')}</td>
+                    <td class="px-3 py-2 text-xs"><span class="${typeBadge} px-2 py-1 rounded">${typeLabel}</span></td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml((row.site_name || '').toUpperCase())}</td>
+                    <td class="px-3 py-2 text-xs font-medium">${escapeHtml(row.responsible_name || '')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(row.phone_number || '')}</td>
+                    <td class="px-3 py-2 text-xs">${row.doc_count || 0}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600">${escapeHtml(row.sent_at_co || '')}</td>
+                    <td class="px-3 py-2 text-xs text-center">
+                        <button onclick="deleteDocumentFollowupRow(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        renderPagination('docFollowups', data.pagination, loadDocumentFollowups);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+async function deleteDocumentFollowupRow(id) {
+    if (!confirm('Eliminar este registro de seguimiento documentos?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/operational/document-followups/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Error eliminando');
+        showToast('Eliminado', 'success');
+        await loadDocumentFollowups();
     } catch (error) {
         showToast(`Error: ${error.message}`, 'error');
     }
