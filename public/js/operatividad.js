@@ -4,6 +4,7 @@ let operationalSites = [];
 let operationalStatuses = [];
 let editingOperationalResponsibleId = null;
 let editingDocumentExpirationId = null;
+let followupDateFilter = new Date().toISOString().slice(0, 10);
 const operationalPaging = {
     vehicles: { page: 1, limit: 10 },
     report: { page: 1, limit: 10 },
@@ -20,6 +21,8 @@ const documentTypeLabels = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const followupDateInput = document.getElementById('followupDateFilter');
+    if (followupDateInput) followupDateInput.value = followupDateFilter;
     loadOperational();
 });
 
@@ -42,6 +45,14 @@ function showToast(message, type = 'info') {
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 4500);
+}
+
+function setFollowupDateFilter(value) {
+    followupDateFilter = value || new Date().toISOString().slice(0, 10);
+    operationalPaging.followups.page = 1;
+    const input = document.getElementById('followupDateFilter');
+    if (input) input.value = followupDateFilter === 'all' ? '' : followupDateFilter;
+    loadOperationalFollowups();
 }
 
 function escapeHtml(text) {
@@ -188,7 +199,8 @@ async function loadOperationalReport() {
         const params = new URLSearchParams({
             paginate: 'true',
             page: paging.page,
-            limit: paging.limit
+            limit: paging.limit,
+            date: followupDateFilter
         });
         const response = await fetch(`${API_URL}/api/operational/report?${params}`);
         const data = await response.json();

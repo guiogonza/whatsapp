@@ -1644,9 +1644,15 @@
                     <div class="mt-6">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="font-semibold">Respuestas seguimiento 8 a. m.</h3>
-                            <button onclick="loadOperationalFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
-                                Actualizar respuestas
-                            </button>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <input id="followupDateFilter" type="date" class="border rounded-lg px-3 py-2 text-sm" onchange="setFollowupDateFilter(this.value)">
+                                <button onclick="setFollowupDateFilter('all')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
+                                    Todos
+                                </button>
+                                <button onclick="loadOperationalFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">
+                                    Actualizar respuestas
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto border rounded-lg">
                             <table class="w-full border-collapse">

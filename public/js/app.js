@@ -3070,6 +3070,7 @@ let operationalSites = [];
 let operationalStatuses = [];
 let editingOperationalResponsibleId = null;
 let editingDocumentExpirationId = null;
+let followupDateFilter = new Date().toISOString().slice(0, 10);
 const operationalPaging = {
     vehicles: { page: 1, limit: 10 },
     report: { page: 1, limit: 10 },
@@ -3086,6 +3087,10 @@ const documentTypeLabels = {
 };
 
 async function loadOperational() {
+    const followupDateInput = document.getElementById('followupDateFilter');
+    if (followupDateInput && !followupDateInput.value && followupDateFilter !== 'all') {
+        followupDateInput.value = followupDateFilter;
+    }
     await Promise.all([
         loadOperationalCatalogs(),
         loadOperationalVehicles(),
@@ -3112,6 +3117,14 @@ function showOperationalTab(tab) {
         ? 'px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700'
         : 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-600 hover:text-purple-700';
     if (showDocuments) loadDocumentExpirations();
+}
+
+function setFollowupDateFilter(value) {
+    followupDateFilter = value || new Date().toISOString().slice(0, 10);
+    operationalPaging.followups.page = 1;
+    const input = document.getElementById('followupDateFilter');
+    if (input) input.value = followupDateFilter === 'all' ? '' : followupDateFilter;
+    loadOperationalFollowups();
 }
 
 async function loadOperationalCatalogs() {
@@ -3229,7 +3242,8 @@ async function loadOperationalReport() {
         const params = new URLSearchParams({
             paginate: 'true',
             page: paging.page,
-            limit: paging.limit
+            limit: paging.limit,
+            date: followupDateFilter
         });
         const response = await fetch(`${API_URL}/api/operational/report?${params}`);
         const data = await response.json();
