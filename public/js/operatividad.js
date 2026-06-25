@@ -637,6 +637,7 @@ async function loadDocumentExpirations() {
                     <td class="px-3 py-2 text-xs">${escapeHtml(row.last_change_km || '')}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(row.next_change_km || '')}</td>
                     <td class="px-3 py-2 text-xs">${escapeHtml(row.observation || '')}</td>
+                    <td class="px-3 py-2 text-xs">${(() => { const cb = row.created_by || ''; if (cb === 'excel_import') return '<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">Excel</span>'; if (cb === 'dashboard') return '<span class="bg-gray-100 text-gray-700 px-2 py-1 rounded">Manual</span>'; if (cb === 'bot' || cb === 'whatsapp') return '<span class="bg-green-100 text-green-800 px-2 py-1 rounded">Bot</span>'; return escapeHtml(cb) || '-'; })()}</td>
                     <td class="px-3 py-2 text-xs text-center whitespace-nowrap">
                         <button onclick="editDocumentExpiration(${row.id}, '${escapeHtml(row.plate || '')}', '${escapeHtml(row.document_type || '')}', '${String(row.expiry_date || '').slice(0, 10)}', '${String(row.last_change_date || '').slice(0, 10)}', '${escapeHtml(row.last_change_km || '')}', '${escapeHtml(row.next_change_km || '')}', '${escapeHtml(row.observation || '').replace(/'/g, '&#39;')}')" class="bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200">Editar</button>
                         <button onclick="deleteDocumentExpiration(${row.id})" class="bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 ml-1">Eliminar</button>
@@ -647,7 +648,7 @@ async function loadDocumentExpirations() {
         applyOperationalTableSort('documentExpirationsTable');
         renderPagination('documents', data.pagination, loadDocumentExpirations);
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-red-500">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
 }
 
