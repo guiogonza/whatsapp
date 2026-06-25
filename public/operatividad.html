@@ -101,9 +101,9 @@
                         <input id="vehiclePlateFilterInput" type="text" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="Filtrar por placa..." oninput="setVehiclePlateFilter(this.value)">
                         <button onclick="setVehiclePlateFilter('')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Todos</button>
                     </div>
-                    <div class="overflow-x-auto border rounded-lg">
+                    <div class="overflow-auto border rounded-lg h-72">
                         <table class="w-full border-collapse">
-                            <thead>
+                            <thead class="sticky top-0 z-10">
                                 <tr class="bg-gray-50">
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Sede</th>
@@ -128,9 +128,9 @@
                             <button id="reportAllBtn" onclick="loadAllReportHistory()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Todos</button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto border rounded-lg">
+                    <div class="overflow-auto border rounded-lg h-72">
                         <table class="w-full border-collapse">
-                            <thead>
+                            <thead class="sticky top-0 z-10">
                                 <tr class="bg-gray-50">
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha (GMT-5)</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
@@ -160,9 +160,9 @@
                         </button>
                     </div>
                 </div>
-                <div class="overflow-x-auto border rounded-lg">
+                <div class="overflow-auto border rounded-lg h-72">
                     <table class="w-full border-collapse">
-                        <thead>
+                        <thead class="sticky top-0 z-10">
                             <tr class="bg-gray-50">
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha</th>
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Tipo</th>
@@ -240,9 +240,9 @@
                             Exportar Excel
                         </button>
                     </div>
-                    <div class="overflow-x-auto border rounded-lg">
+                    <div class="overflow-auto border rounded-lg h-72">
                         <table class="w-full border-collapse">
-                            <thead>
+                            <thead class="sticky top-0 z-10">
                                 <tr class="bg-gray-50">
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Placa</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Sede</th>
@@ -273,9 +273,9 @@
                             <button onclick="loadDocumentFollowups()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm">Actualizar</button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto border rounded-lg">
+                    <div class="overflow-auto border rounded-lg h-72">
                         <table class="w-full border-collapse">
-                            <thead>
+                            <thead class="sticky top-0 z-10">
                                 <tr class="bg-gray-50">
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Fecha</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-700 border-b">Tipo</th>
