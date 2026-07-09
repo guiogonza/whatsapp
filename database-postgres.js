@@ -372,20 +372,6 @@ async function createTables() {
         `);
 
         await client.query(`
-            INSERT INTO operational_site_responsibles (site_id, name, phone_number)
-            SELECT s.id, v.name, v.phone_number
-            FROM (VALUES
-                ('Jamundi', 'Danillo Espinosa', '573172487991'),
-                ('Buga', 'Guiovanny Gonzalez', '573183499539')
-            ) AS v(site_name, name, phone_number)
-            JOIN operational_sites s ON LOWER(s.name) = LOWER(v.site_name)
-            ON CONFLICT (site_id, phone_number) DO UPDATE
-            SET name = EXCLUDED.name,
-                active = TRUE,
-                updated_at = NOW()
-        `);
-
-        await client.query(`
             UPDATE operational_site_responsibles short_phone
             SET active = FALSE,
                 updated_at = NOW()
