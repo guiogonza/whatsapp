@@ -1252,6 +1252,26 @@ app.post('/api/cloud/send', async (req, res) => {
 });
 
 /**
+ * POST /api/encuesta-bot/enviar - Dispara el mensaje de invitación (template) que abre la
+ * conversación de la encuesta de Riesgo Psicosocial. Llamado por el backend de Riesgo
+ * Psicosocial cuando el admin habilita una encuesta para un empleado con teléfono registrado.
+ */
+app.post('/api/encuesta-bot/enviar', async (req, res) => {
+    try {
+        const { telefono, token } = req.body;
+        if (!telefono || !token) {
+            return res.status(400).json({ success: false, error: 'telefono y token son requeridos' });
+        }
+
+        const flow = require('./lib/session/encuesta-bot/flow');
+        const result = await flow.iniciarPorTrigger(telefono, token);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/cloud/stats - Estadísticas de WhatsApp Cloud API con costos
  * Pricing Colombia (utility templates): ~$0.0085 USD por mensaje
  * 1000 conversaciones gratis/mes (service conversations)

@@ -110,6 +110,15 @@ module.exports = {
     // ============================================
     // Token de verificación para el webhook (debe coincidir con el configurado en Meta)
     WEBHOOK_VERIFY_TOKEN: process.env.WEBHOOK_VERIFY_TOKEN || 'rastrear_webhook_2026',
+
+    // ============================================
+    // Bot de encuesta de Riesgo Psicosocial
+    // ============================================
+    // URL base de la API del backend de Riesgo Psicosocial (sin slash final), ej: https://encuestas.miempresa.com/api
+    ENCUESTA_PSICOSOCIAL_API_URL: process.env.ENCUESTA_PSICOSOCIAL_API_URL || '',
+    // Nombre del template de Meta (aprobado) que abre la conversación invitando a responder la encuesta
+    ENCUESTA_PSICOSOCIAL_TEMPLATE_NAME: process.env.ENCUESTA_PSICOSOCIAL_TEMPLATE_NAME || 'hello_world',
+    ENCUESTA_PSICOSOCIAL_TEMPLATE_LANGUAGE: process.env.ENCUESTA_PSICOSOCIAL_TEMPLATE_LANGUAGE || 'en_US',
     
     // Icono que aparece al inicio de cada mensaje consolidado
     MESSAGE_CONSOLIDATION_ICON: '\uD83D\uDCCD',  // 📍 usando Unicode escape
