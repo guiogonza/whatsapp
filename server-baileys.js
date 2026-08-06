@@ -280,6 +280,20 @@ app.use((req, res, next) => {
     return res.redirect('/operatividad-login');
 });
 
+// Notificaciones simples por GET: /?to=NUMERO&message=TEXTO
+app.get('/', async (req, res, next) => {
+    const { to, message } = req.query;
+    if (!to || !message) return next();
+
+    try {
+        const cleanedMessage = cleanGPSMessage(message);
+        const result = await sessionManager.sendMessageHybrid(to, cleanedMessage);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Configurar charset UTF-8 para archivos estáticos
 app.use(express.static(config.PUBLIC_PATH, {
     setHeaders: (res, path) => {
