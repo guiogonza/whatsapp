@@ -381,5 +381,144 @@ module.exports = {
     getHistory,
     getNotificationTypes,
     getFXMessages,
-    getFXMessageStats
+    getFXMessageStats,
+    updatePositions,
+    getPositions
 };
+
+/**
+ * POST /api/fx/positions - Recibe posiciones desde MT5 (webhook)
+ * Body: { positions: [{ ticket, symbol, type, lots, openPrice, currentPrice, 
+ *          stopLoss, takeProfit, profit, profitPct, swap, commission, openTime }], 
+ *          accountNumber, webhookSecret }
+ */
+async function updatePositions(req, res) {
+    try {
+        const { positions, accountNumber, webhookSecret } = req.body;
+
+        if (!webhookSecret || webhookSecret !== (process.env.MT5_WEBHOOK_SECRET || 'mt5_secret_2026')) {
+            return res.status(403).json({ success: false, error: 'Webhook secret inválido' });
+        }
+
+        if (!positions || !Array.isArray(positions) || positions.length === 0) {
+            return res.status(400).json({ success: false, error: 'Se requiere array de posiciones' });
+        }
+
+        const database = require('../database-postgres');
+        const account = accountNumber || '100000';
+        let upserted = 0;
+
+        // Primero: marcar todas las posiciones de esta cuenta como cerradas
+        // Las que vengan en el request se reactivarán
+        await database.query(
+            `UPDATE fx_positions SET is_open = FALSE WHERE account_number = $1`,
+            [account]
+        );
+
+        // Insertar/actualizar cada posición
+        for (const pos of positions) {
+            await database.query(`
+                INSERT INTO fx_positions 
+                    (ticket, account_number, symbol, type, lots, open_price, current_price,
+                     stop_loss, take_profit, profit, profit_pct, swap, commission, open_time, is_open, last_updated)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,NOW())
+                ON CONFLICT (ticket) DO UPDATE SET
+                    current_price = EXCLUDED.current_price,
+                    profit = EXCLUDED.profit,
+                    profit_pct = EXCLUDED.profit_pct,
+                    swap = EXCLUDED.swap,
+                    hours_open = EXCLUDED.hours_open,
+                    sl_pips = EXCLUDED.sl_pips,
+                    tp_pips = EXCLUDED.tp_pips,
+                    is_open = TRUE,
+                    last_updated = NOW()
+            `, [
+                String(pos.ticket),
+                account,
+                pos.symbol,
+                pos.type || 'BUY',
+                parseFloat(pos.lots) || 0.01,
+                parseFloat(pos.openPrice) || 0,
+                pos.currentPrice ? parseFloat(pos.currentPrice) : null,
+                pos.stopLoss ? parseFloat(pos.stopLoss) : null,
+                pos.takeProfit ? parseFloat(pos.takeProfit) : null,
+                parseFloat(pos.profit) || 0,
+                parseFloat(pos.profitPct) || 0,
+                parseFloat(pos.swap) || 0,
+                parseFloat(pos.commission) || 0,
+                parseFloat(pos.hoursOpen) || 0,
+                parseFloat(pos.slPips) || 0,
+                parseFloat(pos.tpPips) || 0,
+                pos.openTime || new Date().toISOString()
+            ]);
+            upserted++;
+        }
+
+        console.log(`📊 FX: ${upserted} posiciones actualizadas para cuenta ${account}`);
+
+        // Guardar datos de cuenta si vienen en el request
+        if (req.body.account) {
+            const acc = req.body.account;
+            await database.query(`
+                INSERT INTO fx_accounts (account_number, balance, equity, margin, margin_free, margin_level, floating_pnl, timestamp)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+            `, [
+                account,
+                parseFloat(acc.balance) || 0,
+                parseFloat(acc.equity) || 0,
+                parseFloat(acc.margin) || 0,
+                parseFloat(acc.marginFree) || 0,
+                parseFloat(acc.marginLevel) || 0,
+                parseFloat(acc.floatingPnL) || 0
+            ]);
+        }
+
+        res.json({
+            success: true,
+            message: `${upserted} posiciones actualizadas`,
+            upserted,
+            accountNumber: account
+        });
+
+    } catch (error) {
+        console.error('❌ Error actualizando posiciones FX:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+}
+
+/**
+ * GET /api/fx/positions - Obtiene posiciones abiertas
+ */
+async function getPositions(req, res) {
+    try {
+        const database = require('../database-postgres');
+        const account = req.query.account || '100000';
+
+        const result = await database.query(
+            `SELECT * FROM fx_positions 
+             WHERE is_open = TRUE AND account_number = $1
+             ORDER BY open_time DESC`,
+            [account]
+        );
+
+        // Calcular resumen
+        const summary = {
+            total: result.rows.length,
+            buy: result.rows.filter(p => p.type === 'BUY').length,
+            sell: result.rows.filter(p => p.type === 'SELL').length,
+            totalProfit: result.rows.reduce((sum, p) => sum + parseFloat(p.profit || 0), 0),
+            totalLots: result.rows.reduce((sum, p) => sum + parseFloat(p.lots || 0), 0),
+        };
+
+        res.json({
+            success: true,
+            accountNumber: account,
+            summary,
+            positions: result.rows
+        });
+
+    } catch (error) {
+        console.error('❌ Error obteniendo posiciones FX:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+}

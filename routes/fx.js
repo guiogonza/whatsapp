@@ -42,4 +42,10 @@ router.get('/messages', fxController.getFXMessages);
 // Obtener estadísticas de mensajes FX
 router.get('/message-stats', fxController.getFXMessageStats);
 
+// Recibir posiciones desde MT5 (webhook)
+router.post('/positions', fxController.updatePositions);
+
+// Obtener posiciones abiertas
+router.get('/positions', fxController.getPositions);
+
 module.exports = router;

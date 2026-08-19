@@ -397,9 +397,129 @@ async function createTables() {
               )
         `);
 
+        // Tabla para mensajes FX/MT5 reenviados (proxy/forwarding)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS fx_messages (
+                id SERIAL PRIMARY KEY,
+                fx_session VARCHAR(50) NOT NULL,
+                source_phone VARCHAR(20),
+                target_phone VARCHAR(20) NOT NULL,
+                message TEXT NOT NULL,
+                status VARCHAR(20) DEFAULT 'PENDING',
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_fx_messages_timestamp ON fx_messages(timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_fx_messages_session ON fx_messages(fx_session);
+            CREATE INDEX IF NOT EXISTS idx_fx_messages_target_phone ON fx_messages(target_phone);
+            CREATE INDEX IF NOT EXISTS idx_fx_messages_status ON fx_messages(status);
+        `);
+
+        // Tabla para notificaciones FX (webhook)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS fx_notifications (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                account_number VARCHAR(20),
+                message TEXT NOT NULL,
+                recipients INTEGER DEFAULT 0,
+                sent INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Tabla para posiciones FX activas (actualizada vía webhook desde MT5)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS fx_positions (
+                id SERIAL PRIMARY KEY,
+                ticket VARCHAR(20) NOT NULL UNIQUE,
+                account_number VARCHAR(20) DEFAULT '100000',
+                symbol VARCHAR(20) NOT NULL,
+                type VARCHAR(10) NOT NULL CHECK (type IN ('BUY', 'SELL')),
+                lots DECIMAL(10,2) NOT NULL DEFAULT 0.01,
+                open_price DECIMAL(15,5) NOT NULL,
+                current_price DECIMAL(15,5),
+                stop_loss DECIMAL(15,5),
+                take_profit DECIMAL(15,5),
+                profit DECIMAL(15,2) DEFAULT 0,
+                profit_pct DECIMAL(10,2) DEFAULT 0,
+                pips DECIMAL(10,1) DEFAULT 0,
+                swap DECIMAL(10,2) DEFAULT 0,
+                commission DECIMAL(10,2) DEFAULT 0,
+                hours_open DECIMAL(10,1) DEFAULT 0,
+                sl_pips DECIMAL(10,0) DEFAULT 0,
+                tp_pips DECIMAL(10,0) DEFAULT 0,
+                open_time TIMESTAMP,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_open BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Tabla para datos de cuenta FX (balance, equity, margin)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS fx_accounts (
+                id SERIAL PRIMARY KEY,
+                account_number VARCHAR(20) NOT NULL,
+                balance DECIMAL(15,2) DEFAULT 0,
+                equity DECIMAL(15,2) DEFAULT 0,
+                margin DECIMAL(15,2) DEFAULT 0,
+                margin_free DECIMAL(15,2) DEFAULT 0,
+                margin_level DECIMAL(10,1) DEFAULT 0,
+                floating_pnl DECIMAL(15,2) DEFAULT 0,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_fx_accounts_number ON fx_accounts(account_number);
+            CREATE INDEX IF NOT EXISTS idx_fx_accounts_ts ON fx_accounts(timestamp DESC);
+        `);
+
+        // Tabla para historial de alertas enviadas
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS fx_alerts_log (
+                id SERIAL PRIMARY KEY,
+                alert_type VARCHAR(50) NOT NULL,
+                account_number VARCHAR(20),
+                message TEXT NOT NULL,
+                sent_to VARCHAR(50),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_fx_positions_ticket ON fx_positions(ticket);
+            CREATE INDEX IF NOT EXISTS idx_fx_positions_open ON fx_positions(is_open) WHERE is_open = TRUE;
+            CREATE INDEX IF NOT EXISTS idx_fx_positions_updated ON fx_positions(last_updated DESC);
+        `);
+
+        // Tabla de sesiones conversacionales del bot de Preoperacional (Hesego)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS preop_bot_sesiones (
+                telefono VARCHAR(30) PRIMARY KEY,
+                datos JSONB NOT NULL DEFAULT '{}',
+                activa BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
+        // Tabla de sesiones conversacionales del bot de Inspección (Hesego)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS inspeccion_bot_sesiones (
+                telefono VARCHAR(30) PRIMARY KEY,
+                datos JSONB NOT NULL DEFAULT '{}',
+                activa BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
         await client.query('COMMIT');
         console.log('✅ Tablas de PostgreSQL creadas/verificadas');
-        
+
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Error creando tablas:', error.message);

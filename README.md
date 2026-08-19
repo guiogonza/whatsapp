@@ -49,7 +49,21 @@ Ejemplo:
 
 ---
 
-### 3. 💬 Sistema Base (Auto-respuesta y Webhooks)
+### 3. 📋 Bot de Encuesta de Riesgo Psicosocial
+**¿Para qué sirve?** Diligenciar por WhatsApp (botones/listas) la encuesta del proyecto Riesgo Psicosocial
+
+```
+Funcionalidad:
+- El backend de Riesgo Psicosocial dispara la invitación al habilitar una encuesta
+- Consentimiento, preguntas de filtro e ítems se responden con botones/listas
+- Las respuestas se guardan vía API en el backend de Riesgo Psicosocial (no aquí)
+```
+
+📖 **Documentación:** [ENCUESTA_PSICOSOCIAL_MODULE.md](./ENCUESTA_PSICOSOCIAL_MODULE.md)
+
+---
+
+### 4. 💬 Sistema Base (Auto-respuesta y Webhooks)
 **¿Para qué sirve?** Funciones generales de WhatsApp
 
 ```

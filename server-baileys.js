@@ -1562,6 +1562,75 @@ app.post('/api/sessions/rotation/rotate', (req, res) => {
 const gpswoxSession = require('./lib/session/gpswox-session');
 
 /**
+ * POST /api/gpswox/session/send - Envia un mensaje directo por la sesion
+ * dedicada GPSwox. Usado por el proyecto hesego-operatividad (extraido de
+ * este monolito) para enviar respuestas del bot y los recordatorios diarios,
+ * ya que este servidor es quien mantiene la conexion real de WhatsApp.
+ */
+app.post('/api/gpswox/session/send', async (req, res) => {
+    try {
+        if (config.GPSWOX_WEBHOOK_SHARED_SECRET) {
+            const provided = req.headers['x-internal-secret'];
+            if (provided !== config.GPSWOX_WEBHOOK_SHARED_SECRET) {
+                return res.status(401).json({ success: false, error: 'secreto invalido' });
+            }
+        }
+
+        const { phoneNumber, message } = req.body;
+        if (!phoneNumber || !message) {
+            return res.status(400).json({ success: false, error: 'phoneNumber y message son requeridos' });
+        }
+
+        const gpswoxSessionName = gpswoxSession.getGPSwoxSessionName();
+        const session = sessionManager.getSession(gpswoxSessionName);
+        if (!session || !session.socket || session.state !== config.SESSION_STATES.READY) {
+            return res.status(503).json({ success: false, error: 'Sesion GPSwox no disponible' });
+        }
+
+        const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+        await session.socket.sendMessage(jid, { text: message });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/gpswox/session/start-inspection - Inicia el flujo del bot de
+ * Inspección Hesego para un número, usando el socket real de la sesión
+ * GPSwox. Usado por hesego-operatividad (opción "8" del menú) porque el
+ * bot de inspección sigue viviendo únicamente en este monolito.
+ */
+app.post('/api/gpswox/session/start-inspection', async (req, res) => {
+    try {
+        if (config.GPSWOX_WEBHOOK_SHARED_SECRET) {
+            const provided = req.headers['x-internal-secret'];
+            if (provided !== config.GPSWOX_WEBHOOK_SHARED_SECRET) {
+                return res.status(401).json({ success: false, error: 'secreto invalido' });
+            }
+        }
+
+        const { phoneNumber } = req.body;
+        if (!phoneNumber) {
+            return res.status(400).json({ success: false, error: 'phoneNumber es requerido' });
+        }
+
+        const gpswoxSessionName = gpswoxSession.getGPSwoxSessionName();
+        const session = sessionManager.getSession(gpswoxSessionName);
+        if (!session || !session.socket || session.state !== config.SESSION_STATES.READY) {
+            return res.status(503).json({ success: false, error: 'Sesion GPSwox no disponible' });
+        }
+
+        const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+        const inspFlow = require('./lib/session/inspeccion-flow');
+        await inspFlow.handleMessage(session, gpswoxSessionName, jid, 'INSPECCION', null, session.socket);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/gpswox/session/create - Crea una sesión dedicada plataformagps
  * Body opcional: { "sessionName": "gpswox-session-2" }
  */
@@ -3200,8 +3269,15 @@ async function initialize() {
         sessionManager.startConsolidationProcessor();
 
         // Iniciar seguimiento diario de operatividad plataformagps
-        const operational = require('./lib/session/gpswox-operational');
-        operational.startDailyScheduler(sessionManager);
+        // (solo si hesego-operatividad NO esta desplegado; si GPSWOX_WEBHOOK_URL
+        // esta configurado, ese proyecto corre su propio scheduler para evitar
+        // recordatorios duplicados)
+        if (!config.GPSWOX_WEBHOOK_URL) {
+            const operational = require('./lib/session/gpswox-operational');
+            operational.startDailyScheduler(sessionManager);
+        } else {
+            console.log('⏭️ Scheduler de operatividad delegado a hesego-operatividad (GPSWOX_WEBHOOK_URL configurado)');
+        }
 
         console.log('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Sistema iniciado correctamente\n');
 

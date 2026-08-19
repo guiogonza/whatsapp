@@ -119,7 +119,27 @@ module.exports = {
     // Nombre del template de Meta (aprobado) que abre la conversación invitando a responder la encuesta
     ENCUESTA_PSICOSOCIAL_TEMPLATE_NAME: process.env.ENCUESTA_PSICOSOCIAL_TEMPLATE_NAME || 'hello_world',
     ENCUESTA_PSICOSOCIAL_TEMPLATE_LANGUAGE: process.env.ENCUESTA_PSICOSOCIAL_TEMPLATE_LANGUAGE || 'en_US',
-    
+
+    // ============================================
+    // Bot de Preoperacional (Hesego)
+    // ============================================
+    // URL base del backend de Preoperacional (ya desplegado, no lo modificamos, solo lo consumimos)
+    PREOP_API_URL: process.env.PREOP_API_URL || 'https://preoperacional.logisticahesego.com',
+    // Palabras clave que inician una conversación de preoperacional (separadas por coma en .env)
+    PREOP_TRIGGER_KEYWORDS: (process.env.PREOP_TRIGGER_KEYWORDS || 'PREOPERACIONAL,PREOP').split(',').map(s => s.trim().toUpperCase()),
+    // Secreto compartido para /internal/* del backend de Preoperacional (generar el link
+    // único de fotos con cámara obligatoria — mismo secreto que PREOP_INTERNAL_SECRET allá)
+    PREOP_INTERNAL_SECRET: process.env.PREOP_INTERNAL_SECRET || '',
+
+    // ============================================
+    // Bot de Inspección (Hesego) — módulo hermano de Preoperacional
+    // ============================================
+    INSP_API_URL: process.env.INSP_API_URL || 'https://inspecciones.logisticahesego.com',
+    INSP_TRIGGER_KEYWORDS: (process.env.INSP_TRIGGER_KEYWORDS || 'INSPECCION,INSPECCIONAR,INSPECCIÓN').split(',').map(s => s.trim().toUpperCase()),
+    // Secreto compartido para /internal/* del backend de Inspección (generar el
+    // link único de fotos con cámara obligatoria — mismo secreto que INSP_INTERNAL_SECRET allá)
+    INSP_INTERNAL_SECRET: process.env.INSP_INTERNAL_SECRET || '',
+
     // Icono que aparece al inicio de cada mensaje consolidado
     MESSAGE_CONSOLIDATION_ICON: '\uD83D\uDCCD',  // 📍 usando Unicode escape
     
@@ -144,7 +164,13 @@ module.exports = {
     GPSWOX_SESSION_NAME: process.env.GPSWOX_SESSION_NAME || 'gpswox-session',
     GPSWOX_SESSION_NAMES: (process.env.GPSWOX_SESSION_NAMES || process.env.GPSWOX_SESSION_NAME || 'gpswox-session').split(',').map(s => s.trim()),
     GPSWOX_DEDICATED_MODE: process.env.GPSWOX_DEDICATED_MODE === 'true', // true = solo procesará GPSwox
-    
+
+    // Proyecto hesego-operatividad (extraido de este monolito): recibe los
+    // mensajes entrantes de la sesion GPSwox via webhook y este servidor
+    // sigue siendo quien envia/recibe realmente por WhatsApp
+    GPSWOX_WEBHOOK_URL: process.env.GPSWOX_WEBHOOK_URL || '',
+    GPSWOX_WEBHOOK_SHARED_SECRET: process.env.GPSWOX_WEBHOOK_SHARED_SECRET || '',
+
     // ============================================
     // FX / MetaTrader5 - Notificaciones de Trading
     // ============================================
