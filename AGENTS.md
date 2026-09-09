@@ -82,6 +82,32 @@ ssh -i "$SSHK" root@164.68.118.86 "cd /root/whatsapp-api && docker compose build
   `hesego-preoperacional`, `hesego-inspecciones`, `logisticahesego` son
   todos proyectos distintos).
 
+## Mapa de proyectos hermanos (local ↔ servidor)
+
+Los backends web de Inspección/Preoperacional/Riesgo Psicosocial/FX **no**
+están en este repo ni en `hesego-operatividad` — son proyectos aparte que
+`whatsapp-docker`/`hesego-operatividad` consumen por HTTP o que les mandan
+webhooks. Mapa confirmado con `docker inspect --format '{{json .Config.Labels}}'`
+en septiembre 2026 (verificar de nuevo si algo no cuadra, el servidor tiene
+decenas de proyectos y las cosas se mueven):
+
+| Carpeta local (Windows) | Contenedor(es) | Compose project / ruta remota |
+|---|---|---|
+| `C:\Documentos\whatsapp docker` | `wpp-bot` | `whatsapp-api` → `/root/whatsapp-api` |
+| `C:\Documentos\hesego operatividad` | `hesego-operatividad` | `hesego-operatividad` → `/root/hesego-operatividad` |
+| `C:\Documentos\Hesego preoperacional\hesego-preoperacional` | `preop-backend`, `preop-frontend`, `preop-db` | `hesego-preoperacional` → `/root/hesego-preoperacional` |
+| `C:\Documentos\Hesego preoperacional\hesego-inspecciones` | `insp-backend`, `insp-frontend`, `insp-db` | `hesego-inspecciones` → `/root/hesego-inspecciones` |
+| `C:\Documentos\Hesego preoperacional\hesego-usuarios` | `usr-backend`, `usr-db` | portal SSO unificado (no confirmado el nombre exacto del compose project) |
+| `C:\Documentos\Hesego preoperacional\hesego-landing` | `hesego-landing` (nginx) | `/root/hesego-landing` |
+| `C:\Documentos\Riesgo psicosocial\app` | `psico-backend`, `psico-frontend`, `psico-db` | `riesgo-psicosocial` → `/root/riesgo-psicosocial` |
+| `C:\Documentos\Fx` | `mt5-dashboard-fxpro` | `mt5-fxpro` → `/opt/mt5-fxpro` (nota: `/opt`, no `/root`, distinto a los demás) |
+
+`hesego-preoperacional`, `hesego-inspecciones`, `hesego-landing` y
+`hesego-usuarios` viven todos en el mismo repo git "paraguas"
+(`C:\Documentos\Hesego preoperacional`, un solo `.git` con las 4 carpetas
+como subdirectorios) — no son 4 repos separados aunque tengan 4
+`docker-compose.yml` distintos en el servidor.
+
 ## Git
 
 Repo con remoto en GitHub: `https://github.com/guiogonza/whatsapp.git`,
