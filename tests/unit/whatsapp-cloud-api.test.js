@@ -60,9 +60,34 @@ describe('WhatsApp Cloud API - GPS Alert Parsing', () => {
         expect(parsed).toEqual({
             empresa: 'RASTREAR',
             vehiculo: 'CRB92F',
-            evento: 'Salio de (darien)',
+            evento: 'Salio de (darien) · 57 kph',
             ubicacion: 'Vía Loboguerrero - Mediacanoa, Calima, Yotoco, Centro, Valle del Cauca, RAP Pacífico, Colombia',
             hora: '11-09-2026 15:19:36'
         });
+    });
+
+    test('should append the speed to evento when present in native GPSwox alerts', () => {
+        // La plantilla aprobada de Meta no tiene variable propia para velocidad,
+        // asi que se agrega como sufijo de "evento" en vez de una linea nueva.
+        const message = 'hola RASTREAR te informa una alerta en su vehiculo *CQU92F* ha presentado ' +
+            '*Entro en (darien)* velocidad:  (42 kph)  en la siguiente ubicacion: ' +
+            'Hotel Shalom, Vía Mediacanoa - Loboguerrero, Dagua, Sur, Valle del Cauca, RAP Pacífico, Colombia ' +
+            'Hora: 11-09-2026 15:45:34. si tiene alguna duda comunicarse al 3183499539.';
+
+        const parsed = cloudApi.parseAlertMessage(message);
+
+        expect(parsed.evento).toBe('Entro en (darien) · 42 kph');
+    });
+
+    test('should not append anything when speed is absent', () => {
+        const message = `🚨 Alerta de Rastreamos - GPS
+
+🚗 Vehículo: TEST001
+⚠️ Evento: Ignición apagada
+📍 Ubicación: Bogotá, Colombia
+🕐 Hora: 24-03-2026 15:00:00 hrs`;
+
+        const parsed = cloudApi.parseAlertMessage(message);
+        expect(parsed.evento).toBe('Ignición apagada');
     });
 });
