@@ -40,6 +40,40 @@ ssh -i "$SSHK" root@164.68.118.86 "grep GPSWOX_WEBHOOK_URL /root/whatsapp-api/.e
 Si de todos modos editas el fallback aquí, aplica el mismo cambio en ambos
 archivos para que no diverjan.
 
+## Notificaciones GPS genéricas (bot #7) — plantilla `alerta_vehiculo`
+
+Código: `lib/session/whatsapp-cloud-api.js`. Recibe el texto nativo de
+GPSwox ("hola EMPRESA te informa una alerta en su vehiculo *PLACA* ha
+presentado *EVENTO* velocidad: (N kph) en la siguiente ubicacion: ... Hora:
+...") vía `parseAlertMessage()`, y lo reenvía usando la plantilla de WhatsApp
+Business (Meta) `alerta_vehiculo` (`es_CO`, categoría Utilidad, variables con
+nombre: `empresa`, `vehiculo`, `evento`, `ubicacion`, `hora` — ver
+`sendAlertTemplate()`).
+
+**Bugs reales encontrados y corregidos (sept. 2026):**
+- La ubicación llegaba truncada a la primera palabra ("Ubicación: Vía" y
+  nada más) porque el regex que la extraía usaba `[^\s]+` (para en el primer
+  espacio) en vez de capturar hasta el siguiente `Hora:`/`Fecha:`/`Time:`.
+  Corregido en ambos branches de parseo nativo de GPSwox (con y sin
+  asteriscos).
+- La velocidad no se mostraba en absoluto. Como la plantilla aprobada por
+  Meta **no tiene variable propia para velocidad** (agregar una requiere
+  editar la plantilla en WhatsApp Manager y esperar re-aprobación de Meta,
+  no algo que se pueda hacer solo con un cambio de código), se agrega como
+  sufijo de la variable `evento` vía `appendVelocidad()`:
+  `"Entro en (darien) · 42 kph"`.
+
+**Pendiente (sept. 2026):** se está agregando una línea de Velocidad propia
+y un botón de "Ver ubicación" (URL dinámica a
+`https://www.google.com/maps/search/?api=1&query=<ubicacion>`) editando la
+plantilla `alerta_vehiculo` existente en WhatsApp Manager (mismo nombre/ID
+`872044595562007`, no una plantilla `_v2` nueva — se intentó ese camino
+primero pero no llegó a crearse). Cuando Meta apruebe la edición, hay que
+actualizar `sendAlertTemplate()` en `whatsapp-cloud-api.js` para mandar los
+parámetros nuevos en el orden exacto que quede aprobado (y quitar el
+workaround de `appendVelocidad` si la velocidad ya tiene su propia
+variable). Verificar el estado en WhatsApp Manager → Administrar plantillas.
+
 ## Desplegar un cambio a producción
 
 Este proyecto sí tiene script de deploy: `deploy-gpswox.ps1` (PowerShell).
@@ -61,6 +95,23 @@ SSHK="/c/Users/guiog/.ssh/id_rsa"
 scp -i "$SSHK" lib/session/core.js root@164.68.118.86:/root/whatsapp-api/lib/session/
 ssh -i "$SSHK" root@164.68.118.86 "cd /root/whatsapp-api && docker compose build wpp-bot && docker compose up -d wpp-bot"
 ```
+
+**Ojo con el tiempo de build de `wpp-bot` específicamente:** su Dockerfile
+instala Chromium y ~200 paquetes de sistema (`apt-get install`) antes de
+`npm install` — la primera vez (sin cache de capas) tarda 5-8 minutos en
+total. Si la conexión SSH se corta a mitad del build (pasó en la práctica:
+`Connection reset by peer`), el `docker compose build` remoto se mata junto
+con la sesión y el `&& docker compose up -d` nunca llega a correr — el
+contenedor sigue con la imagen vieja sin ningún aviso de error visible en el
+lado del cliente. Para builds largos, lanzarlo desacoplado de la sesión SSH:
+```bash
+ssh -i "$SSHK" root@164.68.118.86 "cd /root/whatsapp-api && rm -f /root/deploy_wpp.log && nohup bash -c 'docker compose build wpp-bot && docker compose up -d wpp-bot' > /root/deploy_wpp.log 2>&1 < /dev/null & disown; sleep 1; echo LAUNCHED"
+```
+y verificar el progreso con conexiones SSH nuevas y cortas (`tail
+/root/deploy_wpp.log`, `docker images`, `docker inspect wpp-bot --format
+'{{.Created}}'`) en vez de mantener una sola conexión larga abierta.
+`hesego-operatividad` (imagen más liviana, sin Chromium) no tiene este
+problema — su build tarda ~1 minuto.
 
 ## Acceso SSH a la VPS
 
