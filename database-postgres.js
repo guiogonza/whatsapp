@@ -1131,6 +1131,50 @@ async function getTodayCounts() {
 }
 
 /**
+ * Busca texto libre en el contenido de los mensajes, combinando `messages`
+ * (message_preview) y `webhook_messages` (text_content). Devuelve resultados
+ * de cualquier número, más recientes primero.
+ */
+async function searchMessagesByText(query, limit = 100) {
+    if (!pool || !isConnected) return [];
+    if (!query || !query.trim()) return [];
+
+    try {
+        const like = `%${query.trim()}%`;
+        const result = await pool.query(
+            `SELECT * FROM (
+                SELECT
+                    timestamp,
+                    session,
+                    phone_number,
+                    message_preview AS message,
+                    status,
+                    CASE WHEN status = 'received' THEN 'in' ELSE 'out' END AS direction
+                FROM messages
+                WHERE message_preview ILIKE $1
+                UNION ALL
+                SELECT
+                    timestamp,
+                    'cloud-api' AS session,
+                    from_number AS phone_number,
+                    text_content AS message,
+                    'received' AS status,
+                    'in' AS direction
+                FROM webhook_messages
+                WHERE text_content ILIKE $1
+            ) combined
+            ORDER BY timestamp DESC
+            LIMIT $2`,
+            [like, limit]
+        );
+        return result.rows;
+    } catch (error) {
+        console.error('❌ Error buscando mensajes:', error.message);
+        return [];
+    }
+}
+
+/**
  * Obtener conteo de mensajes enviados hoy por sesión
  */
 async function getTodayMessagesBySession() {
@@ -1669,6 +1713,7 @@ module.exports = {
     getMessagesByFilter,
     getConversation,
     getTodayCounts,
+    searchMessagesByText,
     getTodayMessagesBySession,
     getQueueStats,
     getQueuedNumbers,

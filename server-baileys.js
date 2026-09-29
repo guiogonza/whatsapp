@@ -1467,6 +1467,105 @@ app.get('/api/meta/template-stats', async (req, res) => {
 });
 
 /**
+ * Convierte el array `components` que devuelve la Graph API de Meta para
+ * una plantilla en una forma simple: texto del body, variables (con nombre
+ * o posicionales {{1}}..{{n}}), sus valores de ejemplo, y botón de URL
+ * dinámica si existe.
+ */
+function parseTemplateComponents(components) {
+    const body = (components || []).find(c => c.type === 'BODY');
+    const header = (components || []).find(c => c.type === 'HEADER');
+    const footer = (components || []).find(c => c.type === 'FOOTER');
+    const buttonsComp = (components || []).find(c => c.type === 'BUTTONS');
+
+    const bodyText = body?.text || '';
+    const namedMatches = [...bodyText.matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g)].map(m => m[1]);
+    const positionalMatches = [...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]);
+    const isNamedParams = namedMatches.length > 0;
+    const variables = isNamedParams ? [...new Set(namedMatches)] : [...new Set(positionalMatches)];
+
+    let example = {};
+    if (isNamedParams && body?.example?.body_text_named_params) {
+        body.example.body_text_named_params.forEach(p => {
+            example[p.param_name] = p.example;
+        });
+    } else if (!isNamedParams && body?.example?.body_text?.[0]) {
+        body.example.body_text[0].forEach((val, idx) => {
+            example[String(idx + 1)] = val;
+        });
+    }
+
+    let urlButton = null;
+    const dynamicUrlBtn = (buttonsComp?.buttons || []).find(b => b.type === 'URL' && /\{\{\d+\}\}/.test(b.url || ''));
+    if (dynamicUrlBtn) {
+        urlButton = {
+            text: dynamicUrlBtn.text,
+            urlTemplate: dynamicUrlBtn.url,
+            example: dynamicUrlBtn.example?.[0] || ''
+        };
+    }
+
+    return {
+        headerText: header?.text || null,
+        bodyText,
+        footerText: footer?.text || null,
+        isNamedParams,
+        variables,
+        example,
+        urlButton
+    };
+}
+
+/**
+ * GET /api/cloud/templates - Lista las plantillas APROBADAS de la WABA con
+ * su texto, variables y ejemplos, para armar el formulario de "Enviar
+ * Mensaje" dinámicamente en vez de tener una sola plantilla hardcodeada.
+ */
+app.get('/api/cloud/templates', async (req, res) => {
+    try {
+        const token = config.WHATSAPP_CLOUD_TOKEN;
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'WHATSAPP_CLOUD_TOKEN no configurado' });
+        }
+
+        const graphVersion = config.META_GRAPH_VERSION;
+        const baseUrl = `https://graph.facebook.com/${graphVersion}`;
+        const headers = { Authorization: `Bearer ${token}` };
+
+        let wabaId = config.META_WABA_ID;
+        if (!wabaId) {
+            const autoWaba = await resolveWabaIdFromPhoneId({ token, graphVersion, phoneId: config.WHATSAPP_CLOUD_PHONE_ID });
+            wabaId = autoWaba.wabaId;
+        }
+        if (!wabaId) {
+            return res.status(400).json({ success: false, error: 'No se pudo resolver la WABA. Configura META_WABA_ID.' });
+        }
+
+        const listResp = await axios.get(`${baseUrl}/${wabaId}/message_templates`, {
+            headers,
+            params: { fields: 'name,language,status,category,components', limit: 100 },
+            timeout: 15000
+        });
+
+        const templates = (listResp.data?.data || [])
+            .filter(t => t.status === 'APPROVED')
+            .map(t => ({
+                name: t.name,
+                language: t.language,
+                category: t.category,
+                ...parseTemplateComponents(t.components)
+            }));
+
+        res.json({ success: true, count: templates.length, templates });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.response?.data?.error?.message || error.message
+        });
+    }
+});
+
+/**
  * POST /api/cloud/enable - Habilitar Cloud API (marcar cuenta como lista)
  */
 app.post('/api/cloud/enable', (req, res) => {
@@ -2294,7 +2393,8 @@ app.get('/api/monitor/messages', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 500;
         const offset = parseInt(req.query.offset) || 0;
-        const result = await database.getMessagesByFilter({ limit, offset });
+        const session = req.query.session || undefined;
+        const result = await database.getMessagesByFilter({ limit, offset, session });
         // Adaptar formato para el monitor
         const messages = (result.messages || []).map(m => ({
             timestamp: m.timestamp,
@@ -2335,6 +2435,21 @@ app.get('/api/messages/today-counts', async (req, res) => {
     try {
         const counts = await database.getTodayCounts();
         res.json({ success: true, ...counts });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/messages/search-text - Busca texto libre en el contenido de
+ * cualquier mensaje (enviado o recibido, cualquier número).
+ */
+app.get('/api/messages/search-text', async (req, res) => {
+    try {
+        const query = req.query.q || '';
+        const limit = parseInt(req.query.limit) || 100;
+        const messages = await database.searchMessagesByText(query, limit);
+        res.json({ success: true, count: messages.length, messages });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

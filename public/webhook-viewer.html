@@ -517,6 +517,12 @@
             </div>
         </header>
 
+        <!-- Banner de alertas de salud -->
+        <div id="healthBanner" style="display:none;background:rgba(234,67,53,0.15);border:1px solid var(--error);border-radius:12px;padding:12px 16px;margin-bottom:16px;color:var(--error);font-size:13px;">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span id="healthBannerText"></span>
+        </div>
+
         <!-- Stats -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -607,11 +613,22 @@
                     <button id="tab-received" onclick="switchTab('received')" style="flex:1;padding:10px;background:#25D366;color:#000;border:none;cursor:pointer;font-weight:bold;border-radius:0;min-width:110px;">↩ Recibidos <span id="receivedTodayBadge" style="background:#000;color:#25D366;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:4px;">0</span> hoy</button>
                     <button id="tab-sent" onclick="switchTab('sent')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;min-width:110px;">↗ Enviados <span id="sentTodayBadge" style="background:#25D366;color:#000;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:4px;">0</span> hoy</button>
                     <button id="tab-conversation" onclick="switchTab('conversation')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;min-width:110px;">💬 Conversación</button>
+                    <button id="tab-search" onclick="switchTab('search')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;min-width:110px;">🔍 Buscar</button>
                     <button id="tab-stats" onclick="switchTab('stats')" style="flex:1;padding:10px;background:#1a1a2e;color:#aaa;border:none;cursor:pointer;font-weight:bold;border-radius:0;min-width:110px;">📊 Estadísticas</button>
                 </div>
                 <div id="conversationSearchBar" style="display:none;gap:8px;padding:10px 16px 0;">
                     <input type="text" id="conversationPhoneInput" placeholder="Ej: 573001234567" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #2a2a2a;background:#0f0f1a;color:#e9edef;">
                     <button onclick="loadConversation()" style="padding:8px 16px;border-radius:8px;border:none;background:#25D366;color:#000;font-weight:bold;cursor:pointer;">Ver</button>
+                </div>
+                <div id="textSearchBar" style="display:none;gap:8px;padding:10px 16px 0;">
+                    <input type="text" id="textSearchInput" placeholder="Ej: CQU92F, darien, palabra clave..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #2a2a2a;background:#0f0f1a;color:#e9edef;" onkeydown="if(event.key==='Enter')runTextSearch()">
+                    <button onclick="runTextSearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#25D366;color:#000;font-weight:bold;cursor:pointer;">Buscar</button>
+                </div>
+                <div id="sessionFilterBar" style="display:none;gap:8px;padding:10px 16px 0;align-items:center;">
+                    <label style="font-size:12px;color:var(--text-secondary);">Filtrar por bot/sesión:</label>
+                    <select id="sessionFilterSelect" onchange="onSessionFilterChange()" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid #2a2a2a;background:#0f0f1a;color:#e9edef;">
+                        <option value="">Todos</option>
+                    </select>
                 </div>
                 <div class="messages-container" id="messagesContainer">
                     <div class="empty-state">
@@ -635,9 +652,16 @@
                     <div class="form-group">
                         <label>Tipo de mensaje</label>
                         <select id="messageType" onchange="toggleMessageFields()">
-                            <option value="template">📋 Plantilla (hello_world)</option>
                             <option value="text">💬 Texto libre (solo Baileys, gratis)</option>
                         </select>
+                    </div>
+                    <div class="form-group" id="templatePreviewGroup" style="display: none;">
+                        <label>Vista previa</label>
+                        <div id="templatePreviewText" style="background:var(--bg-dark);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text-secondary);white-space:pre-wrap;"></div>
+                    </div>
+                    <div class="form-group" id="templateVarsGroup" style="display: none;">
+                        <label>Variables de la plantilla</label>
+                        <div id="templateVarsInputs"></div>
                     </div>
                     <div class="form-group" id="textMessageGroup" style="display: none;">
                         <label>Mensaje</label>
@@ -689,7 +713,53 @@
             scheduleMidnightReset();
             // Actualizar badge cada 30s
             setInterval(loadSentTodayCount, 30000);
+            checkHealthBanner();
+            setInterval(checkHealthBanner, 30000);
+            loadSessionFilterOptions();
+            loadTemplatesForSendForm();
         });
+
+        async function checkHealthBanner() {
+            const issues = [];
+            try {
+                const [healthRes, cloudRes] = await Promise.all([
+                    fetch(`${API_BASE}/health`).then(r => r.json()).catch(() => null),
+                    fetch(`${API_BASE}/api/cloud/stats`).then(r => r.json()).catch(() => null)
+                ]);
+
+                if (healthRes) {
+                    if (healthRes.system === 'CRITICAL') {
+                        issues.push('Ninguna sesión de Baileys está activa');
+                    }
+                    (healthRes.sessions?.list || []).forEach(s => {
+                        if (s.state !== 'READY') {
+                            issues.push(`Sesión "${s.name}" en estado ${s.state}`);
+                        }
+                    });
+                }
+
+                if (cloudRes && cloudRes.success) {
+                    const cloudApi = cloudRes.cloudApi || {};
+                    if (cloudApi.configured && !cloudApi.accountReady) {
+                        issues.push(`Cloud API con problemas: ${cloudApi.accountError || 'cuenta no lista'}`);
+                    }
+                    const hourlyPct = (cloudApi.hourlyCount || 0) / (cloudApi.hourlyLimit || 500);
+                    if (hourlyPct >= 0.9) {
+                        issues.push(`Cerca del límite por hora de Cloud API (${cloudApi.hourlyCount}/${cloudApi.hourlyLimit})`);
+                    }
+                }
+            } catch (error) {
+                console.error('Error verificando salud:', error);
+            }
+
+            const banner = document.getElementById('healthBanner');
+            if (issues.length > 0) {
+                document.getElementById('healthBannerText').textContent = issues.join(' · ');
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
 
         async function loadCloudStats() {
             try {
@@ -818,14 +888,39 @@
             }, msUntilMidnightColombia());
         }
 
+        let currentSessionFilter = '';
+
         function switchTab(tab) {
             currentTab = tab;
-            ['received', 'sent', 'conversation', 'stats'].forEach(t => {
+            ['received', 'sent', 'conversation', 'search', 'stats'].forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 btn.style.background = tab === t ? '#25D366' : '#1a1a2e';
                 btn.style.color = tab === t ? '#000' : '#aaa';
             });
             document.getElementById('conversationSearchBar').style.display = tab === 'conversation' ? 'flex' : 'none';
+            document.getElementById('textSearchBar').style.display = tab === 'search' ? 'flex' : 'none';
+            document.getElementById('sessionFilterBar').style.display = (tab === 'sent' || tab === 'stats') ? 'flex' : 'none';
+            loadMessages();
+        }
+
+        async function loadSessionFilterOptions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/messages/sessions`);
+                const data = await response.json();
+                if (data.success && data.sessions) {
+                    const select = document.getElementById('sessionFilterSelect');
+                    const current = select.value;
+                    select.innerHTML = '<option value="">Todos</option>' +
+                        data.sessions.map(s => `<option value="${s.session}">${s.session} (${s.message_count})</option>`).join('');
+                    select.value = current;
+                }
+            } catch (error) {
+                console.error('Error cargando lista de sesiones:', error);
+            }
+        }
+
+        function onSessionFilterChange() {
+            currentSessionFilter = document.getElementById('sessionFilterSelect').value;
             loadMessages();
         }
 
@@ -842,13 +937,16 @@
                         updateStats(data.messages);
                     }
                 } else if (currentTab === 'sent') {
-                    const response = await fetch(`${API_BASE}/api/monitor/messages?limit=50`);
+                    const sessionParam = currentSessionFilter ? `&session=${encodeURIComponent(currentSessionFilter)}` : '';
+                    const response = await fetch(`${API_BASE}/api/monitor/messages?limit=50${sessionParam}`);
                     const data = await response.json();
                     if (data.success) {
                         renderSentMessages(data.messages);
                     }
                 } else if (currentTab === 'conversation') {
                     await loadConversation();
+                } else if (currentTab === 'search') {
+                    // Se dispara con el boton "Buscar", no hace falta cargar nada al entrar
                 } else if (currentTab === 'stats') {
                     await loadStats();
                 }
@@ -857,6 +955,43 @@
                 showToast('Error al cargar mensajes', 'error');
             } finally {
                 btn.classList.remove('loading');
+            }
+        }
+
+        async function runTextSearch() {
+            const container = document.getElementById('messagesContainer');
+            const query = document.getElementById('textSearchInput').value.trim();
+            if (!query) {
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Escribe algo para buscar</h3><p>Ej: una placa, un nombre, una palabra clave</p></div>`;
+                return;
+            }
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><h3>Buscando...</h3></div>`;
+            try {
+                const response = await fetch(`${API_BASE}/api/messages/search-text?q=${encodeURIComponent(query)}&limit=100`);
+                const data = await response.json();
+                if (!data.success || !data.messages || data.messages.length === 0) {
+                    container.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Sin resultados para "${escapeHtml(query)}"</h3></div>`;
+                    return;
+                }
+                container.innerHTML = data.messages.map(msg => `
+                    <div class="message-item ${msg.direction === 'out' ? 'outgoing' : ''}">
+                        <div class="message-header">
+                            <span class="message-from" style="cursor:pointer;" onclick="openConversation('${msg.phone_number}')">
+                                <i class="fas ${msg.direction === 'out' ? 'fa-arrow-right' : 'fa-arrow-left'}"></i>
+                                ${msg.direction === 'out' ? 'Enviado a: ' : 'De: '}${formatPhone(msg.phone_number)}
+                            </span>
+                            <span class="message-time">${formatDate(msg.timestamp)}</span>
+                        </div>
+                        <div class="message-body">${escapeHtml(msg.message || 'Sin contenido')}</div>
+                        <div class="message-meta">
+                            <span class="meta-tag">${msg.session || 'N/A'}</span>
+                            <span class="meta-tag status-${msg.status}">${msg.status}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error buscando:', error);
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Error al buscar</h3></div>`;
             }
         }
 
@@ -933,8 +1068,9 @@
             const container = document.getElementById('messagesContainer');
             const isMonth = statsGranularity === 'month';
             const queryParams = isMonth ? 'period=month&range=year' : 'period=day&range=month';
+            const sessionParam = currentSessionFilter ? `&session=${encodeURIComponent(currentSessionFilter)}` : '';
             try {
-                const response = await fetch(`${API_BASE}/api/analytics/messages?${queryParams}&top=10`);
+                const response = await fetch(`${API_BASE}/api/analytics/messages?${queryParams}&top=10${sessionParam}`);
                 const data = await response.json();
                 const timeline = data.timeline || [];
                 statsAllTopNumbers = data.top_numbers || [];
@@ -1016,7 +1152,8 @@
             document.getElementById('statsTopNumbers').innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">Cargando...</p>';
 
             try {
-                const response = await fetch(`${API_BASE}/api/analytics/messages?period=custom&start_date=${startDate}&end_date=${endDate}&top=10`);
+                const sessionParam = currentSessionFilter ? `&session=${encodeURIComponent(currentSessionFilter)}` : '';
+                const response = await fetch(`${API_BASE}/api/analytics/messages?period=custom&start_date=${startDate}&end_date=${endDate}&top=10${sessionParam}`);
                 const data = await response.json();
                 renderTopNumbers(data.top_numbers || []);
             } catch (error) {
@@ -1100,10 +1237,64 @@
             document.getElementById('totalReceived').textContent = received;
         }
 
+        let loadedTemplates = {}; // name -> { language, bodyText, isNamedParams, variables, example, urlButton }
+
+        async function loadTemplatesForSendForm() {
+            try {
+                const response = await fetch(`${API_BASE}/api/cloud/templates`);
+                const data = await response.json();
+                if (!data.success || !data.templates) return;
+
+                loadedTemplates = {};
+                const select = document.getElementById('messageType');
+                data.templates.forEach(tpl => {
+                    loadedTemplates[tpl.name] = tpl;
+                    const opt = document.createElement('option');
+                    opt.value = `tpl:${tpl.name}`;
+                    opt.textContent = `📋 ${tpl.name} (${tpl.language})`;
+                    select.appendChild(opt);
+                });
+            } catch (error) {
+                console.error('Error cargando plantillas:', error);
+            }
+        }
+
         function toggleMessageFields() {
             const type = document.getElementById('messageType').value;
             const textGroup = document.getElementById('textMessageGroup');
-            textGroup.style.display = type === 'text' ? 'block' : 'none';
+            const previewGroup = document.getElementById('templatePreviewGroup');
+            const varsGroup = document.getElementById('templateVarsGroup');
+
+            if (type.startsWith('tpl:')) {
+                const tplName = type.slice(4);
+                const tpl = loadedTemplates[tplName];
+                textGroup.style.display = 'none';
+                if (!tpl) {
+                    previewGroup.style.display = 'none';
+                    varsGroup.style.display = 'none';
+                    return;
+                }
+                document.getElementById('templatePreviewText').textContent = tpl.bodyText || '';
+                previewGroup.style.display = 'block';
+
+                const inputsHtml = tpl.variables.map(v => `
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:2px;">${v}</label>
+                        <input type="text" class="tpl-var-input" data-var="${v}" value="${escapeHtml(tpl.example?.[v] || '')}" style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid #2a2a2a;background:#0f0f1a;color:#e9edef;">
+                    </div>
+                `).join('') + (tpl.urlButton ? `
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:2px;">🔗 ${tpl.urlButton.text} (parte variable del link)</label>
+                        <input type="text" class="tpl-var-input" data-var="__button_url__" value="${escapeHtml(tpl.urlButton.example || '')}" style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid #2a2a2a;background:#0f0f1a;color:#e9edef;">
+                    </div>
+                ` : '');
+                document.getElementById('templateVarsInputs').innerHTML = inputsHtml || '<p style="font-size:12px;color:var(--text-secondary);">Esta plantilla no tiene variables.</p>';
+                varsGroup.style.display = 'block';
+            } else {
+                previewGroup.style.display = 'none';
+                varsGroup.style.display = 'none';
+                textGroup.style.display = type === 'text' ? 'block' : 'none';
+            }
         }
 
         function replyTo(phoneNumber) {
@@ -1116,27 +1307,53 @@
 
         async function sendMessage(event) {
             event.preventDefault();
-            
+
             const btn = document.getElementById('sendBtn');
             const toNumber = document.getElementById('toNumber').value.replace(/\D/g, '');
             const messageType = document.getElementById('messageType').value;
             const messageText = document.getElementById('messageText').value;
-            
+
             if (!toNumber) {
                 showToast('Ingresa un número de destino', 'error');
                 return;
             }
-            
+
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
-            
+
             try {
                 let body;
-                if (messageType === 'template') {
+                if (messageType.startsWith('tpl:')) {
+                    const tplName = messageType.slice(4);
+                    const tpl = loadedTemplates[tplName];
+                    const varInputs = document.querySelectorAll('.tpl-var-input');
+                    const values = {};
+                    varInputs.forEach(inp => { values[inp.dataset.var] = inp.value; });
+
+                    const components = [];
+                    if (tpl && tpl.variables.length > 0) {
+                        components.push({
+                            type: 'body',
+                            parameters: tpl.variables.map(v => tpl.isNamedParams
+                                ? { type: 'text', text: values[v] || '', parameter_name: v }
+                                : { type: 'text', text: values[v] || '' })
+                        });
+                    }
+                    if (tpl && tpl.urlButton) {
+                        components.push({
+                            type: 'button',
+                            sub_type: 'url',
+                            index: '0',
+                            parameters: [{ type: 'text', text: values['__button_url__'] || '' }]
+                        });
+                    }
+
                     body = {
                         to: toNumber,
                         type: 'template',
-                        template: 'hello_world'
+                        template: tplName,
+                        language: tpl?.language || 'es_CO',
+                        components
                     };
                 } else {
                     body = {

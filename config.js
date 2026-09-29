@@ -102,7 +102,10 @@ module.exports = {
     META_GRAPH_VERSION: process.env.META_GRAPH_VERSION || process.env.WHATSAPP_CLOUD_API_VERSION || 'v21.0',
     META_WABA_ID: process.env.META_WABA_ID || '',
     META_TEMPLATE_ID: process.env.META_TEMPLATE_ID || '',
-    META_TEMPLATE_NAME: process.env.META_TEMPLATE_NAME || '',
+    // Default a la plantilla real que usa el bot de alertas GPS -- sin esto,
+    // la seccion "Meta" del dashboard no podia resolver ninguna plantilla y
+    // fallaba con "(#100) The parameter template_ids is required".
+    META_TEMPLATE_NAME: process.env.META_TEMPLATE_NAME || 'alerta_vehiculo',
     META_TEMPLATE_LANGUAGE: process.env.META_TEMPLATE_LANGUAGE || 'es_CO',
     
     // ============================================
