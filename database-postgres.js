@@ -764,7 +764,7 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFil
             ? [startDate, endDate, sessionFilter, topN] 
             : [startDate, endDate, topN];
         const topResult = await pool.query(
-            `SELECT 
+            `SELECT
                 phone_number,
                 COUNT(*) as total,
                 COALESCE(SUM(char_count), 0) as total_chars,
@@ -773,7 +773,10 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFil
                 COUNT(CASE WHEN status = 'discarded' THEN 1 END) as descartados,
                 COUNT(CASE WHEN status = 'queued' THEN 1 END) as en_cola,
                 MIN(timestamp) as first_message,
-                MAX(timestamp) as last_message
+                MAX(timestamp) as last_message,
+                (SELECT wm.from_name FROM webhook_messages wm
+                 WHERE wm.from_number = messages.phone_number AND wm.from_name IS NOT NULL AND wm.from_name <> 'Desconocido'
+                 ORDER BY wm.timestamp DESC LIMIT 1) as contact_name
              FROM messages
              WHERE DATE(timestamp) BETWEEN $1 AND $2${sessionCondition}
              GROUP BY phone_number
@@ -1101,6 +1104,29 @@ async function getConversation(phoneNumber, limit = 200) {
     } catch (error) {
         console.error('❌ Error obteniendo conversación:', error.message);
         return [];
+    }
+}
+
+/**
+ * Cuenta los mensajes de hoy exactamente en la misma fuente que usan las
+ * pestañas "Recibidos" (webhook_messages, solo Cloud API entrante) y
+ * "Enviados" (messages con status='sent', cualquier canal) del viewer.
+ */
+async function getTodayCounts() {
+    if (!pool || !isConnected) return { received: 0, sent: 0 };
+
+    try {
+        const [receivedResult, sentResult] = await Promise.all([
+            pool.query(`SELECT COUNT(*) AS total FROM webhook_messages WHERE DATE(timestamp) = CURRENT_DATE`),
+            pool.query(`SELECT COUNT(*) AS total FROM messages WHERE status = 'sent' AND DATE(timestamp) = CURRENT_DATE`)
+        ]);
+        return {
+            received: parseInt(receivedResult.rows[0].total, 10) || 0,
+            sent: parseInt(sentResult.rows[0].total, 10) || 0
+        };
+    } catch (error) {
+        console.error('❌ Error obteniendo conteos de hoy:', error.message);
+        return { received: 0, sent: 0 };
     }
 }
 
@@ -1642,6 +1668,7 @@ module.exports = {
     getUniqueSessions,
     getMessagesByFilter,
     getConversation,
+    getTodayCounts,
     getTodayMessagesBySession,
     getQueueStats,
     getQueuedNumbers,

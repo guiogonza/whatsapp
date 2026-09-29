@@ -2328,6 +2328,19 @@ app.get('/api/conversation/:phoneNumber', async (req, res) => {
 });
 
 /**
+ * GET /api/messages/today-counts - Conteo de hoy para los badges de las
+ * pestañas Recibidos/Enviados del webhook-viewer.
+ */
+app.get('/api/messages/today-counts', async (req, res) => {
+    try {
+        const counts = await database.getTodayCounts();
+        res.json({ success: true, ...counts });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/monitor/history - Agregados simples por fecha y por sesión
  */
 app.get('/api/monitor/history', async (req, res) => {
