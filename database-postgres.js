@@ -658,10 +658,10 @@ async function getPendingMessages(limit = 100) {
  */
 async function getAnalytics(options = {}) {
     const { period = 'day', range = 'today', top = 10, startDate, endDate, session, limit = 50 } = options;
-    
+
     let start, end;
     const now = new Date();
-    
+
     // Calcular fechas según el rango
     if (period === 'custom' && startDate && endDate) {
         start = startDate;
@@ -683,12 +683,22 @@ async function getAnalytics(options = {}) {
                 start = monthAgo.toISOString().split('T')[0];
                 end = now.toISOString().split('T')[0];
                 break;
+            case 'year':
+                const yearAgo = new Date(now);
+                yearAgo.setFullYear(now.getFullYear() - 1);
+                start = yearAgo.toISOString().split('T')[0];
+                end = now.toISOString().split('T')[0];
+                break;
             default:
                 start = end = now.toISOString().split('T')[0];
         }
     }
-    
-    return await getAnalyticsByDateRange(start, end, top, session, limit);
+
+    // "period" tambien controla la granularidad del timeline: agrupado por
+    // dia (default) o por mes. Cualquier valor distinto de 'month' cae a
+    // agrupacion diaria (incluye 'day' y 'custom').
+    const groupBy = period === 'month' ? 'month' : 'day';
+    return await getAnalyticsByDateRange(start, end, top, session, limit, groupBy);
 }
 
 /**
@@ -718,18 +728,23 @@ async function getStats() {
 /**
  * Obtener estadísticas de analytics por rango de fechas
  */
-async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFilter = null, limit = 50) {
+async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFilter = null, limit = 50, groupBy = 'day') {
     if (!pool || !isConnected) return { timeline: [], top_numbers: [], sessions_stats: [], db_stats: {} };
-    
+
     try {
         // Construir condición de sesión
         const sessionCondition = sessionFilter ? ' AND session = $3' : '';
         const baseParams = sessionFilter ? [startDate, endDate, sessionFilter] : [startDate, endDate];
-        
+
+        // Agrupar por dia (DATE) o por mes (primer dia del mes, DATE_TRUNC)
+        const periodoExpr = groupBy === 'month'
+            ? `DATE_TRUNC('month', timestamp)::date`
+            : `DATE(timestamp)`;
+
         // Timeline por fecha - separar recibidos individuales vs enviados consolidados
         const timelineResult = await pool.query(
-            `SELECT 
-                DATE(timestamp) as periodo,
+            `SELECT
+                ${periodoExpr} as periodo,
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as enviados,
                 COUNT(CASE WHEN status = 'error' THEN 1 END) as errores,
@@ -739,7 +754,7 @@ async function getAnalyticsByDateRange(startDate, endDate, topN = 10, sessionFil
                 COALESCE(SUM(CASE WHEN is_consolidated = true THEN msg_count ELSE 0 END), 0) as msgs_en_consolidados
              FROM messages
              WHERE DATE(timestamp) BETWEEN $1 AND $2${sessionCondition}
-             GROUP BY DATE(timestamp)
+             GROUP BY ${periodoExpr}
              ORDER BY periodo ASC`,
             baseParams
         );
