@@ -1075,12 +1075,15 @@
                 const timeline = data.timeline || [];
                 statsAllTopNumbers = data.top_numbers || [];
                 statsSelectedPeriod = null;
-                const rangeTotal = timeline.reduce((sum, d) => sum + Number(d.total || 0), 0);
+                // Usamos "enviados" (status='sent') en vez de "total" para que estos
+                // numeros coincidan con el badge "Enviados X hoy" de arriba -- "total"
+                // incluye tambien recibidos/en cola/descartados/con error del dia.
+                const rangeTotal = timeline.reduce((sum, d) => sum + Number(d.enviados || 0), 0);
                 const today = new Date().toISOString().split('T')[0];
                 const todayRow = timeline.find(d => dateOnly(d.periodo) === today);
-                const todayTotal = todayRow ? Number(todayRow.total || 0) : 0;
+                const todayTotal = todayRow ? Number(todayRow.enviados || 0) : 0;
 
-                const maxVal = Math.max(1, ...timeline.map(d => Number(d.total || 0)));
+                const maxVal = Math.max(1, ...timeline.map(d => Number(d.enviados || 0)));
                 const labelFor = d => isMonth ? monthOnly(d.periodo) : dateOnly(d.periodo);
                 const rangeLabel = isMonth ? 'Últimos 12 meses' : 'Últimos 30 días';
 
@@ -1099,15 +1102,15 @@
                         <button id="stats-gran-day" onclick="switchStatsGranularity('day')" style="flex:1;padding:8px;border-radius:8px;border:1px solid #2a2a2a;cursor:pointer;font-weight:bold;background:${isMonth ? '#1a1a2e' : '#25D366'};color:${isMonth ? '#aaa' : '#000'};">Por día</button>
                         <button id="stats-gran-month" onclick="switchStatsGranularity('month')" style="flex:1;padding:8px;border-radius:8px;border:1px solid #2a2a2a;cursor:pointer;font-weight:bold;background:${isMonth ? '#25D366' : '#1a1a2e'};color:${isMonth ? '#000' : '#aaa'};">Por mes</button>
                     </div>
-                    <h3 style="font-size:14px;margin-bottom:10px;color:var(--text-secondary);">Mensajes por ${isMonth ? 'mes' : 'día'} <span style="font-weight:400;">(click para filtrar los números de abajo)</span></h3>
+                    <h3 style="font-size:14px;margin-bottom:10px;color:var(--text-secondary);">Mensajes enviados por ${isMonth ? 'mes' : 'día'} <span style="font-weight:400;">(click para filtrar los números de abajo)</span></h3>
                     <div id="statsBars" style="margin-bottom:20px;max-height:280px;overflow-y:auto;padding-right:4px;">
                         ${timeline.map(d => `
                             <div class="stats-period-row" data-period="${dateOnly(d.periodo)}" onclick="filterStatsByPeriod('${dateOnly(d.periodo)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:3px;border-radius:6px;">
                                 <span style="width:90px;flex-shrink:0;font-size:11px;color:var(--text-secondary);">${labelFor(d)}</span>
                                 <div style="flex:1;background:var(--bg-dark);border-radius:4px;overflow:hidden;height:14px;">
-                                    <div style="width:${Math.round((Number(d.total || 0) / maxVal) * 100)}%;background:var(--primary);height:100%;"></div>
+                                    <div style="width:${Math.round((Number(d.enviados || 0) / maxVal) * 100)}%;background:var(--primary);height:100%;"></div>
                                 </div>
-                                <span style="width:30px;flex-shrink:0;text-align:right;font-size:11px;">${d.total}</span>
+                                <span style="width:30px;flex-shrink:0;text-align:right;font-size:11px;">${d.enviados}</span>
                             </div>
                         `).join('') || '<p style="color:var(--text-secondary);font-size:13px;">Sin datos</p>'}
                     </div>
