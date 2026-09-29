@@ -1228,7 +1228,24 @@ app.post('/api/cloud/send', async (req, res) => {
         let result;
 
         if (type === 'template') {
-            result = await cloudApi.sendTemplateMessage(destNumber, template || 'hello_world');
+            // language (default 'es') y params (array de textos = variables {{1}}..{{n}} del body)
+            // o components (formato Meta completo, para variables con nombre / botones).
+            const { language, params, components } = req.body;
+            let templateComponents = Array.isArray(components) ? components : [];
+            if (templateComponents.length === 0 && Array.isArray(params) && params.length > 0) {
+                templateComponents = [{
+                    type: 'body',
+                    parameters: params.map((p) => ({ type: 'text', text: String(p) }))
+                }];
+            }
+            result = await cloudApi.sendTemplateMessage(destNumber, template || 'hello_world', language || 'es', templateComponents);
+            if (!result.success && result.error) {
+                // Error serializable (un Error se convertiría en {} en el JSON)
+                result = {
+                    ...result,
+                    error: result.error.response?.data?.error?.message || result.error.message || 'Error enviando plantilla'
+                };
+            }
         } else if (message) {
             // Texto libre: NUNCA usar Cloud API (costo). Solo Baileys.
             const activeSessions = sessionManager.getActiveSessions();
@@ -1378,11 +1395,13 @@ app.get('/api/cloud/stats', async (req, res) => {
         const costUSD = billableConversations * COST_PER_CONVERSATION_USD;
         const costCOP = costUSD * USD_TO_COP;
 
+        const displayPhoneNumber = await cloudApi.getDisplayPhoneNumber();
+
         res.json({
             success: true,
             cloudApi: stats,
             database: dbStats,
-            phoneNumber: config.WHATSAPP_CLOUD_PHONE_ID,
+            phoneNumber: displayPhoneNumber || config.WHATSAPP_CLOUD_PHONE_ID,
             hybridMode: config.HYBRID_MODE_ENABLED,
             percentage: config.WHATSAPP_CLOUD_PERCENTAGE || 50,
             monthlyLimit: cloudApi.getMonthlyLimitInfo(),
