@@ -901,16 +901,25 @@
             }
         }
 
+        let statsMonthTopNumbers = []; // cache del top de los ultimos 30 dias, para el boton "Ver todos"
+        let statsSelectedDay = null;
+
+        // "2026-08-29T05:00:00.000Z" -> "2026-08-29"
+        function dateOnly(periodo) {
+            return String(periodo || '').slice(0, 10);
+        }
+
         async function loadStats() {
             const container = document.getElementById('messagesContainer');
             try {
                 const response = await fetch(`${API_BASE}/api/analytics/messages?period=day&range=month&top=10`);
                 const data = await response.json();
                 const timeline = data.timeline || [];
-                const topNumbers = data.top_numbers || [];
+                statsMonthTopNumbers = data.top_numbers || [];
+                statsSelectedDay = null;
                 const monthTotal = timeline.reduce((sum, d) => sum + Number(d.total || 0), 0);
                 const today = new Date().toISOString().split('T')[0];
-                const todayRow = timeline.find(d => (d.periodo || '').startsWith(today));
+                const todayRow = timeline.find(d => dateOnly(d.periodo) === today);
                 const todayTotal = todayRow ? Number(todayRow.total || 0) : 0;
 
                 const maxDay = Math.max(1, ...timeline.map(d => Number(d.total || 0)));
@@ -926,32 +935,70 @@
                             <div style="font-size:12px;color:var(--text-secondary);">Últimos 30 días</div>
                         </div>
                     </div>
-                    <h3 style="font-size:14px;margin-bottom:10px;color:var(--text-secondary);">Mensajes por día</h3>
-                    <div style="margin-bottom:20px;">
+                    <h3 style="font-size:14px;margin-bottom:10px;color:var(--text-secondary);">Mensajes por día <span style="font-weight:400;">(click en un día para filtrar los números de abajo)</span></h3>
+                    <div id="statsDayBars" style="margin-bottom:20px;max-height:280px;overflow-y:auto;padding-right:4px;">
                         ${timeline.map(d => `
-                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                                <span style="width:80px;font-size:11px;color:var(--text-secondary);">${d.periodo}</span>
+                            <div class="stats-day-row" data-day="${dateOnly(d.periodo)}" onclick="filterStatsByDay('${dateOnly(d.periodo)}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:3px;border-radius:6px;">
+                                <span style="width:90px;flex-shrink:0;font-size:11px;color:var(--text-secondary);">${dateOnly(d.periodo)}</span>
                                 <div style="flex:1;background:var(--bg-dark);border-radius:4px;overflow:hidden;height:14px;">
                                     <div style="width:${Math.round((Number(d.total || 0) / maxDay) * 100)}%;background:var(--primary);height:100%;"></div>
                                 </div>
-                                <span style="width:30px;text-align:right;font-size:11px;">${d.total}</span>
+                                <span style="width:30px;flex-shrink:0;text-align:right;font-size:11px;">${d.total}</span>
                             </div>
                         `).join('') || '<p style="color:var(--text-secondary);font-size:13px;">Sin datos</p>'}
                     </div>
-                    <h3 style="font-size:14px;margin-bottom:10px;color:var(--text-secondary);">Números con más mensajes (30 días)</h3>
-                    <div>
-                        ${topNumbers.map((n, i) => `
-                            <div onclick="openConversation('${n.phone_number}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg-received);border-radius:8px;margin-bottom:6px;">
-                                <span>#${i + 1} ${formatPhone(n.phone_number)}</span>
-                                <span style="background:var(--bg-dark);padding:2px 10px;border-radius:10px;font-size:12px;">${n.total}</span>
-                            </div>
-                        `).join('') || '<p style="color:var(--text-secondary);font-size:13px;">Sin datos</p>'}
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <h3 id="statsTopNumbersTitle" style="font-size:14px;color:var(--text-secondary);">Números con más mensajes (30 días)</h3>
+                        <button id="statsResetDayBtn" onclick="resetStatsDayFilter()" style="display:none;background:var(--bg-dark);color:var(--text-secondary);border:1px solid #2a2a2a;padding:4px 10px;border-radius:8px;font-size:11px;cursor:pointer;">Ver todos</button>
                     </div>
+                    <div id="statsTopNumbers"></div>
                 `;
+                renderTopNumbers(statsMonthTopNumbers);
             } catch (error) {
                 console.error('Error loading stats:', error);
                 container.innerHTML = `<div class="empty-state"><i class="fas fa-chart-bar"></i><h3>Error cargando estadísticas</h3></div>`;
             }
+        }
+
+        function renderTopNumbers(numbers) {
+            const el = document.getElementById('statsTopNumbers');
+            if (!el) return;
+            el.innerHTML = numbers.map((n, i) => `
+                <div onclick="openConversation('${n.phone_number}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg-received);border-radius:8px;margin-bottom:6px;">
+                    <span>#${i + 1} ${formatPhone(n.phone_number)}</span>
+                    <span style="background:var(--bg-dark);padding:2px 10px;border-radius:10px;font-size:12px;">${n.total}</span>
+                </div>
+            `).join('') || '<p style="color:var(--text-secondary);font-size:13px;">Sin mensajes ese día</p>';
+        }
+
+        async function filterStatsByDay(day) {
+            statsSelectedDay = day;
+
+            // Resaltar el dia seleccionado en la lista de barras
+            document.querySelectorAll('.stats-day-row').forEach(row => {
+                row.style.background = row.dataset.day === day ? 'rgba(37, 211, 102, 0.15)' : 'transparent';
+            });
+
+            document.getElementById('statsTopNumbersTitle').textContent = `Números con más mensajes — ${day}`;
+            document.getElementById('statsResetDayBtn').style.display = 'inline-block';
+            document.getElementById('statsTopNumbers').innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">Cargando...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/analytics/messages?period=custom&start_date=${day}&end_date=${day}&top=10`);
+                const data = await response.json();
+                renderTopNumbers(data.top_numbers || []);
+            } catch (error) {
+                console.error('Error filtrando por día:', error);
+                document.getElementById('statsTopNumbers').innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">Error cargando ese día</p>';
+            }
+        }
+
+        function resetStatsDayFilter() {
+            statsSelectedDay = null;
+            document.querySelectorAll('.stats-day-row').forEach(row => row.style.background = 'transparent');
+            document.getElementById('statsTopNumbersTitle').textContent = 'Números con más mensajes (30 días)';
+            document.getElementById('statsResetDayBtn').style.display = 'none';
+            renderTopNumbers(statsMonthTopNumbers);
         }
 
         function renderSentMessages(messages) {
