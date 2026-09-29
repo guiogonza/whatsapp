@@ -2310,6 +2310,24 @@ app.get('/api/monitor/messages', async (req, res) => {
 });
 
 /**
+ * GET /api/conversation/:phoneNumber - Hilo completo (enviados + recibidos)
+ * de un número específico, en orden cronológico.
+ */
+app.get('/api/conversation/:phoneNumber', async (req, res) => {
+    try {
+        const phoneNumber = (req.params.phoneNumber || '').replace(/\D/g, '');
+        if (!phoneNumber) {
+            return res.status(400).json({ success: false, error: 'Número inválido' });
+        }
+        const limit = parseInt(req.query.limit) || 200;
+        const messages = await database.getConversation(phoneNumber, limit);
+        res.json({ success: true, phoneNumber, count: messages.length, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/monitor/history - Agregados simples por fecha y por sesión
  */
 app.get('/api/monitor/history', async (req, res) => {

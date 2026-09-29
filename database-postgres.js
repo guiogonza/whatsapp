@@ -1046,6 +1046,50 @@ async function getMessagesByFilter(options = {}) {
 }
 
 /**
+ * Obtiene la conversación completa (enviados + recibidos) de un número,
+ * combinando la tabla `messages` (salientes de cualquier canal, y entrantes
+ * de Baileys con status='received') con `webhook_messages` (entrantes de
+ * WhatsApp Cloud API). Devuelve en orden cronológico ascendente (más viejo
+ * primero), como un hilo de chat.
+ */
+async function getConversation(phoneNumber, limit = 200) {
+    if (!pool || !isConnected) return [];
+    if (!phoneNumber) return [];
+
+    try {
+        const result = await pool.query(
+            `SELECT * FROM (
+                SELECT
+                    timestamp,
+                    session,
+                    message_preview AS message,
+                    status,
+                    CASE WHEN status = 'received' THEN 'in' ELSE 'out' END AS direction
+                FROM messages
+                WHERE phone_number = $1
+                UNION ALL
+                SELECT
+                    timestamp,
+                    'cloud-api' AS session,
+                    text_content AS message,
+                    'received' AS status,
+                    'in' AS direction
+                FROM webhook_messages
+                WHERE from_number = $1
+            ) combined
+            ORDER BY timestamp DESC
+            LIMIT $2`,
+            [phoneNumber, limit]
+        );
+
+        return result.rows.reverse();
+    } catch (error) {
+        console.error('❌ Error obteniendo conversación:', error.message);
+        return [];
+    }
+}
+
+/**
  * Obtener conteo de mensajes enviados hoy por sesión
  */
 async function getTodayMessagesBySession() {
@@ -1582,6 +1626,7 @@ module.exports = {
     getUniquePhoneNumbers,
     getUniqueSessions,
     getMessagesByFilter,
+    getConversation,
     getTodayMessagesBySession,
     getQueueStats,
     getQueuedNumbers,
