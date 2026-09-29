@@ -1226,6 +1226,7 @@ app.post('/api/cloud/send', async (req, res) => {
 
         const cloudApi = require('./lib/session/whatsapp-cloud-api');
         let result;
+        let templatePreview = null;
 
         if (type === 'template') {
             // language (default 'es') y params (array de textos = variables {{1}}..{{n}} del body)
@@ -1238,6 +1239,16 @@ app.post('/api/cloud/send', async (req, res) => {
                     parameters: params.map((p) => ({ type: 'text', text: String(p) }))
                 }];
             }
+
+            // Reconstruir un texto legible con las variables reales para guardarlo
+            // en "message_preview" -- sin esto, la pestaña Enviados solo mostraba
+            // "[Template: nombre]" para cualquier envio manual con plantilla.
+            const bodyComponent = templateComponents.find(c => c.type === 'body');
+            if (bodyComponent?.parameters?.length > 0) {
+                const parts = bodyComponent.parameters.map((p, i) => `${p.parameter_name || (i + 1)}: ${p.text}`);
+                templatePreview = `[${template}] ${parts.join(' | ')}`;
+            }
+
             result = await cloudApi.sendTemplateMessage(destNumber, template || 'hello_world', language || 'es', templateComponents);
             if (!result.success && result.error) {
                 // Error serializable (un Error se convertiría en {} en el JSON)
@@ -1270,7 +1281,7 @@ app.post('/api/cloud/send', async (req, res) => {
                 await db.query(`
                     INSERT INTO messages (session, phone_number, message_preview, char_count, status, is_consolidated, msg_count, created_at, timestamp)
                     VALUES ('cloud-api', $1, $2, $3, 'sent', false, 1, $4, $4)
-                `, [formattedNumber, (message || `[Template: ${template}]`).substring(0, 200), (message || '').length, colombiaTs]);
+                `, [formattedNumber, (message || templatePreview || `[Template: ${template}]`).substring(0, 200), (message || templatePreview || '').length, colombiaTs]);
             } catch (dbErr) {
                 console.error('Error guardando mensaje Cloud API:', dbErr);
             }
