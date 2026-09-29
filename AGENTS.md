@@ -40,6 +40,32 @@ ssh -i "$SSHK" root@164.68.118.86 "grep GPSWOX_WEBHOOK_URL /root/whatsapp-api/.e
 Si de todos modos editas el fallback aquí, aplica el mismo cambio en ambos
 archivos para que no diverjan.
 
+## Panel `webhook-viewer.html` (Centro de Mensajes)
+
+`public/webhook-viewer.html` — página standalone, sin login, servida
+estática (montada como volumen: `./public:/app/public` en
+`docker-compose.yml`, así que **no necesita rebuild**, solo copiar el
+archivo). Es la URL que se comparte para ver mensajes desde el celular:
+`http://164.68.118.86:3010/webhook-viewer.html` (el puerto 80 del dominio no
+la sirve, hay que usar `:3010` directo).
+
+Pestañas: **Recibidos** (`/api/webhook/messages`, tabla `webhook_messages`),
+**Enviados** (`/api/monitor/messages`, tabla `messages`), **Conversación**
+(busca por número y arma el hilo cronológico completo — usa
+`GET /api/conversation/:phoneNumber`, que en `database-postgres.js` hace un
+`UNION` entre `messages` WHERE `phone_number` y `webhook_messages` WHERE
+`from_number`), y **Estadísticas** (mensajes de hoy/30 días + top 10
+números, reutilizando el endpoint ya existente `/api/analytics/messages`
+que alimenta también el "Analytics Dashboard" del admin en `index.html`).
+Los números en cualquier lista son clickeables y abren directo su
+conversación.
+
+**Ojo de seguridad:** esta página no tiene autenticación — cualquiera con la
+URL y el puerto ve contenido de mensajes reales (números, alertas GPS,
+etc.). Está así a propósito por ahora (decisión del cliente), pero si algún
+día se pide protegerla, lo más simple es un middleware de basic auth en
+Express solo para esa ruta estática, no cambiar el resto del sitio.
+
 ## Notificaciones GPS genéricas (bot #7) — plantilla `alerta_vehiculo`
 
 Código: `lib/session/whatsapp-cloud-api.js`. Recibe el texto nativo de
