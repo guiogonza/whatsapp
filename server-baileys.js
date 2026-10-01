@@ -1760,6 +1760,40 @@ app.post('/api/gpswox/session/start-inspection', async (req, res) => {
 });
 
 /**
+ * POST /api/inspeccion/fotos-vehiculo-completadas - Llamado por insp-backend
+ * (hesego-inspecciones) cuando el auditor termina de subir las 4 fotos
+ * generales del vehículo en /insp-fotos. Reanuda la conversación de
+ * WhatsApp en el paso de ítems dañados, usando el mismo socket de la
+ * sesión GPSwox que ya conduce el flujo de Inspección.
+ */
+app.post('/api/inspeccion/fotos-vehiculo-completadas', async (req, res) => {
+    try {
+        const provided = req.headers['x-internal-secret'];
+        if (!config.INSP_INTERNAL_SECRET || provided !== config.INSP_INTERNAL_SECRET) {
+            return res.status(401).json({ success: false, error: 'secreto invalido' });
+        }
+
+        const { phoneNumber, fotos } = req.body;
+        if (!phoneNumber || !fotos) {
+            return res.status(400).json({ success: false, error: 'phoneNumber y fotos son requeridos' });
+        }
+
+        const gpswoxSessionName = gpswoxSession.getGPSwoxSessionName();
+        const session = sessionManager.getSession(gpswoxSessionName);
+        if (!session || !session.socket || session.state !== config.SESSION_STATES.READY) {
+            return res.status(503).json({ success: false, error: 'Sesion GPSwox no disponible' });
+        }
+
+        const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+        const inspFlow = require('./lib/session/inspeccion-flow');
+        await inspFlow.continuarDespuesDeFotosVehiculo(session, gpswoxSessionName, jid, fotos, session.socket);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/gpswox/session/create - Crea una sesión dedicada plataformagps
  * Body opcional: { "sessionName": "gpswox-session-2" }
  */
