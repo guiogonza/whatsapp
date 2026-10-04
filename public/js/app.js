@@ -55,12 +55,143 @@ function toggleBulkMethod() {
         cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-green-500 bg-green-50';
         if (tabGroups) tabGroups.style.display = 'none';
         switchBulkTab('numbers');
+        const tplBox = document.getElementById('bulkTemplateBox');
+        if (tplBox) { tplBox.classList.remove('hidden'); bulkLoadTemplates(); }
     } else {
+        const tplBoxOff = document.getElementById('bulkTemplateBox');
+        if (tplBoxOff) {
+            tplBoxOff.classList.add('hidden');
+            const tplSel = document.getElementById('bulkTemplateSelect');
+            if (tplSel && tplSel.value) { tplSel.value = ''; bulkOnTemplateSelect(); }
+        }
         if (sessionsContainer) sessionsContainer.style.display = '';
         baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-purple-500 bg-purple-50';
         cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
         if (tabGroups) tabGroups.style.display = '';
     }
+}
+
+// ======================== PLANTILLAS EN ENVÍO MASIVO (WhatsApp API) ========================
+// Usa las plantillas APROBADAS de la cuenta (GET /api/cloud/templates) y envía cada
+// número con POST /api/cloud/send { type: 'template', ... }, igual que el Centro de Mensajes.
+
+let bulkTemplates = {};   // "nombre::idioma" -> plantilla
+let bulkTemplatesLoaded = false;
+
+async function bulkLoadTemplates() {
+    const select = document.getElementById('bulkTemplateSelect');
+    const info = document.getElementById('bulkTemplateInfo');
+    if (!select || bulkTemplatesLoaded) return;
+    info.textContent = 'Cargando plantillas aprobadas...';
+    try {
+        const response = await fetch(`${API_URL}/api/cloud/templates`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'No se pudieron cargar las plantillas');
+        bulkTemplates = {};
+        select.innerHTML = '<option value="">Mensaje de texto (se envía por Baileys, gratis)</option>';
+        data.templates.forEach(t => {
+            const key = `${t.name}::${t.language}`;
+            bulkTemplates[key] = t;
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = `📋 ${t.name} · ${t.category} · ${t.language}`;
+            select.appendChild(opt);
+        });
+        bulkTemplatesLoaded = true;
+        info.textContent = `${data.templates.length} plantillas aprobadas disponibles.`;
+    } catch (error) {
+        info.textContent = 'Error al cargar plantillas: ' + error.message;
+    }
+}
+
+function bulkGetSelectedTemplate() {
+    const select = document.getElementById('bulkTemplateSelect');
+    return select && select.value ? (bulkTemplates[select.value] || null) : null;
+}
+
+function bulkOnTemplateSelect() {
+    const tpl = bulkGetSelectedTemplate();
+    const varsEl = document.getElementById('bulkTemplateVars');
+    const previewBox = document.getElementById('bulkTemplatePreviewBox');
+    const messageBox = document.getElementById('bulkMessage');
+    const fileInput = document.getElementById('bulkFileInput');
+    varsEl.innerHTML = '';
+
+    if (!tpl) {
+        previewBox.classList.add('hidden');
+        messageBox.disabled = false;
+        fileInput.disabled = false;
+        messageBox.placeholder = 'Mensaje para envío masivo...';
+        return;
+    }
+
+    messageBox.disabled = true;
+    messageBox.value = '';
+    messageBox.placeholder = 'Este envío usa una plantilla: completa las variables de arriba.';
+    fileInput.disabled = true;
+    fileInput.value = '';
+
+    const addInput = (varName, label, example) => {
+        const wrap = document.createElement('div');
+        const lbl = document.createElement('label');
+        lbl.className = 'block text-xs font-medium text-gray-600 mb-1';
+        lbl.textContent = label;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'bulk-tpl-var w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:outline-none';
+        input.dataset.var = varName;
+        input.placeholder = example ? `Ej: ${example}` : '';
+        input.addEventListener('input', bulkUpdateTemplatePreview);
+        wrap.appendChild(lbl);
+        wrap.appendChild(input);
+        varsEl.appendChild(wrap);
+    };
+    tpl.variables.forEach(v => addInput(v, tpl.isNamedParams ? v : `Variable {{${v}}}`, tpl.example && tpl.example[v]));
+    if (tpl.urlButton) addInput('__button_url__', `🔗 ${tpl.urlButton.text} (parte variable del link)`, tpl.urlButton.example);
+
+    previewBox.classList.remove('hidden');
+    bulkUpdateTemplatePreview();
+    document.getElementById('bulkTemplateInfo').textContent =
+        tpl.variables.length || tpl.urlButton
+            ? 'Las mismas variables se usan para todos los números de la lista.'
+            : 'Esta plantilla no tiene variables.';
+}
+
+function bulkTemplateValues() {
+    const values = {};
+    document.querySelectorAll('.bulk-tpl-var').forEach(input => { values[input.dataset.var] = input.value.trim(); });
+    return values;
+}
+
+function bulkUpdateTemplatePreview() {
+    const tpl = bulkGetSelectedTemplate();
+    if (!tpl) return;
+    const values = bulkTemplateValues();
+    let text = tpl.bodyText || '';
+    tpl.variables.forEach(v => { text = text.split(`{{${v}}}`).join(values[v] || `{{${v}}}`); });
+    document.getElementById('bulkTemplatePreview').textContent = text;
+}
+
+// Arma el cuerpo del envío (sin el número) o devuelve { error } si falta alguna variable
+function bulkBuildTemplateRequest(tpl) {
+    const values = bulkTemplateValues();
+    const missing = tpl.variables.find(v => !values[v]);
+    if (missing) return { error: `Completa la variable "${missing}"` };
+    if (tpl.urlButton && !values['__button_url__']) return { error: `Completa el campo del botón "${tpl.urlButton.text}"` };
+
+    const components = [];
+    if (tpl.variables.length > 0) {
+        components.push({
+            type: 'body',
+            parameters: tpl.variables.map(v => tpl.isNamedParams
+                ? { type: 'text', text: values[v], parameter_name: v }
+                : { type: 'text', text: values[v] })
+        });
+    }
+    if (tpl.urlButton) {
+        components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: values['__button_url__'] }] });
+    }
+    return { request: { type: 'template', template: tpl.name, language: tpl.language, components } };
 }
 
 function toggleConvMethod() {
@@ -1946,7 +2077,8 @@ async function sendBulkMessages() {
         }
     }
 
-    if (!message && !fileInput.files[0]) {
+    const bulkTpl = (method === 'cloud-api' && !isGroupSend) ? bulkGetSelectedTemplate() : null;
+    if (!message && !fileInput.files[0] && !bulkTpl) {
         statusEl.className = 'text-sm text-red-500';
         statusEl.textContent = 'Escribe un mensaje o adjunta un archivo';
         return;
@@ -1954,12 +2086,24 @@ async function sendBulkMessages() {
 
     // Envío vía Cloud API
     if (method === 'cloud-api' && !isGroupSend) {
-        if (!message) {
+        let cloudBody = null;
+        if (bulkTpl) {
+            const built = bulkBuildTemplateRequest(bulkTpl);
+            if (built.error) {
+                statusEl.className = 'text-sm text-red-500';
+                statusEl.textContent = built.error;
+                return;
+            }
+            cloudBody = built.request;
+        } else if (!message) {
             statusEl.className = 'text-sm text-red-500';
-            statusEl.textContent = 'WhatsApp API solo soporta mensajes de texto';
+            statusEl.textContent = 'Escribe un mensaje de texto o elige una plantilla';
             return;
         }
-        if (!confirm(`¿Enviar mensaje a ${recipients.length} número(s) vía WhatsApp API?`)) return;
+        const confirmText = bulkTpl
+            ? `¿Enviar la plantilla "${bulkTpl.name}" a ${recipients.length} número(s) vía WhatsApp API?\n\n${document.getElementById('bulkTemplatePreview').textContent}`
+            : `¿Enviar mensaje a ${recipients.length} número(s) vía WhatsApp API?`;
+        if (!confirm(confirmText)) return;
 
         button.disabled = true;
         button.innerHTML = '<span class="spinner inline-block mr-2"></span> Enviando vía API...';
@@ -1967,6 +2111,7 @@ async function sendBulkMessages() {
         progressBar.style.width = '0%';
 
         let sentCount = 0, failedCount = 0;
+        const errors = [];
         for (let i = 0; i < recipients.length; i++) {
             statusEl.className = 'text-sm text-blue-500';
             statusEl.textContent = `☁️ Enviando a ${recipients[i]}... (${i+1}/${recipients.length})`;
@@ -1974,13 +2119,17 @@ async function sendBulkMessages() {
                 const response = await fetch(`${API_URL}/api/cloud/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phoneNumber: recipients[i], message })
+                    body: JSON.stringify(cloudBody ? { ...cloudBody, to: recipients[i] } : { phoneNumber: recipients[i], message })
                 });
                 const result = await response.json();
                 if (result.success) sentCount++;
-                else failedCount++;
+                else {
+                    failedCount++;
+                    if (errors.length < 3) errors.push(`${recipients[i]}: ${result.error || 'error'}`);
+                }
             } catch (error) {
                 failedCount++;
+                if (errors.length < 3) errors.push(`${recipients[i]}: ${error.message}`);
             }
             const progress = ((i + 1) / recipients.length) * 100;
             progressBar.style.width = `${progress}%`;
@@ -1993,7 +2142,7 @@ async function sendBulkMessages() {
         statusEl.className = failedCount === 0 ? 'text-sm text-green-500' : 'text-sm text-yellow-500';
         statusEl.textContent = failedCount === 0 
             ? `✅ Completado vía API: ${sentCount} mensajes enviados`
-            : `⚠️ API: ${sentCount} enviados, ${failedCount} fallidos`;
+            : `⚠️ API: ${sentCount} enviados, ${failedCount} fallidos` + (errors.length ? ` — ${errors.join(' | ')}` : '');
         button.disabled = false;
         button.innerHTML = '🚀 Enviar Masivo';
         setTimeout(() => progressContainer.classList.add('hidden'), 3000);
@@ -2075,6 +2224,8 @@ function clearBulkForm() {
     document.getElementById('bulkContacts').value = '';
     document.getElementById('bulkMessage').value = '';
     document.getElementById('bulkFileInput').value = '';
+    const bulkTplSelect = document.getElementById('bulkTemplateSelect');
+    if (bulkTplSelect && bulkTplSelect.value) { bulkTplSelect.value = ''; bulkOnTemplateSelect(); }
     document.getElementById('bulkStatus').textContent = '';
     document.getElementById('bulkProgress').classList.add('hidden');
     document.querySelectorAll('input[name="bulkGroup"]').forEach(cb => cb.checked = false);
