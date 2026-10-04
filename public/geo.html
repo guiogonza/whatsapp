@@ -9,6 +9,16 @@
     <style>
         th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
         th.sortable:hover { background: #eef2f7; }
+        .tcol { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; cursor: default; }
+        .tbar { width: 100%; max-width: 24px; border-radius: 4px 4px 0 0; background: #93b8f5; transition: background .12s; }
+        .tbar.now { background: #2563eb; }
+        .tcol:hover .tbar, .tcol:focus .tbar { background: #1d4ed8; }
+        .tcol:focus { outline: none; }
+        .tbar, .tzero, .tval { flex: none; }
+        .tzero { width: 100%; max-width: 24px; height: 2px; background: #d1d5db; }
+        .tval { font-size: 11px; color: #374151; margin-bottom: 3px; line-height: 1; }
+        #trendTip { position: fixed; z-index: 60; pointer-events: none; background: #111827; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; display: none; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+        #trendTip strong { font-size: 14px; display: block; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -132,13 +142,16 @@
                     <h3 class="font-semibold text-gray-700 mb-3">Números con más envíos</h3>
                     <div id="topNumbers" class="space-y-2"></div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <h3 class="font-semibold text-gray-700 mb-3">Mensajes por día <span class="text-xs font-normal text-gray-500">(últimos 14 días)</span></h3>
-                    <div id="byDay" class="space-y-1"></div>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <h3 class="font-semibold text-gray-700 mb-3">Mensajes por mes <span class="text-xs font-normal text-gray-500">(últimos 12 meses)</span></h3>
-                    <div id="byMonth" class="space-y-1"></div>
+                <div class="bg-white rounded-lg shadow p-4 lg:col-span-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h3 class="font-semibold text-gray-700">Mensajes enviados</h3>
+                        <div class="inline-flex rounded-lg border border-gray-200 overflow-hidden text-sm" role="tablist">
+                            <button id="trendBtnMonth" onclick="setTrendView('month')" class="px-3 py-1">Por mes</button>
+                            <button id="trendBtnDay" onclick="setTrendView('day')" class="px-3 py-1 border-l border-gray-200">Por día</button>
+                            <button id="trendBtnTable" onclick="setTrendView('table')" class="px-3 py-1 border-l border-gray-200">Tabla</button>
+                        </div>
+                    </div>
+                    <div id="trendChart" class="overflow-x-auto"></div>
                 </div>
             </div>
         </section>
@@ -174,6 +187,7 @@
         </section>
     </div>
 
+    <div id="trendTip" role="tooltip"></div>
     <script>
         const $ = id => document.getElementById(id);
         const TZ = 'America/Bogota';
@@ -534,22 +548,6 @@
                 </div>`).join('');
         }
 
-        function lastDays(n) {
-            const days = [];
-            for (let i = n - 1; i >= 0; i--) days.push(bogota(new Date(Date.now() - i * 86400000).toISOString()).day);
-            return days;
-        }
-
-        function lastMonths(n) {
-            const months = [];
-            const [y, m] = bogota(new Date().toISOString()).month.split('-').map(Number);
-            for (let i = n - 1; i >= 0; i--) {
-                const d = new Date(Date.UTC(y, m - 1 - i, 1));
-                months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
-            }
-            return months;
-        }
-
         function renderStats() {
             const now = bogota(new Date().toISOString());
             $('kTotal').textContent = sentLog.length;
@@ -566,11 +564,144 @@
                 .map(([label, value]) => ({ label, value, title: `${nameByNumber.get(label) || 'Destino original'} (${label})` }));
             $('topNumbers').innerHTML = barList(numbers, 'bg-purple-500', 'Aún no hay envíos');
 
-            const perDay = countBy(sentLog, r => r.when.day);
-            $('byDay').innerHTML = barList(lastDays(14).map(d => ({ label: d.slice(5).split('-').reverse().join('-'), value: perDay.get(d) || 0 })), 'bg-green-500', '');
+            renderTrend();
+        }
 
-            const perMonth = countBy(sentLog, r => r.when.month);
-            $('byMonth').innerHTML = barList(lastMonths(12).map(m => ({ label: m, value: perMonth.get(m) || 0 })), 'bg-orange-500', '');
+        // ---------------------------- Gráfico de mensajes (mes / día / tabla) ----------------------------
+
+        const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        let trendView = 'month';
+
+        function setTrendView(view) {
+            trendView = view;
+            renderTrend();
+        }
+
+        function lastDays(n) {
+            const days = [];
+            for (let i = n - 1; i >= 0; i--) days.push(bogota(new Date(Date.now() - i * 86400000).toISOString()).day);
+            return days;
+        }
+
+        function lastMonths(n) {
+            const months = [];
+            const [y, m] = bogota(new Date().toISOString()).month.split('-').map(Number);
+            for (let i = n - 1; i >= 0; i--) {
+                const d = new Date(Date.UTC(y, m - 1 - i, 1));
+                months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+            }
+            return months;
+        }
+
+        // Eje Y con 4 tramos de paso "redondo" (1, 2, 5, 10, 20, 25, 50, 100...) que cubren el valor máximo
+        function niceScale(maxValue) {
+            const steps = [1, 2, 5];
+            for (let p = 1; ; p *= 10) {
+                for (const base of [1, 2, 2.5, 5]) {
+                    const step = base * p;
+                    if (!Number.isInteger(step)) continue;
+                    if (step * 4 >= maxValue) return { step, max: step * 4 };
+                }
+            }
+        }
+
+        function trendSeries(view) {
+            const now = bogota(new Date().toISOString());
+            const total = countBy(sentLog, r => (view === 'month' ? r.when.month : r.when.day));
+            const failed = countBy(sentLog.filter(r => !r.ok), r => (view === 'month' ? r.when.month : r.when.day));
+            const keys = view === 'month' ? lastMonths(12) : lastDays(30);
+            return keys.map((key, i) => {
+                const [y, m, d] = key.split('-').map(Number);
+                const isMonth = view === 'month';
+                const showYear = isMonth ? (m === 1 || i === 0) : false;
+                const showMonth = !isMonth && (d === 1 || i === 0);
+                return {
+                    key,
+                    value: total.get(key) || 0,
+                    failed: failed.get(key) || 0,
+                    label: isMonth ? MONTHS_SHORT[m - 1] : String(d),
+                    sub: showYear ? String(y) : (showMonth ? MONTHS_SHORT[m - 1] : ''),
+                    title: isMonth ? `${MONTHS_LONG[m - 1]} ${y}` : `${d} de ${MONTHS_LONG[m - 1]} ${y}`,
+                    current: key === (isMonth ? now.month : now.day)
+                };
+            });
+        }
+
+        function renderTrend() {
+            const box = $('trendChart');
+            const on = 'px-3 py-1 bg-blue-600 text-white';
+            const off = 'px-3 py-1 bg-white text-gray-600 hover:bg-gray-50';
+            ['Month', 'Day', 'Table'].forEach(name => {
+                const active = trendView === name.toLowerCase();
+                $('trendBtn' + name).className = (active ? on : off) + (name === 'Month' ? '' : ' border-l border-gray-200');
+                $('trendBtn' + name).setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+
+            if (trendView === 'table') {
+                const months = trendSeries('month').filter(m => m.value > 0).reverse();
+                const grand = sentLog.length;
+                box.innerHTML = months.length === 0
+                    ? '<p class="text-sm text-gray-500 py-4">Aún no hay envíos.</p>'
+                    : `<table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-700"><tr><th class="px-3 py-2">Mes</th><th class="px-3 py-2 text-right">Enviados</th><th class="px-3 py-2 text-right">Fallidos</th></tr></thead>
+                        <tbody>${months.map(m => `<tr class="border-t"><td class="px-3 py-2 capitalize">${esc(m.title)}</td><td class="px-3 py-2 text-right">${m.value - m.failed}</td><td class="px-3 py-2 text-right ${m.failed ? 'text-red-600' : 'text-gray-400'}">${m.failed}</td></tr>`).join('')}</tbody>
+                        <tfoot><tr class="border-t font-semibold"><td class="px-3 py-2">Total (últimos 12 meses)</td><td class="px-3 py-2 text-right">${months.reduce((a, m) => a + m.value - m.failed, 0)}</td><td class="px-3 py-2 text-right">${months.reduce((a, m) => a + m.failed, 0)}</td></tr></tfoot>
+                       </table>
+                       <p class="text-xs text-gray-500 mt-2">Histórico total: ${grand} mensajes.</p>`;
+                return;
+            }
+
+            const data = trendSeries(trendView);
+            const { step, max } = niceScale(Math.max(...data.map(d => d.value), 0));
+            const H = 180;
+            const ticks = [0, 1, 2, 3, 4].map(i => i * step);
+            const gap = trendView === 'month' ? 10 : 3;
+            const minW = trendView === 'month' ? 520 : 760;
+
+            const grid = ticks.map(t => `<div style="position:absolute;left:0;right:0;bottom:${t / max * 100}%;border-top:1px solid #e5e7eb"></div>`).join('');
+            const yAxis = ticks.map(t => `<div style="position:absolute;right:6px;bottom:calc(${t / max * 100}% - 7px);font-size:11px;color:#6b7280;line-height:14px">${t}</div>`).join('');
+            const cols = data.map((d, i) => {
+                const h = Math.max(2, d.value / max * H);
+                const mark = d.value === 0
+                    ? '<div class="tzero"></div>'
+                    : `<div class="tval">${d.value}</div><div class="tbar${d.current ? ' now' : ''}" style="height:${h}px"></div>`;
+                return `<div class="tcol" tabindex="0" data-i="${i}" aria-label="${esc(d.title)}: ${d.value} mensajes">${mark}</div>`;
+            }).join('');
+            const xLabels = data.map(d => `<div style="flex:1 1 0;min-width:0;text-align:center;font-size:11px;color:#6b7280;line-height:13px">${esc(d.label)}<div style="color:#374151;font-weight:600;height:13px">${esc(d.sub)}</div></div>`).join('');
+
+            box.innerHTML = `<div style="min-width:${minW}px;padding-top:22px">
+                <div style="display:flex">
+                    <div style="position:relative;width:34px;height:${H}px">${yAxis}</div>
+                    <div style="position:relative;flex:1;height:${H}px">
+                        ${grid}
+                        <div id="trendBars" style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:${gap}px;padding:0 4px">${cols}</div>
+                    </div>
+                </div>
+                <div style="display:flex;margin-top:4px"><div style="width:34px"></div><div style="flex:1;display:flex;gap:${gap}px;padding:0 4px">${xLabels}</div></div>
+                <p class="text-xs text-gray-500 mt-2">${trendView === 'month' ? 'Últimos 12 meses' : 'Últimos 30 días'} · pase el mouse sobre una columna para ver el detalle. La columna oscura es el período actual.</p>
+            </div>`;
+
+            const tip = $('trendTip');
+            const show = (el, evt) => {
+                const d = data[Number(el.dataset.i)];
+                tip.textContent = '';
+                const strong = document.createElement('strong');
+                strong.textContent = `${d.value} ${d.value === 1 ? 'mensaje' : 'mensajes'}`;
+                tip.appendChild(strong);
+                tip.appendChild(document.createTextNode(d.title + (d.failed ? ` · ${d.failed} fallido(s)` : '')));
+                tip.style.display = 'block';
+                const r = el.getBoundingClientRect();
+                const x = evt && evt.clientX ? evt.clientX : r.left + r.width / 2;
+                tip.style.left = Math.min(x + 12, window.innerWidth - tip.offsetWidth - 8) + 'px';
+                tip.style.top = Math.max(8, r.top - tip.offsetHeight - 6) + 'px';
+            };
+            box.querySelectorAll('.tcol').forEach(el => {
+                el.addEventListener('mousemove', evt => show(el, evt));
+                el.addEventListener('focus', () => show(el));
+                el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+                el.addEventListener('blur', () => { tip.style.display = 'none'; });
+            });
         }
 
         function sortSent(key) {
