@@ -27,14 +27,17 @@ function togglePersonalMethod() {
     const sessionsContainer = document.getElementById('personalSessionsContainer');
     const baileysLabel = document.getElementById('personalMethodBaileysLabel');
     const cloudLabel = document.getElementById('personalMethodCloudLabel');
+    const cloudExtra = document.getElementById('personalCloudExtra');
     
     if (method === 'cloud-api') {
         if (sessionsContainer) sessionsContainer.style.display = 'none';
         baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
         cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-green-500 bg-green-50';
+        if (cloudExtra) { cloudExtra.style.display = ''; pctLoadAccounts(); }
     } else {
         if (sessionsContainer) sessionsContainer.style.display = '';
         baileysLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-blue-500 bg-blue-50';
+        if (cloudExtra) cloudExtra.style.display = 'none';
         cloudLabel.className = 'flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 border-transparent bg-white';
     }
 }
@@ -1730,13 +1733,19 @@ async function sendPersonalMessage() {
         statusEl.textContent = 'Ingresa el número de teléfono';
         return;
     }
-    if (!message && !fileInput.files[0]) {
+    const pctHasTemplateSelected = method === 'cloud-api' && document.getElementById('pctTemplateSelect') && document.getElementById('pctTemplateSelect').value;
+    if (!message && !fileInput.files[0] && !pctHasTemplateSelected) {
         statusEl.className = 'text-sm text-red-500';
         statusEl.textContent = 'Escribe un mensaje o adjunta un archivo';
         return;
     }
 
     // Envío vía Cloud API
+    if (method === 'cloud-api' && document.getElementById('pctTemplateSelect') && document.getElementById('pctTemplateSelect').value) {
+        await pctSendTemplate(phoneNumber, statusEl, button);
+        return;
+    }
+
     if (method === 'cloud-api') {
         if (!message) {
             statusEl.className = 'text-sm text-red-500';
@@ -4170,4 +4179,156 @@ async function loadMetaStats() {
         }
         console.error('Error cargando Meta stats:', error);
     }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// PLANTILLAS CLOUD API dentro de "Mensaje Personalizado" (multi-cuenta)
+// ══════════════════════════════════════════════════════════════════════════
+let pctAccounts = [];
+let pctTemplates = [];
+let pctCurrentTemplate = null;
+
+async function pctLoadAccounts() {
+    const sel = document.getElementById('pctAccountSelect');
+    if (!sel || pctAccounts.length) { if (sel && pctAccounts.length) pctLoadTemplates(); return; }
+    try {
+        const r = await fetch(`${API_URL}/api/cloud-accounts`);
+        const d = await r.json();
+        pctAccounts = d.accounts || [];
+        sel.innerHTML = pctAccounts.map(a => `<option value="${a.id}">${a.label}</option>`).join('');
+        pctLoadTemplates();
+    } catch (e) {
+        sel.innerHTML = '<option value="">Error al cargar cuentas</option>';
+    }
+}
+
+async function pctLoadTemplates() {
+    const account = document.getElementById('pctAccountSelect').value;
+    const tSel = document.getElementById('pctTemplateSelect');
+    document.getElementById('pctFields').innerHTML = '';
+    document.getElementById('pctPreview').classList.add('hidden');
+    pctCurrentTemplate = null;
+    if (!account) { tSel.innerHTML = '<option value="">— Texto libre —</option>'; return; }
+    tSel.innerHTML = '<option value="">⏳ Cargando plantillas...</option>';
+    try {
+        const r = await fetch(`${API_URL}/api/cloud-templates?account=${encodeURIComponent(account)}`);
+        const d = await r.json();
+        pctTemplates = d.templates || [];
+        tSel.innerHTML = '<option value="">— Texto libre —</option>' +
+            pctTemplates.map(t => {
+                const statusIcon = t.status === 'APPROVED' ? '✅' : '⏳';
+                return `<option value="${t.name}">${statusIcon} ${t.name} · ${t.category} · ${t.language}</option>`;
+            }).join('');
+    } catch (e) {
+        tSel.innerHTML = '<option value="">Error al cargar plantillas</option>';
+    }
+}
+
+function pctExtractParams(bodyText) {
+    const matches = [...(bodyText || '').matchAll(/\{\{([^}]+)\}\}/g)];
+    const seen = new Set();
+    return matches.reduce((acc, m) => { if (!seen.has(m[1])) { seen.add(m[1]); acc.push(m[1]); } return acc; }, []);
+}
+
+function pctOnTemplateSelect() {
+    const name = document.getElementById('pctTemplateSelect').value;
+    const fieldsEl = document.getElementById('pctFields');
+    const previewEl = document.getElementById('pctPreview');
+    const messageBox = document.getElementById('personalMessage');
+    fieldsEl.innerHTML = '';
+    if (!name) {
+        pctCurrentTemplate = null;
+        previewEl.classList.add('hidden');
+        if (messageBox) { messageBox.disabled = false; messageBox.placeholder = 'Escribe tu mensaje aquí...'; }
+        return;
+    }
+    pctCurrentTemplate = pctTemplates.find(t => t.name === name);
+    if (!pctCurrentTemplate) return;
+    if (messageBox) { messageBox.disabled = true; messageBox.value = ''; messageBox.placeholder = 'Este mensaje usa una plantilla -- completa las variables abajo'; }
+
+    const bodyComp = pctCurrentTemplate.components?.find(c => c.type === 'BODY');
+    const bodyText = bodyComp?.text || '';
+    const params = pctExtractParams(bodyText);
+    const namedParams = bodyComp?.example?.body_text_named_params || [];
+
+    if (params.length) {
+        fieldsEl.innerHTML = params.map(p => {
+            const isNum = !isNaN(p);
+            const label = isNum ? `Parámetro {{${p}}}` : p;
+            const exampleEntry = namedParams.find(e => e.param_name === p);
+            const placeholder = exampleEntry ? exampleEntry.example : label;
+            return `
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">${label}</label>
+                    <input type="text" class="pct-param-input w-full px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none" data-param="${p}" placeholder="${placeholder}" oninput="pctUpdatePreview()">
+                </div>`;
+        }).join('');
+    }
+    pctUpdatePreview();
+}
+
+function pctUpdatePreview() {
+    if (!pctCurrentTemplate) return;
+    const bodyComp = pctCurrentTemplate.components?.find(c => c.type === 'BODY');
+    const bodyText = bodyComp?.text || '';
+    const values = {};
+    document.querySelectorAll('.pct-param-input').forEach(inp => { values[inp.dataset.param] = inp.value; });
+    const rendered = bodyText.replace(/\{\{([^}]+)\}\}/g, (_, p) => values[p] && values[p].trim() ? values[p] : `{{${p}}}`);
+    const previewEl = document.getElementById('pctPreview');
+    previewEl.textContent = rendered;
+    previewEl.classList.remove('hidden');
+}
+
+function pctBuildComponents() {
+    if (!pctCurrentTemplate) return undefined;
+    const bodyComp = pctCurrentTemplate.components?.find(c => c.type === 'BODY');
+    const params = pctExtractParams(bodyComp?.text || '');
+    if (!params.length) return undefined;
+    const isPositional = params.every(p => !isNaN(p));
+    const parameters = params.map(p => {
+        const val = document.querySelector(`.pct-param-input[data-param="${p}"]`)?.value?.trim() || '';
+        return isPositional ? { type: 'text', text: val } : { type: 'text', parameter_name: p, text: val };
+    });
+    return [{ type: 'body', parameters }];
+}
+
+async function pctSendTemplate(phoneNumber, statusEl, button) {
+    const account = document.getElementById('pctAccountSelect').value;
+    const templateName = document.getElementById('pctTemplateSelect').value;
+    const emptyParams = [...document.querySelectorAll('.pct-param-input')].filter(i => !i.value.trim());
+    if (emptyParams.length) {
+        statusEl.className = 'text-sm text-red-500';
+        statusEl.textContent = 'Completa todas las variables de la plantilla';
+        return;
+    }
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner inline-block mr-2"></span> Enviando plantilla...';
+    statusEl.className = 'text-sm text-blue-500';
+    statusEl.textContent = 'Enviando plantilla vía WhatsApp Cloud API...';
+    try {
+        const r = await fetch(`${API_URL}/api/cloud-templates/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account, templateName, phones: [phoneNumber],
+                language: pctCurrentTemplate?.language || 'es',
+                components: pctBuildComponents(),
+            })
+        });
+        const d = await r.json();
+        const res = d.results && d.results[0];
+        if (d.ok && res && res.ok) {
+            statusEl.className = 'text-sm text-green-500';
+            statusEl.textContent = `✅ Plantilla enviada (ID: ${res.id || 'ok'})`;
+        } else {
+            statusEl.className = 'text-sm text-red-500';
+            statusEl.textContent = `❌ Error: ${(res && res.error) || d.error || 'Error desconocido'}`;
+        }
+    } catch (e) {
+        statusEl.className = 'text-sm text-red-500';
+        statusEl.textContent = `❌ Error: ${e.message}`;
+    }
+    button.disabled = false;
+    button.innerHTML = '📨 Enviar Mensaje';
 }
