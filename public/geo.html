@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alertas Geozonas Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+        th.sortable:hover { background: #eef2f7; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Login -->
+    <div id="loginOverlay" class="hidden fixed inset-0 z-50 bg-gray-100 flex items-center justify-center px-4">
+        <form onsubmit="login(event)" class="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
+            <div class="text-center mb-6">
+                <div class="text-5xl mb-2">📍</div>
+                <h2 class="text-xl font-bold text-gray-800">Bot Geozonas</h2>
+                <p class="text-sm text-gray-500">Inicie sesión para continuar</p>
+            </div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+            <input id="loginUser" type="text" autocomplete="username" required
+                   class="w-full px-3 py-2 border rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+            <input id="loginPass" type="password" autocomplete="current-password" required
+                   class="w-full px-3 py-2 border rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p id="loginError" class="text-sm text-red-600 mb-3 min-h-[1.25rem]"></p>
+            <button id="loginBtn" type="submit" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">Entrar</button>
+            <p id="loginNotice" class="text-xs text-gray-500 text-center mt-3"></p>
+        </form>
+    </div>
+
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <div class="flex items-start justify-between gap-4 mb-2">
+            <h1 class="text-3xl font-bold text-gray-800">Alertas de Geozonas "control"</h1>
+            <button onclick="logout()" class="shrink-0 bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800 text-sm">Cerrar sesión</button>
+        </div>
+        <p class="text-sm text-gray-600 mb-6">
+            Las alertas que lleguen por la sesión <strong>gps rastrear</strong> con una geozona que empiece por
+            <em>(control ...)</em> se reenvían por WhatsApp a las personas asignadas a la placa.
+        </p>
+
+        <!-- Pestañas -->
+        <div class="flex gap-1 border-b border-gray-300 mb-6">
+            <button id="tabBtnPlates" onclick="showTab('plates')" class="px-5 py-2 font-medium border-b-2">Placas y personas</button>
+            <button id="tabBtnSent" onclick="showTab('sent')" class="px-5 py-2 font-medium border-b-2">Mensajes enviados</button>
+            <button id="tabBtnStats" onclick="showTab('stats')" class="px-5 py-2 font-medium border-b-2">Estadísticas</button>
+        </div>
+
+        <!-- ===================== PESTAÑA PLACAS ===================== -->
+        <section id="tabPlates">
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 id="formTitle" class="text-lg font-semibold mb-4">Agregar persona a una placa</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Placa</label>
+                        <input id="plate" type="text" placeholder="CQU92F" maxlength="10"
+                               class="w-full px-3 py-2 border rounded uppercase focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de la persona</label>
+                        <input id="name" type="text" placeholder="Juan Pérez" maxlength="80"
+                               class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+                        <input id="whatsapp" type="text" inputmode="numeric" placeholder="3196319531" maxlength="10"
+                               oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)"
+                               class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <button id="saveBtn" onclick="save()" class="bg-blue-500 text-white px-5 py-2 rounded hover:bg-blue-600">Agregar</button>
+                    <button id="cancelBtn" onclick="resetForm()" class="hidden bg-gray-500 text-white px-5 py-2 rounded hover:bg-gray-600">Cancelar</button>
+                    <span id="status" class="text-sm ml-2"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Una placa puede tener varias personas. El WhatsApp debe tener 10 dígitos y empezar por 3 (ej: 3196319531).</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold mb-1">Carga masiva con Excel</h2>
+                <p class="text-sm text-gray-600 mb-4">
+                    Descargue la plantilla, complete <strong>Placa</strong>, <strong>Nombre</strong> y <strong>WhatsApp</strong>
+                    (10 dígitos, sin 57) y cárguela. Cada número se valida; las filas con error se informan y no se guardan.
+                </p>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button onclick="downloadTemplate()" class="border border-green-600 text-green-700 px-4 py-2 rounded hover:bg-green-50">Descargar plantilla</button>
+                    <label class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 cursor-pointer">
+                        Cargar Excel
+                        <input id="bulkFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="uploadExcel(this)">
+                    </label>
+                    <span id="bulkStatus" class="text-sm"></span>
+                </div>
+                <div id="bulkResult" class="mt-3 text-sm"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-4 gap-3">
+                    <h2 class="text-lg font-semibold">Placas registradas <span id="count" class="text-gray-500 font-normal"></span></h2>
+                    <input id="search" type="text" placeholder="Buscar..." oninput="render()"
+                           class="px-3 py-1.5 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-700">
+                            <tr><th class="px-3 py-2">Placa</th><th class="px-3 py-2">Persona</th><th class="px-3 py-2">WhatsApp</th><th class="px-3 py-2"></th></tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== PESTAÑA ESTADÍSTICAS ===================== -->
+        <section id="tabStats" class="hidden">
+            <!-- Tarjetas resumen -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4"><div class="text-xs text-gray-500">Total enviados</div><div id="kTotal" class="text-3xl font-bold text-gray-800">0</div></div>
+                <div class="bg-white rounded-lg shadow p-4"><div class="text-xs text-gray-500">Hoy</div><div id="kToday" class="text-3xl font-bold text-blue-600">0</div></div>
+                <div class="bg-white rounded-lg shadow p-4"><div class="text-xs text-gray-500">Este mes</div><div id="kMonth" class="text-3xl font-bold text-green-600">0</div></div>
+                <div class="bg-white rounded-lg shadow p-4"><div class="text-xs text-gray-500">Fallidos</div><div id="kFailed" class="text-3xl font-bold text-red-600">0</div></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3">Placas con más envíos</h3>
+                    <div id="topPlates" class="space-y-2"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3">Números con más envíos</h3>
+                    <div id="topNumbers" class="space-y-2"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3">Mensajes por día <span class="text-xs font-normal text-gray-500">(últimos 14 días)</span></h3>
+                    <div id="byDay" class="space-y-1"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3">Mensajes por mes <span class="text-xs font-normal text-gray-500">(últimos 12 meses)</span></h3>
+                    <div id="byMonth" class="space-y-1"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== PESTAÑA ENVIADOS ===================== -->
+        <section id="tabSent" class="hidden">
+            <!-- Tabla ordenable -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                    <h2 class="text-lg font-semibold">Detalle de envíos <span id="sentCount" class="text-gray-500 font-normal"></span></h2>
+                    <div class="flex gap-2">
+                        <input id="sentSearch" type="text" placeholder="Buscar placa, persona, número..." oninput="renderSent()"
+                               class="px-3 py-1.5 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button onclick="loadSent()" class="px-3 py-1.5 border rounded text-sm hover:bg-gray-50">Actualizar</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-700">
+                            <tr>
+                                <th class="sortable px-3 py-2" onclick="sortSent('ts')">Fecha y hora <span data-arrow="ts"></span></th>
+                                <th class="sortable px-3 py-2" onclick="sortSent('plate')">Placa <span data-arrow="plate"></span></th>
+                                <th class="sortable px-3 py-2" onclick="sortSent('name')">Persona <span data-arrow="name"></span></th>
+                                <th class="sortable px-3 py-2" onclick="sortSent('whatsapp')">WhatsApp <span data-arrow="whatsapp"></span></th>
+                                <th class="sortable px-3 py-2" onclick="sortSent('event')">Evento <span data-arrow="event"></span></th>
+                                <th class="sortable px-3 py-2" onclick="sortSent('ok')">Estado <span data-arrow="ok"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sentBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const TZ = 'America/Bogota';
+        let records = [];
+        let editingId = null;
+        let sentLog = [];
+        let sentSort = { key: 'ts', dir: 'desc' };
+
+        function esc(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : value;
+            return div.innerHTML;
+        }
+
+        function message(text, isError) {
+            $('status').textContent = text;
+            $('status').className = 'text-sm ml-2 ' + (isError ? 'text-red-600' : 'text-green-600');
+        }
+
+        // ---------------------------- Sesión ----------------------------
+
+        const IDLE_LIMIT_MS = 5 * 60 * 1000;   // cierre por inactividad
+        const PING_EVERY_MS = 60 * 1000;       // mantiene viva la sesión del servidor mientras haya actividad
+        let lastActivity = Date.now();
+        let lastPing = 0;
+        let idleTimer = null;
+        let appStarted = false;
+
+        const rawFetch = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+            const response = await rawFetch(...args);
+            if (response.status === 401 && String(args[0]).startsWith('/api/alert-vehicles')) {
+                showLogin('Su sesión venció. Inicie sesión de nuevo.');
+            }
+            return response;
+        };
+
+        function showLogin(notice) {
+            clearInterval(idleTimer);
+            idleTimer = null;
+            $('loginOverlay').classList.remove('hidden');
+            $('loginNotice').textContent = notice || '';
+            $('loginError').textContent = '';
+            $('loginPass').value = '';
+            $('loginUser').focus();
+        }
+
+        function onActivity() {
+            lastActivity = Date.now();
+            if (idleTimer && lastActivity - lastPing > PING_EVERY_MS) {
+                lastPing = lastActivity;
+                rawFetch('/api/geo-auth/me').catch(() => {});
+            }
+        }
+
+        function startIdleWatch() {
+            lastActivity = Date.now();
+            lastPing = Date.now();
+            clearInterval(idleTimer);
+            idleTimer = setInterval(() => {
+                if (Date.now() - lastActivity >= IDLE_LIMIT_MS) logout('Sesión cerrada por 5 minutos de inactividad.');
+            }, 5000);
+        }
+        ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(evt =>
+            document.addEventListener(evt, onActivity, { passive: true }));
+
+        async function login(event) {
+            event.preventDefault();
+            $('loginBtn').disabled = true;
+            $('loginError').textContent = '';
+            try {
+                const response = await rawFetch('/api/geo-auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: $('loginUser').value, password: $('loginPass').value })
+                });
+                const data = await response.json();
+                if (!response.ok) { $('loginError').textContent = data.error; return; }
+                $('loginOverlay').classList.add('hidden');
+                $('loginPass').value = '';
+                startApp();
+            } catch (error) {
+                $('loginError').textContent = 'No se pudo conectar: ' + error.message;
+            } finally {
+                $('loginBtn').disabled = false;
+            }
+        }
+
+        async function logout(notice) {
+            try { await rawFetch('/api/geo-auth/logout', { method: 'POST' }); } catch (e) {}
+            records = [];
+            sentLog = [];
+            render();
+            showLogin(typeof notice === 'string' ? notice : 'Sesión cerrada.');
+        }
+
+        function startApp() {
+            startIdleWatch();
+            load();
+            if (!appStarted) {
+                appStarted = true;
+                let initialTab = 'plates';
+                try { initialTab = localStorage.getItem('geoTab') || 'plates'; } catch (e) {}
+                showTab(['sent', 'stats'].includes(initialTab) ? initialTab : 'plates');
+            } else {
+                showTab('plates');
+            }
+        }
+
+        async function init() {
+            try {
+                const response = await rawFetch('/api/geo-auth/me');
+                if (response.ok) return startApp();
+            } catch (e) {}
+            showLogin();
+        }
+
+        // ---------------------------- Pestañas ----------------------------
+
+        function showTab(tab) {
+            const tabs = { plates: 'Plates', sent: 'Sent', stats: 'Stats' };
+            const on = 'px-5 py-2 font-medium border-b-2 border-blue-500 text-blue-600';
+            const off = 'px-5 py-2 font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-800';
+            Object.entries(tabs).forEach(([key, name]) => {
+                $('tab' + name).classList.toggle('hidden', key !== tab);
+                $('tabBtn' + name).className = key === tab ? on : off;
+            });
+            try { localStorage.setItem('geoTab', tab); } catch (e) {}
+            if (tab === 'sent' || tab === 'stats') loadSent();
+        }
+
+        // ---------------------------- Placas y personas ----------------------------
+
+        async function load() {
+            try {
+                const response = await fetch('/api/alert-vehicles');
+                const data = await response.json();
+                records = data.records;
+                render();
+            } catch (error) {
+                message('No se pudo cargar la lista: ' + error.message, true);
+            }
+        }
+
+        function render() {
+            const q = $('search').value.trim().toLowerCase();
+            const rows = records.filter(r => !q || `${r.plate} ${r.name} ${r.whatsapp}`.toLowerCase().includes(q));
+            $('count').textContent = `(${records.length})`;
+            $('tableBody').innerHTML = rows.length === 0
+                ? '<tr><td colspan="4" class="px-3 py-4 text-center text-gray-500">Sin registros</td></tr>'
+                : rows.map(r => `
+                    <tr class="border-t">
+                        <td class="px-3 py-2 font-mono">${esc(r.plate)}</td>
+                        <td class="px-3 py-2">${esc(r.name)}</td>
+                        <td class="px-3 py-2">${esc(r.whatsapp)}</td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap">
+                            <button onclick="edit('${r.id}')" class="text-blue-600 hover:underline mr-3">Editar</button>
+                            <button onclick="del('${r.id}')" class="text-red-600 hover:underline">Eliminar</button>
+                        </td>
+                    </tr>`).join('');
+        }
+
+        function resetForm() {
+            editingId = null;
+            ['plate', 'name', 'whatsapp'].forEach(id => $(id).value = '');
+            $('saveBtn').textContent = 'Agregar';
+            $('formTitle').textContent = 'Agregar persona a una placa';
+            $('cancelBtn').classList.add('hidden');
+        }
+
+        function edit(id) {
+            const r = records.find(x => x.id === id);
+            if (!r) return;
+            editingId = id;
+            $('plate').value = r.plate;
+            $('name').value = r.name;
+            $('whatsapp').value = r.whatsapp;
+            $('saveBtn').textContent = 'Guardar';
+            $('formTitle').textContent = 'Editar registro';
+            $('cancelBtn').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function save() {
+            const payload = { plate: $('plate').value, name: $('name').value, whatsapp: $('whatsapp').value };
+            if (!/^3\d{9}$/.test(payload.whatsapp)) return message('El WhatsApp debe tener 10 dígitos y empezar por 3', true);
+            try {
+                const response = await fetch(editingId ? `/api/alert-vehicles/${editingId}` : '/api/alert-vehicles', {
+                    method: editingId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) return message(data.error, true);
+                message(editingId ? 'Registro actualizado' : 'Registro agregado', false);
+                resetForm();
+                load();
+            } catch (error) {
+                message('Error al guardar: ' + error.message, true);
+            }
+        }
+
+        async function del(id) {
+            const r = records.find(x => x.id === id);
+            if (!r || !confirm(`¿Eliminar a ${r.name} de la placa ${r.plate}?`)) return;
+            try {
+                const response = await fetch(`/api/alert-vehicles/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (!response.ok) return message(data.error, true);
+                if (editingId === id) resetForm();
+                message('Registro eliminado', false);
+                load();
+            } catch (error) {
+                message('Error al eliminar: ' + error.message, true);
+            }
+        }
+
+        // ---------------------------- Carga masiva (Excel) ----------------------------
+
+        function downloadTemplate() {
+            const wb = XLSX.utils.book_new();
+            const sheet = XLSX.utils.aoa_to_sheet([
+                ['Placa', 'Nombre', 'WhatsApp'],
+                ['CQU92F', 'Juan Pérez', '3196319531'],
+                ['KZZ595', 'María López', '3155553132']
+            ]);
+            sheet['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }];
+            XLSX.utils.book_append_sheet(wb, sheet, 'Plantilla');
+            const help = XLSX.utils.aoa_to_sheet([
+                ['Instrucciones'],
+                ['1. Una fila por persona. Una placa puede repetirse con distintas personas.'],
+                ['2. Placa: de 5 a 8 letras o números (ej: CQU92F).'],
+                ['3. Nombre: nombre de la persona que recibe la alerta.'],
+                ['4. WhatsApp: exactamente 10 dígitos y empieza por 3 (ej: 3196319531). No escriba el 57.'],
+                ['5. Borre las filas de ejemplo antes de cargar el archivo.']
+            ]);
+            help['!cols'] = [{ wch: 90 }];
+            XLSX.utils.book_append_sheet(wb, help, 'Instrucciones');
+            XLSX.writeFile(wb, 'plantilla_placas_personas.xlsx');
+        }
+
+        function normalizeHeader(value) {
+            return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
+        }
+
+        async function uploadExcel(input) {
+            const file = input.files[0];
+            input.value = '';
+            if (!file) return;
+            const status = $('bulkStatus');
+            const result = $('bulkResult');
+            result.innerHTML = '';
+            status.className = 'text-sm text-gray-600';
+            status.textContent = 'Leyendo archivo...';
+            try {
+                const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+                const ws = wb.Sheets['Plantilla'] || wb.Sheets[wb.SheetNames[0]];
+                const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+                if (matrix.length < 2) throw new Error('El archivo no tiene filas de datos');
+
+                const headers = matrix[0].map(normalizeHeader);
+                const find = (names, fallback) => {
+                    const i = headers.findIndex(h => names.includes(h));
+                    return i === -1 ? fallback : i;
+                };
+                const col = {
+                    plate: find(['placa', 'placas', 'vehiculo'], 0),
+                    name: find(['nombre', 'persona', 'nombrepersona'], 1),
+                    whatsapp: find(['whatsapp', 'celular', 'telefono', 'numero', 'movil'], 2)
+                };
+
+                const rows = [];
+                matrix.slice(1).forEach((line, i) => {
+                    if (line.every(cell => String(cell).trim() === '')) return;
+                    rows.push({
+                        excelRow: i + 2,
+                        plate: String(line[col.plate] ?? '').trim(),
+                        name: String(line[col.name] ?? '').trim(),
+                        whatsapp: String(line[col.whatsapp] ?? '').trim()
+                    });
+                });
+                if (rows.length === 0) throw new Error('No hay filas con datos');
+
+                const total = { created: 0, duplicates: 0, errors: [] };
+                const CHUNK = 200;
+                for (let i = 0; i < rows.length; i += CHUNK) {
+                    status.textContent = `Cargando ${Math.min(i + CHUNK, rows.length)} de ${rows.length}...`;
+                    const chunk = rows.slice(i, i + CHUNK);
+                    const response = await fetch('/api/alert-vehicles/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ rows: chunk.map(({ plate, name, whatsapp }) => ({ plate, name, whatsapp })) })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Error del servidor');
+                    total.created += data.created;
+                    total.duplicates += data.duplicates;
+                    data.errors.forEach(e => total.errors.push({ row: chunk[e.row].excelRow, error: e.error }));
+                }
+
+                const ok = total.errors.length === 0;
+                status.className = 'text-sm ' + (ok ? 'text-green-600' : 'text-orange-600');
+                status.textContent = `${total.created} agregados · ${total.duplicates} repetidos omitidos · ${total.errors.length} con error`;
+                if (!ok) {
+                    result.innerHTML = '<div class="bg-red-50 border border-red-200 rounded p-3"><p class="font-medium text-red-700 mb-1">Filas no cargadas:</p><ul class="list-disc ml-5 text-red-700">'
+                        + total.errors.slice(0, 30).map(e => `<li>Fila ${e.row}: ${esc(e.error)}</li>`).join('')
+                        + (total.errors.length > 30 ? `<li>... y ${total.errors.length - 30} más</li>` : '')
+                        + '</ul></div>';
+                }
+                load();
+            } catch (error) {
+                status.className = 'text-sm text-red-600';
+                status.textContent = 'No se pudo cargar: ' + error.message;
+            }
+        }
+
+        // ---------------------------- Mensajes enviados ----------------------------
+
+        // Fecha en hora de Colombia: { day: 'YYYY-MM-DD', month: 'YYYY-MM', text: 'DD-MM-YYYY HH:mm:ss' }
+        function bogota(iso) {
+            const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+                timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+            }).formatToParts(new Date(iso)).map(p => [p.type, p.value]));
+            return {
+                day: `${parts.year}-${parts.month}-${parts.day}`,
+                month: `${parts.year}-${parts.month}`,
+                text: `${parts.day}-${parts.month}-${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`
+            };
+        }
+
+        async function loadSent() {
+            try {
+                const response = await fetch('/api/alert-vehicles/log');
+                const data = await response.json();
+                sentLog = data.records.map(r => ({ ...r, when: bogota(r.ts) }));
+                renderStats();
+                renderSent();
+            } catch (error) {
+                $('sentBody').innerHTML = `<tr><td colspan="6" class="px-3 py-4 text-center text-red-600">No se pudo cargar: ${esc(error.message)}</td></tr>`;
+            }
+        }
+
+        function countBy(list, keyFn) {
+            const counts = new Map();
+            list.forEach(item => counts.set(keyFn(item), (counts.get(keyFn(item)) || 0) + 1));
+            return counts;
+        }
+
+        function barList(entries, color, emptyText) {
+            if (entries.length === 0) return `<p class="text-sm text-gray-500">${emptyText}</p>`;
+            const max = Math.max(...entries.map(e => e.value));
+            return entries.map(e => `
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-36 truncate ${e.mono ? 'font-mono' : ''}" title="${esc(e.title || e.label)}">${esc(e.label)}</div>
+                    <div class="flex-1 bg-gray-100 rounded h-4"><div class="${color} h-4 rounded" style="width:${Math.max(3, e.value / max * 100)}%"></div></div>
+                    <div class="w-10 text-right font-medium">${e.value}</div>
+                </div>`).join('');
+        }
+
+        function lastDays(n) {
+            const days = [];
+            for (let i = n - 1; i >= 0; i--) days.push(bogota(new Date(Date.now() - i * 86400000).toISOString()).day);
+            return days;
+        }
+
+        function lastMonths(n) {
+            const months = [];
+            const [y, m] = bogota(new Date().toISOString()).month.split('-').map(Number);
+            for (let i = n - 1; i >= 0; i--) {
+                const d = new Date(Date.UTC(y, m - 1 - i, 1));
+                months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+            }
+            return months;
+        }
+
+        function renderStats() {
+            const now = bogota(new Date().toISOString());
+            $('kTotal').textContent = sentLog.length;
+            $('kToday').textContent = sentLog.filter(r => r.when.day === now.day).length;
+            $('kMonth').textContent = sentLog.filter(r => r.when.month === now.month).length;
+            $('kFailed').textContent = sentLog.filter(r => !r.ok).length;
+
+            const plates = [...countBy(sentLog, r => r.plate)].sort((a, b) => b[1] - a[1]).slice(0, 8)
+                .map(([label, value]) => ({ label, value, mono: true }));
+            $('topPlates').innerHTML = barList(plates, 'bg-blue-500', 'Aún no hay envíos');
+
+            const nameByNumber = new Map(sentLog.filter(r => r.name).map(r => [r.whatsapp, r.name]));
+            const numbers = [...countBy(sentLog, r => r.whatsapp)].sort((a, b) => b[1] - a[1]).slice(0, 8)
+                .map(([label, value]) => ({ label, value, title: `${nameByNumber.get(label) || 'Destino original'} (${label})` }));
+            $('topNumbers').innerHTML = barList(numbers, 'bg-purple-500', 'Aún no hay envíos');
+
+            const perDay = countBy(sentLog, r => r.when.day);
+            $('byDay').innerHTML = barList(lastDays(14).map(d => ({ label: d.slice(5).split('-').reverse().join('-'), value: perDay.get(d) || 0 })), 'bg-green-500', '');
+
+            const perMonth = countBy(sentLog, r => r.when.month);
+            $('byMonth').innerHTML = barList(lastMonths(12).map(m => ({ label: m, value: perMonth.get(m) || 0 })), 'bg-orange-500', '');
+        }
+
+        function sortSent(key) {
+            sentSort = { key, dir: sentSort.key === key && sentSort.dir === 'asc' ? 'desc' : 'asc' };
+            renderSent();
+        }
+
+        function renderSent() {
+            const q = $('sentSearch').value.trim().toLowerCase();
+            const { key, dir } = sentSort;
+            const rows = sentLog
+                .filter(r => !q || `${r.plate} ${r.name} ${r.whatsapp} ${r.event} ${r.when.text}`.toLowerCase().includes(q))
+                .sort((a, b) => {
+                    const av = key === 'ok' ? (a.ok ? 1 : 0) : a[key];
+                    const bv = key === 'ok' ? (b.ok ? 1 : 0) : b[key];
+                    const cmp = typeof av === 'number' ? av - bv : String(av ?? '').localeCompare(String(bv ?? ''), 'es', { numeric: true });
+                    return dir === 'asc' ? cmp : -cmp;
+                });
+            $('sentCount').textContent = `(${rows.length})`;
+            document.querySelectorAll('[data-arrow]').forEach(el => {
+                el.textContent = el.dataset.arrow === key ? (dir === 'asc' ? '▲' : '▼') : '';
+            });
+            $('sentBody').innerHTML = rows.length === 0
+                ? '<tr><td colspan="6" class="px-3 py-4 text-center text-gray-500">Sin envíos registrados</td></tr>'
+                : rows.map(r => `
+                    <tr class="border-t">
+                        <td class="px-3 py-2 whitespace-nowrap">${esc(r.when.text)}</td>
+                        <td class="px-3 py-2 font-mono">${esc(r.plate)}</td>
+                        <td class="px-3 py-2">${r.original ? '<span class="text-gray-400 italic">Destino original</span>' : esc(r.name)}</td>
+                        <td class="px-3 py-2">${esc(r.whatsapp)}</td>
+                        <td class="px-3 py-2">${esc(r.event)}</td>
+                        <td class="px-3 py-2">${r.ok
+                            ? '<span class="text-green-700 bg-green-100 rounded px-2 py-0.5 text-xs">Enviado</span>'
+                            : `<span class="text-red-700 bg-red-100 rounded px-2 py-0.5 text-xs" title="${esc(r.error)}">Falló</span>`}</td>
+                    </tr>`).join('');
+        }
+
+        init();
+    </script>
+</body>
+</html>

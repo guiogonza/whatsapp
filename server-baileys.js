@@ -111,7 +111,8 @@ app.use(authenticateAPI);
 
 // Login simple para la pagina de operatividad
 const OPERATIONAL_LOGIN_USER = 'hesego';
-const OPERATIONAL_LOGIN_PASSWORD = 'alejandro123*';
+// La clave sale del .env (OPERATIONAL_LOGIN_PASSWORD). Sin valor por defecto: si falta, se usa uno aleatorio por proceso y nadie puede entrar.
+const OPERATIONAL_LOGIN_PASSWORD = process.env.OPERATIONAL_LOGIN_PASSWORD || require('crypto').randomBytes(24).toString('hex');
 const OPERATIONAL_AUTH_COOKIE = 'operatividad_auth';
 const OPERATIONAL_AUTH_TTL_MS = 10 * 60 * 1000;
 const OPERATIONAL_AUTH_SECRET = process.env.OPERATIONAL_AUTH_SECRET || process.env.JWT_SECRET || process.env.API_KEY || 'operatividad-login-secret';
@@ -280,6 +281,60 @@ app.use((req, res, next) => {
     return res.redirect('/operatividad-login');
 });
 
+// ======================== ALERTAS GEOZONAS "CONTROL" ========================
+// Reenvía a las personas asignadas a la placa las alertas cuya geozona empieza por "control"
+const alertForwarder = require('./lib/alertForwarder');
+const geoAuth = require('./lib/geoAuth');
+
+// Login de la página de geozonas: el CRUD y el registro exigen sesión iniciada
+app.post('/api/geo-auth/login', geoAuth.login);
+app.post('/api/geo-auth/logout', geoAuth.logout);
+app.get('/api/geo-auth/me', geoAuth.me);
+app.use('/api/alert-vehicles', geoAuth.requireAuth);
+
+function forwardControlAlertAsync(to, message, originalResult) {
+    alertForwarder.forwardControlAlert(message, to, async (number, text) => {
+        const result = await sessionManager.sendMessageHybrid(number, text);
+        if (result && result.success === false) {
+            throw new Error((result.error && result.error.message) || result.error || 'envío fallido');
+        }
+    }, originalResult).catch(error => console.error('❌ forwardControlAlert:', error.message));
+}
+
+app.get('/api/alert-vehicles', (req, res) => {
+    res.json({ sessionName: config.GPSWOX_SESSION_NAME, records: alertForwarder.list() });
+});
+
+app.post('/api/alert-vehicles/bulk', (req, res) => {
+    const rows = req.body && req.body.rows;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'Se requiere rows (arreglo)' });
+    if (rows.length > 500) return res.status(400).json({ error: 'Máximo 500 filas por solicitud' });
+    res.json(alertForwarder.bulkCreate(rows));
+});
+
+app.get('/api/alert-vehicles/log', (req, res) => {
+    res.json({ records: alertForwarder.listLog() });
+});
+
+app.post('/api/alert-vehicles', (req, res) => {
+    const result = alertForwarder.create(req.body || {});
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.status(201).json(result.record);
+});
+
+app.put('/api/alert-vehicles/:id', (req, res) => {
+    const result = alertForwarder.update(req.params.id, req.body || {});
+    if (result.notFound) return res.status(404).json({ error: 'Registro no encontrado' });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result.record);
+});
+
+app.delete('/api/alert-vehicles/:id', (req, res) => {
+    const result = alertForwarder.remove(req.params.id);
+    if (result.notFound) return res.status(404).json({ error: 'Registro no encontrado' });
+    res.json({ success: true });
+});
+
 // Notificaciones simples por GET: /?to=NUMERO&message=TEXTO
 app.get('/', async (req, res, next) => {
     const { to, message } = req.query;
@@ -288,6 +343,7 @@ app.get('/', async (req, res, next) => {
     try {
         const cleanedMessage = cleanGPSMessage(message);
         const result = await sessionManager.sendMessageHybrid(to, cleanedMessage);
+        forwardControlAlertAsync(to, cleanedMessage, result);
         res.json(result);
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -2111,6 +2167,7 @@ app.post('/api/messages/send', async (req, res) => {
 
         // Enviar directo por Cloud API (con fallback a Baileys si está disponible)
         const result = await sessionManager.sendMessageHybrid(phoneNumber, cleanedMessage);
+        forwardControlAlertAsync(phoneNumber, cleanedMessage, result);
         res.json(result);
     } catch (error) {
         res.status(500).json({
