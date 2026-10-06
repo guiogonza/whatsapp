@@ -184,6 +184,9 @@ module.exports = {
     MT5_WEBHOOK_SECRET: process.env.MT5_WEBHOOK_SECRET || 'mt5_secret_2026',
     // Sesiones dedicadas FX (múltiples sesiones separadas por coma)
     FX_SESSION_NAMES: (process.env.FX_SESSION_NAMES || 'fx-session-1,fx-session-2').split(',').map(s => s.trim()).filter(s => s),
+    // API de precios en vivo (feed websocket XM) del dashboard de trading
+    // en C:\Documentos\Fx\app.py (GET /api/precios) -- usada por "fx oro", etc.
+    FX_PRICES_API_URL: process.env.FX_PRICES_API_URL || 'https://fx.apptu.net',
     // Modo dedicado: true = sesiones FX SOLO envían notificaciones FX
     FX_DEDICATED_MODE: process.env.FX_DEDICATED_MODE !== 'false', // true por defecto
     
