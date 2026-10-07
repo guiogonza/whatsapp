@@ -184,9 +184,13 @@ module.exports = {
     MT5_WEBHOOK_SECRET: process.env.MT5_WEBHOOK_SECRET || 'mt5_secret_2026',
     // Sesiones dedicadas FX (múltiples sesiones separadas por coma)
     FX_SESSION_NAMES: (process.env.FX_SESSION_NAMES || 'fx-session-1,fx-session-2').split(',').map(s => s.trim()).filter(s => s),
-    // API de precios en vivo (feed websocket XM) del dashboard de trading
-    // en C:\Documentos\Fx\app.py (GET /api/precios) -- usada por "fx oro", etc.
-    FX_PRICES_API_URL: process.env.FX_PRICES_API_URL || 'https://fx.apptu.net',
+    // Asistente de trading con IA (DeepSeek + tool-calling) del dashboard en
+    // C:\Documentos\Fx\app.py (POST /webhook/incoming, mismo patron que el
+    // webhook de hesego-operatividad) -- responde "fx <cualquier pregunta>"
+    // con datos reales (posiciones, operaciones cerradas, precios en vivo).
+    // Mismo docker network que wpp-bot, se le habla por nombre de contenedor.
+    FX_ASSISTANT_URL: process.env.FX_ASSISTANT_URL || 'http://mt5-dashboard-fxpro:8080',
+    FX_ASSISTANT_SHARED_SECRET: process.env.FX_ASSISTANT_SHARED_SECRET || '',
     // Modo dedicado: true = sesiones FX SOLO envían notificaciones FX
     FX_DEDICATED_MODE: process.env.FX_DEDICATED_MODE !== 'false', // true por defecto
     
