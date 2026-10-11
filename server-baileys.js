@@ -2343,7 +2343,12 @@ app.post('/api/send-direct', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Número de teléfono inválido' });
         }
 
-        const jid = formattedNumber + '@s.whatsapp.net';
+        // formatPhoneNumber ya devuelve el numero CON el sufijo @s.whatsapp.net incluido
+        // (ver lib/session/utils.js); agregarlo de nuevo aqui duplicaba el sufijo y dejaba
+        // el JID invalido, haciendo que session.socket.sendMessage() se colgara hasta el
+        // timeout del llamador en vez de fallar rapido. Corregido 2026-10-06 (reaparecio
+        // porque un redeploy normal de este repo sobreescribio un parche aplicado solo en vivo).
+        const jid = formattedNumber;
         await session.socket.sendMessage(jid, { text: message });
 
         console.log(`📤 Mensaje directo enviado a ${formattedNumber} vía sesión ${session.name}`);
