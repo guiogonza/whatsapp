@@ -46,8 +46,12 @@ archivos para que no diverjan.
 estática (montada como volumen: `./public:/app/public` en
 `docker-compose.yml`, así que **no necesita rebuild**, solo copiar el
 archivo). Es la URL que se comparte para ver mensajes desde el celular:
-`http://164.68.118.86:3010/webhook-viewer.html` (el puerto 80 del dominio no
-la sirve, hay que usar `:3010` directo).
+`https://api.rastrear.com.co/webhook-viewer.html` (nginx + Certbot en el
+host hacen proxy_pass de ese dominio directo a `127.0.0.1:3010`, así que
+también sirve este panel — va por HTTPS, sin exponer la IP). La variante
+directa `http://164.68.118.86:3010/webhook-viewer.html` también funciona
+(el puerto 80 de `rastrear.com.co` sin el subdominio `api.` no la sirve,
+ojo con esa diferencia).
 
 Pestañas: **Recibidos** (`/api/webhook/messages`, tabla `webhook_messages`),
 **Enviados** (`/api/monitor/messages`, tabla `messages`), **Conversación**
