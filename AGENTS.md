@@ -185,6 +185,20 @@ decenas de proyectos y las cosas se mueven):
 como subdirectorios) — no son 4 repos separados aunque tengan 4
 `docker-compose.yml` distintos en el servidor.
 
+**Llamadas entre contenedores hermanos: usar red interna de Docker, nunca
+el dominio público.** Bug real (oct. 2026): `insp-backend` avisaba a
+`wpp-bot` de las fotos del vehículo llamando a `https://api.rastrear.com.co`
+(el dominio público) en vez de al contenedor por su nombre — cuando el DNS
+externo tuvo cortes transitorios (`EAI_AGAIN`, confirmado 2026-09-29 y
+2026-10-12), la inspección se quedaba "colgada" después de las fotos, y
+como la alerta a administradores usaba la misma URL rota, tampoco avisaba
+del fallo. Corregido uniendo `insp-backend` a la red
+`whatsapp-api_whatsapp-network` y usando `http://wpp-bot:3010` (mismo
+patrón ya usado para `mt5-dashboard-fxpro` ↔ `wpp-bot`). Si se agrega otra
+llamada HTTP entre proyectos hermanos que viven en el mismo servidor,
+preferir siempre `docker network connect` + nombre de contenedor sobre un
+dominio público, aunque exista.
+
 ## Git
 
 Repo con remoto en GitHub: `https://github.com/guiogonza/whatsapp.git`,
