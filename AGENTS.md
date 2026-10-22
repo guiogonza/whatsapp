@@ -40,6 +40,50 @@ ssh -i "$SSHK" root@164.68.118.86 "grep GPSWOX_WEBHOOK_URL /root/whatsapp-api/.e
 Si de todos modos editas el fallback aquí, aplica el mismo cambio en ambos
 archivos para que no diverjan.
 
+**Drift conocido (oct. 2026) entre ambos archivos:** el fallback de aquí
+(`lib/session/gpswox-session.js`) tiene un selector de empresa (escribir
+"HESEGO" o "RASTREAR" elige y recuerda con cuál empresa trabaja ese
+teléfono, vía `empresa-pref.js` + tabla `bot_empresa_elegida` en la BD de
+**este** repo) que el archivo real de producción
+(`hesego-operatividad/lib/gpswox-session.js`) **no tiene** — ahí solo
+`HESEGO`/`MENU`/`MENÚ` abren el menú, sin selector de empresa. No se
+corrigió ese drift a propósito (nadie lo pidió todavía): en producción,
+"RASTREAR" hoy no abre un menú de GPSwox de Rastrear, abre directo el
+Preoperacional de Rastrear (ver tabla de palabras clave abajo) — son dos
+cosas distintas y es fácil confundirlas. Si algún día se pide un menú de
+GPSwox específico para Rastrear, hay que portar el selector de empresa al
+archivo real de `hesego-operatividad`, no asumir que ya está ahí.
+
+## Palabras clave que activan cada bot (estado real, oct. 2026)
+
+Todos estos triggers se evalúan en `lib/session/core.js` de **este** repo
+(antes de reenviar nada a `hesego-operatividad`), excepto donde se indica
+lo contrario. Case-insensitive, se compara el mensaje completo en
+mayúsculas contra estas listas (configurables por variable de entorno, los
+valores de abajo son los default en `config.js` si la variable no está
+puesta):
+
+| Palabra(s) | Abre | Dónde se maneja |
+|---|---|---|
+| `HESEGO`, `MENU`, `MENÚ` | Menú de administración GPSwox (asignar placa, consultar ubicación, Operatividad, lanzar Inspección/Preop desde el menú) | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+| `RASTREAR` | Preoperacional de **Rastrear** directo (tenant `rastrear`) | aquí: `lib/session/preop-flow.js` vía `PREOP_RASTREAR_TRIGGER_KEYWORDS` |
+| `RPREOP`, `PREOP RASTREAR`, `PREOPERACIONAL RASTREAR` | Preoperacional de Rastrear (variantes explícitas, mismo tenant que arriba) | aquí: `lib/session/preop-flow.js` |
+| `PREOP`, `PREOPERACIONAL` | Preoperacional de la empresa que el teléfono eligió antes (o Hesego por defecto si nunca eligió) | aquí: `lib/session/preop-flow.js` (`tenantFromTrigger` → `'auto'` → `empresa-pref.js`) |
+| `PREOP HESEGO`, `PREOPERACIONAL HESEGO` | Preoperacional de Hesego explícito | aquí: `lib/session/preop-flow.js` |
+| `INSPECCION`, `INSPECCIONAR`, `INSPECCIÓN` | Checklist de Inspección (20 ítems) | aquí: `lib/session/inspeccion-flow.js` |
+| `TURNO`, `TURNOS` | Responde con el link de la app de turnos de descargue (`TURNOS_URL`, hoy `https://turnos.apptu.net/app`) — no abre ningún flujo conversacional, es una sola respuesta | aquí: `lib/session/core.js` directo, no tiene módulo propio |
+| `fx`, `/fx`, `!fx`, `posiciones`, `balance`, `estado`, `trading`, `mt5` (+ lo que sigue, libre) | Asistente de trading (DeepSeek) | aquí: `lib/session/fx-commands.js` → reenvía a `mt5-dashboard-fxpro` |
+| `CANCELAR` | Aborta el flujo de Preoperacional/Inspección en curso | dentro de cada flujo |
+| Cualquier otra palabra, sin conversación activa, en la sesión dedicada GPSwox | Aviso de "bot de notificaciones, escribe el nombre de la empresa o la palabra de acceso" — al 3er intento fallido seguido, bloqueo de 10 min (avisa cuánto falta si escribe de nuevo) | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+
+**Bots que NO se activan por palabra clave** (corren por canal propio, no
+por texto en WhatsApp): Notificaciones GPS genéricas (bot #7, llegan por
+`/webhook`/`/webhook/whatsapp` desde GPSwox, no las escribe un humano),
+Encuesta de Riesgo Psicosocial (bot #6, se dispara desde
+`/api/encuesta-bot/enviar`, no por palabra del usuario), Auto-respuesta IA
+(bot #8, responde a cualquier mensaje de un número en
+`AI_AUTO_RESPONSE_NUMBERS` que no haya matcheado ningún trigger de arriba).
+
 ## Panel `webhook-viewer.html` (Centro de Mensajes)
 
 `public/webhook-viewer.html` — página standalone, sin login, servida
