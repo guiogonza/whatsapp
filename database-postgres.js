@@ -506,6 +506,16 @@ async function createTables() {
             )
         `);
 
+        // Empresa con la que trabaja cada teléfono (hesego | rastrear): define qué menú ve y a qué
+        // instancia del Preoperacional entran las palabras PREOP / PREOPERACIONAL.
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS bot_empresa_elegida (
+                telefono VARCHAR(30) PRIMARY KEY,
+                empresa VARCHAR(20) NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
         // Tabla de sesiones conversacionales del bot de Inspección (Hesego)
         await client.query(`
             CREATE TABLE IF NOT EXISTS inspeccion_bot_sesiones (
