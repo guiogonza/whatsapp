@@ -41,18 +41,16 @@ Si de todos modos editas el fallback aquí, aplica el mismo cambio en ambos
 archivos para que no diverjan.
 
 **Drift conocido (oct. 2026) entre ambos archivos:** el fallback de aquí
-(`lib/session/gpswox-session.js`) tiene un selector de empresa (escribir
-"HESEGO" o "RASTREAR" elige y recuerda con cuál empresa trabaja ese
-teléfono, vía `empresa-pref.js` + tabla `bot_empresa_elegida` en la BD de
-**este** repo) que el archivo real de producción
-(`hesego-operatividad/lib/gpswox-session.js`) **no tiene** — ahí solo
-`HESEGO`/`MENU`/`MENÚ` abren el menú, sin selector de empresa. No se
-corrigió ese drift a propósito (nadie lo pidió todavía): en producción,
-"RASTREAR" hoy no abre un menú de GPSwox de Rastrear, abre directo el
-Preoperacional de Rastrear (ver tabla de palabras clave abajo) — son dos
-cosas distintas y es fácil confundirlas. Si algún día se pide un menú de
-GPSwox específico para Rastrear, hay que portar el selector de empresa al
-archivo real de `hesego-operatividad`, no asumir que ya está ahí.
+(`lib/session/gpswox-session.js`) tiene su PROPIO selector de empresa
+(distinto del menú de Rastrear descrito abajo, construido antes y nunca
+portado a producción) vía `empresa-pref.js` + tabla `bot_empresa_elegida`
+en la BD de **este** repo. El archivo real de producción
+(`hesego-operatividad/lib/gpswox-session.js`) no usa ese mecanismo — tiene
+su propio menú de Rastrear standalone (ver tabla abajo), construido
+directamente ahí. No se intentó unificar los dos (nadie lo pidió
+todavía) — si se toca el menú de Rastrear, el archivo real a editar es
+`hesego-operatividad/lib/gpswox-session.js`, el fallback de aquí queda
+weirdly adelantado en un diseño distinto que no está en uso.
 
 ## Palabras clave que activan cada bot (estado real, oct. 2026)
 
@@ -65,16 +63,27 @@ puesta):
 
 | Palabra(s) | Abre | Dónde se maneja |
 |---|---|---|
-| `HESEGO`, `MENU`, `MENÚ` | Menú de administración GPSwox (asignar placa, consultar ubicación, Operatividad, lanzar Inspección/Preop desde el menú) | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
-| `RASTREAR` | Preoperacional de **Rastrear** directo (tenant `rastrear`) | aquí: `lib/session/preop-flow.js` vía `PREOP_RASTREAR_TRIGGER_KEYWORDS` |
-| `RPREOP`, `PREOP RASTREAR`, `PREOPERACIONAL RASTREAR` | Preoperacional de Rastrear (variantes explícitas, mismo tenant que arriba) | aquí: `lib/session/preop-flow.js` |
+| `HESEGO` | Menú de administración de Hesego (asignar placa, consultar ubicación, Operatividad, lanzar Inspección/Preop desde el menú) — siempre abre/reinicia, es la palabra de entrada "desde afuera" | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+| `RASTREAR` | Menú propio de Rastrear: *1* Preoperacional, *2* Consultar placa y última ubicación (misma lógica que la opción 2 de Hesego, GPSwox es genérico), *3* Consultar documentos y *4* Registrar gastos (estas dos últimas responden "próximamente, en desarrollo") — igual que HESEGO, siempre abre/reinicia desde afuera | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+| `MENU`, `MENÚ` | Vuelve al tope del menú en el que ya estés (Hesego o Rastrear) — **solo si hay una conversación activa**; sin conversación (recién entraste o escribiste `SALIR`) no hace nada, se trata como palabra sin reconocer | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+| `SALIR` | Termina cualquier conversación/flujo activo (Hesego, Rastrear, Preop, Inspección) y responde un mensaje neutral sin abrir ningún menú ni mencionar las palabras clave (evita invitar a probarlas todas) | `hesego-operatividad/lib/gpswox-session.js` (webhook); `preop-flow.js`/`inspeccion-flow.js` aquí reenvían "salir" ahí si hay sesión local activa |
+| `RPREOP`, `PREOP RASTREAR`, `PREOPERACIONAL RASTREAR` | Acceso directo al Preoperacional de Rastrear, sin pasar por el menú (lo que la opción *1* del menú de Rastrear usa internamente vía el endpoint `/api/gpswox/session/start-preop`) | aquí: `lib/session/preop-flow.js` |
 | `PREOP`, `PREOPERACIONAL` | Preoperacional de la empresa que el teléfono eligió antes (o Hesego por defecto si nunca eligió) | aquí: `lib/session/preop-flow.js` (`tenantFromTrigger` → `'auto'` → `empresa-pref.js`) |
 | `PREOP HESEGO`, `PREOPERACIONAL HESEGO` | Preoperacional de Hesego explícito | aquí: `lib/session/preop-flow.js` |
 | `INSPECCION`, `INSPECCIONAR`, `INSPECCIÓN` | Checklist de Inspección (20 ítems) | aquí: `lib/session/inspeccion-flow.js` |
 | `TURNO`, `TURNOS` | Responde con el link de la app de turnos de descargue (`TURNOS_URL`, hoy `https://turnos.apptu.net/app`) — no abre ningún flujo conversacional, es una sola respuesta | aquí: `lib/session/core.js` directo, no tiene módulo propio |
 | `fx`, `/fx`, `!fx`, `posiciones`, `balance`, `estado`, `trading`, `mt5` (+ lo que sigue, libre) | Asistente de trading (DeepSeek) | aquí: `lib/session/fx-commands.js` → reenvía a `mt5-dashboard-fxpro` |
-| `CANCELAR` | Aborta el flujo de Preoperacional/Inspección en curso | dentro de cada flujo |
-| Cualquier otra palabra, sin conversación activa, en la sesión dedicada GPSwox | Aviso de "bot de notificaciones, escribe el nombre de la empresa o la palabra de acceso" — al 3er intento fallido seguido, bloqueo de 10 min (avisa cuánto falta si escribe de nuevo) | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+| `CANCELAR` | Aborta el flujo de Preoperacional/Inspección en curso (se queda donde estaba, a diferencia de SALIR que termina todo) | dentro de cada flujo |
+| Cualquier otra palabra, sin conversación activa, en la sesión dedicada GPSwox | Aviso de "bot de notificaciones, escribe el nombre de la empresa o la palabra de acceso" (nunca nombra las palabras) — al 3er intento fallido seguido, bloqueo de 10 min (avisa cuánto falta si escribe de nuevo) | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+
+**Puente hesego-operatividad → whatsapp-docker para flujos que solo viven
+aquí**: cuando el menú de Hesego u Rastrear necesita arrancar Inspección o
+Preoperacional (que son módulos de este repo, no de hesego-operatividad),
+`hesego-operatividad/lib/whatsappSender.js` llama de vuelta a un endpoint
+interno de aquí (`startInspection` → `POST /api/gpswox/session/start-inspection`,
+`startPreopRastrear` → `POST /api/gpswox/session/start-preop`), con el
+mismo secreto compartido (`GPSWOX_WEBHOOK_SHARED_SECRET`) que usa el
+webhook en la otra dirección.
 
 **Bots que NO se activan por palabra clave** (corren por canal propio, no
 por texto en WhatsApp): Notificaciones GPS genéricas (bot #7, llegan por
