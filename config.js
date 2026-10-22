@@ -129,10 +129,22 @@ module.exports = {
     // URL base del backend de Preoperacional (ya desplegado, no lo modificamos, solo lo consumimos)
     PREOP_API_URL: process.env.PREOP_API_URL || 'https://preoperacional.logisticahesego.com',
     // Palabras clave que inician una conversación de preoperacional (separadas por coma en .env)
-    PREOP_TRIGGER_KEYWORDS: (process.env.PREOP_TRIGGER_KEYWORDS || 'PREOPERACIONAL,PREOP').split(',').map(s => s.trim().toUpperCase()),
+    PREOP_TRIGGER_KEYWORDS: (process.env.PREOP_TRIGGER_KEYWORDS || 'PREOPERACIONAL,PREOP,PREOP HESEGO,PREOPERACIONAL HESEGO').split(',').map(s => s.trim().toUpperCase()),
     // Secreto compartido para /internal/* del backend de Preoperacional (generar el link
     // único de fotos con cámara obligatoria — mismo secreto que PREOP_INTERNAL_SECRET allá)
     PREOP_INTERNAL_SECRET: process.env.PREOP_INTERNAL_SECRET || '',
+
+    // Segunda instancia independiente del Preoperacional: Rastrear (rastrear.com.co/preoperacional).
+    // Mismo bot y número; la palabra clave decide a qué backend se habla (ver preop-flow.js).
+    // Palabra "turno": el bot responde con el enlace de la app de turnos de descargue.
+    TURNOS_TRIGGER_KEYWORDS: (process.env.TURNOS_TRIGGER_KEYWORDS || 'TURNO,TURNOS').split(',').map(s => s.trim().toUpperCase()),
+    TURNOS_URL: process.env.TURNOS_URL || 'https://turnos.apptu.net/app',
+    PREOP_RASTREAR_API_URL: process.env.PREOP_RASTREAR_API_URL || 'https://rastrear.com.co/preoperacional',
+    PREOP_RASTREAR_INTERNAL_SECRET: process.env.PREOP_RASTREAR_INTERNAL_SECRET || '',
+    // "RASTREAR" solo (el nombre de la empresa) ya NO esta aqui -- ahora abre el
+    // menu propio de Rastrear (hesego-operatividad/lib/gpswox-session.js), que
+    // incluye Preoperacional como una de sus opciones, no un acceso directo.
+    PREOP_RASTREAR_TRIGGER_KEYWORDS: (process.env.PREOP_RASTREAR_TRIGGER_KEYWORDS || 'RPREOP,PREOP RASTREAR,PREOPERACIONAL RASTREAR').split(',').map(s => s.trim().toUpperCase()),
 
     // ============================================
     // Bot de Inspección (Hesego) — módulo hermano de Preoperacional

@@ -1816,6 +1816,42 @@ app.post('/api/gpswox/session/start-inspection', async (req, res) => {
 });
 
 /**
+ * POST /api/gpswox/session/start-preop - Llamado por hesego-operatividad
+ * cuando alguien elige "Preoperacional" en el menú de Rastrear (el flujo de
+ * Preoperacional solo existe aquí, mismo patrón que start-inspection).
+ * Body: { phoneNumber, tenant: 'hesego'|'rastrear' }
+ */
+app.post('/api/gpswox/session/start-preop', async (req, res) => {
+    try {
+        if (config.GPSWOX_WEBHOOK_SHARED_SECRET) {
+            const provided = req.headers['x-internal-secret'];
+            if (provided !== config.GPSWOX_WEBHOOK_SHARED_SECRET) {
+                return res.status(401).json({ success: false, error: 'secreto invalido' });
+            }
+        }
+
+        const { phoneNumber, tenant } = req.body;
+        if (!phoneNumber) {
+            return res.status(400).json({ success: false, error: 'phoneNumber es requerido' });
+        }
+
+        const gpswoxSessionName = gpswoxSession.getGPSwoxSessionName();
+        const session = sessionManager.getSession(gpswoxSessionName);
+        if (!session || !session.socket || session.state !== config.SESSION_STATES.READY) {
+            return res.status(503).json({ success: false, error: 'Sesion GPSwox no disponible' });
+        }
+
+        const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+        const preopFlow = require('./lib/session/preop-flow');
+        const trigger = tenant === 'rastrear' ? 'RPREOP' : 'PREOP';
+        await preopFlow.handleMessage(session, gpswoxSessionName, jid, trigger, null, session.socket);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/inspeccion/fotos-vehiculo-completadas - Llamado por insp-backend
  * (hesego-inspecciones) cuando el auditor termina de subir las 4 fotos
  * generales del vehículo en /insp-fotos. Reanuda la conversación de
@@ -2361,6 +2397,41 @@ app.post('/api/send-direct', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error enviando mensaje directo:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/fx-push - Alertas del proyecto Fx hacia SU telefono autorizado, por la conversacion (jid) que Fx ya uso.
+ * Exige X-Internal-Secret (el de data/fx-inbound.json). Solo envia a la conversacion guardada en data/fx-jid.json
+ * (se guarda sola cuando ese telefono escribe "fx ..."); nunca a un numero arbitrario.
+ */
+app.post('/api/fx-push', async (req, res) => {
+    try {
+        const fsp = require('fs').promises;
+        const dataDir = path.join(__dirname, 'data');
+        const cfg = JSON.parse(await fsp.readFile(path.join(dataDir, 'fx-inbound.json'), 'utf8'));
+        const dado = String(req.get('X-Internal-Secret') || '');
+        const ok = cfg.secret && dado.length === String(cfg.secret).length &&
+            crypto.timingSafeEqual(Buffer.from(dado), Buffer.from(String(cfg.secret)));
+        if (!ok) return res.status(403).json({ success: false, error: 'no autorizado' });
+        const message = String((req.body && req.body.message) || '').slice(0, 3800);
+        if (!message) return res.status(400).json({ success: false, error: 'message requerido' });
+        let dest;
+        try { dest = JSON.parse(await fsp.readFile(path.join(dataDir, 'fx-jid.json'), 'utf8')); }
+        catch (e) { return res.status(409).json({ success: false, error: 'aun no hay conversacion guardada: escribe "fx hola" al numero una vez' }); }
+        const session = sessionManager.getSession(cfg.sesion);
+        if (!session || session.state !== config.SESSION_STATES.READY || !session.socket) {
+            return res.status(503).json({ success: false, error: `sesion ${cfg.sesion} no disponible` });
+        }
+        // una conversacion por telefono autorizado (dest.jids); si el archivo es del formato anterior, solo dest.jid
+        const destinos = dest.jids && Object.keys(dest.jids).length ? Object.values(dest.jids).map(x => x.jid) : [dest.jid];
+        const resultados = await Promise.allSettled(destinos.map(j => session.socket.sendMessage(j, { text: message })));
+        const enviados = resultados.filter(r => r.status === 'fulfilled').length;
+        if (!enviados) return res.status(502).json({ success: false, error: resultados.map(r => r.reason && r.reason.message).filter(Boolean).join('; ') || 'no se pudo enviar' });
+        res.json({ success: true, enviados, de: destinos.length });
+    } catch (error) {
+        console.error('❌ Error en fx-push:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
