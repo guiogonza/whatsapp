@@ -71,10 +71,23 @@ puesta):
 | `PREOP`, `PREOPERACIONAL` | Preoperacional de la empresa que el teléfono eligió antes (o Hesego por defecto si nunca eligió) | aquí: `lib/session/preop-flow.js` (`tenantFromTrigger` → `'auto'` → `empresa-pref.js`) |
 | `PREOP HESEGO`, `PREOPERACIONAL HESEGO` | Preoperacional de Hesego explícito | aquí: `lib/session/preop-flow.js` |
 | `INSPECCION`, `INSPECCIONAR`, `INSPECCIÓN` | Checklist de Inspección (20 ítems) | aquí: `lib/session/inspeccion-flow.js` |
-| `TURNO`, `TURNOS` | Responde con el link de la app de turnos de descargue (`TURNOS_URL`, hoy `https://turnos.apptu.net/app`) — no abre ningún flujo conversacional, es una sola respuesta | aquí: `lib/session/core.js` directo, no tiene módulo propio |
 | `fx`, `/fx`, `!fx`, `posiciones`, `balance`, `estado`, `trading`, `mt5` (+ lo que sigue, libre) | Asistente de trading (DeepSeek) | aquí: `lib/session/fx-commands.js` → reenvía a `mt5-dashboard-fxpro` |
 | `CANCELAR` | Aborta el flujo de Preoperacional/Inspección en curso (se queda donde estaba, a diferencia de SALIR que termina todo) | dentro de cada flujo |
 | Cualquier otra palabra, sin conversación activa, en la sesión dedicada GPSwox | Aviso de "bot de notificaciones, escribe el nombre de la empresa o la palabra de acceso" (nunca nombra las palabras) — al 3er intento fallido seguido, bloqueo de 10 min (avisa cuánto falta si escribe de nuevo) | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+
+**`TURNO`/`TURNOS` NO está en esta tabla a propósito** — es el único trigger
+que NO llega por la sesión dedicada de Baileys (GPSwox). Los conductores le
+escriben al número de la **WhatsApp Cloud API** (el mismo que `turnos_co`
+usa para mandar la plantilla aprobada `turno_descargue`), que entra por
+`POST /webhook`/`/webhook/whatsapp` → `lib/session/webhook.js` →
+`processIncomingMessage()` — nada que ver con `core.js`/Baileys. Ahí
+responde con un botón real (`cta_url` vía Cloud API,
+`cloudApi.sendInteractiveMessage`) en vez de texto plano con el link;
+funciona sin plantilla aprobada porque el usuario ya escribió primero
+(ventana de servicio de 24h). **Trampa ya cometida (oct. 2026):** se puso
+primero en `core.js` junto a HESEGO/RASTREAR porque parecía "un trigger
+más" — nunca se disparaba en producción porque esos mensajes jamás pasan
+por Baileys. Si se toca TURNOS, el archivo real es `webhook.js`.
 
 **Puente hesego-operatividad → whatsapp-docker para flujos que solo viven
 aquí**: cuando el menú de Hesego u Rastrear necesita arrancar Inspección o
