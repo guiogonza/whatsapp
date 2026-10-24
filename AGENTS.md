@@ -136,6 +136,29 @@ etc.). Está así a propósito por ahora (decisión del cliente), pero si algún
 día se pide protegerla, lo más simple es un middleware de basic auth en
 Express solo para esa ruta estática, no cambiar el resto del sitio.
 
+## Panel `architecture-map.html` (mapa de arquitectura)
+
+Mismo patrón que `webhook-viewer.html`: página standalone, sin login,
+estática, servida por el volumen de `public/` (no necesita rebuild).
+`https://api.rastrear.com.co/architecture-map.html`. Grafo de dependencias
+(d3-force, vía CDN) + tabla de costo/obsolescencia de `whatsapp-docker` y
+sus proyectos hermanos/APIs externas directas. Empezó como prototipo en un
+Artifact de Claude (tipo Dashboard) y se portó aquí como página real
+(oct. 2026) porque el cliente la quería en un contenedor del servidor, no
+dependiendo de claude.ai.
+
+**Los datos NO son una fuente en vivo** — viven en
+`public/architecture-map-data.json` (array de objetos, un servicio cada
+uno: `id`, `nombre`, `rol`, `tipo` [`core`/`hermano`/`externo`],
+`repo_local`, `servidor`, `depende_de` [ids], `lo_llaman` [ids], `costo`,
+`obsolescencia`, `ultima_revision`), curados a mano a partir de los
+`AGENTS.md` de cada proyecto y de lo investigado en sesiones de trabajo.
+Actualizar ese JSON (y copiarlo a `/root/whatsapp-api/public/`, sin
+rebuild) es la única forma de refrescarlo — no hay ningún script que lo
+genere solo todavía. Hoy solo cubre el vecindario directo de
+`whatsapp-docker` (9 nodos); si se pide ampliarlo a los ~15 proyectos del
+servidor, agregar filas al mismo JSON basta, no hace falta tocar el HTML.
+
 ## Notificaciones GPS genéricas (bot #7) — plantilla `alerta_vehiculo`
 
 Código: `lib/session/whatsapp-cloud-api.js`. Recibe el texto nativo de

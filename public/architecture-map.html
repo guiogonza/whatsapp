@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Arquitectura — Rastrear/Hesego</title>
+<style>
+    :root {
+        --primary: #25D366;
+        --primary-dark: #128C7E;
+        --secondary: #075E54;
+        --bg-dark: #111B21;
+        --bg-card: #1F2C33;
+        --bg-received: #202C33;
+        --text-primary: #E9EDEF;
+        --text-secondary: #8696A0;
+        --border-color: #2A3942;
+        --success: #00A884;
+        --warning: #F7C948;
+        --error: #EA4335;
+        --info: #34B7F1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg-dark);
+        color: var(--text-primary);
+        padding: 24px 16px 60px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    header { margin-bottom: 24px; }
+    header h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    header p { color: var(--text-secondary); font-size: 14px; max-width: 70ch; }
+    header p.meta { margin-top: 6px; font-size: 12px; }
+
+    .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .card .note { color: var(--text-secondary); font-size: 12.5px; margin-bottom: 14px; }
+
+    #graph { width: 100%; height: 440px; }
+    #graph svg { width: 100%; height: 100%; display: block; }
+    .node circle { stroke: var(--bg-card); stroke-width: 2px; cursor: pointer; }
+    .node text {
+        font-size: 11px; fill: var(--text-primary);
+        paint-order: stroke; stroke: var(--bg-card); stroke-width: 3px;
+    }
+    .link { stroke: var(--border-color); stroke-width: 1.4px; }
+
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--text-secondary); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+    th { color: var(--text-secondary); font-weight: 600; white-space: nowrap; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+    td.rol { max-width: 30ch; }
+    td.dim { color: var(--text-secondary); font-size: 12px; max-width: 32ch; }
+
+    .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+    .pill-core { background: rgba(37,211,102,.18); color: var(--primary); }
+    .pill-hermano { background: rgba(233,237,239,.12); color: var(--text-primary); }
+    .pill-externo { background: rgba(247,201,72,.18); color: var(--warning); }
+
+    tr.row-sel { background: rgba(37,211,102,.08); }
+
+    footer { color: var(--text-secondary); font-size: 11.5px; text-align: center; margin-top: 30px; }
+    footer a { color: var(--info); }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>🗺️ Mapa de Arquitectura — Rastrear / Hesego</h1>
+        <p>Dependencias, costo y señales de obsolescencia de los proyectos del servidor, empezando por <strong>whatsapp-docker</strong> y sus vecinos directos.</p>
+        <p class="meta" id="takeaway">Cargando…</p>
+    </header>
+
+    <div class="card">
+        <h2>Dependencias</h2>
+        <p class="note">Flecha = "depende de" (el que manda la flecha necesita al que la recibe para funcionar). Clic en un nodo para resaltar su fila en la tabla. Datos curados a mano, no es una consulta en vivo — se edita en <code>architecture-map-data.json</code>.</p>
+        <div id="graph"></div>
+        <div class="legend">
+            <span><i style="background:var(--primary)"></i>Este repo (core)</span>
+            <span><i style="background:var(--text-primary);opacity:.6"></i>Proyecto hermano</span>
+            <span><i style="background:var(--warning)"></i>Servicio externo (de pago)</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Detalle por servicio</h2>
+        <p class="note">Costo y obsolescencia: lo documentado hoy. "No documentado" es honesto, no un cero.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Servicio</th><th>Tipo</th><th>Rol</th><th>Costo</th><th>Señal de obsolescencia</th><th>Última revisión</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <footer>
+        Generado por Claude · datos en <a href="architecture-map-data.json" target="_blank">architecture-map-data.json</a>
+    </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+const TIPO_LABEL = { core: 'Core', hermano: 'Hermano', externo: 'Externo' };
+const TIPO_PILL = { core: 'pill-core', hermano: 'pill-hermano', externo: 'pill-externo' };
+const TIPO_COLOR = { core: '#25D366', hermano: '#E9EDEF', externo: '#F7C948' };
+
+fetch('architecture-map-data.json')
+    .then(r => r.json())
+    .then(rows => {
+        renderTakeaway(rows);
+        renderTable(rows);
+        renderGraph(rows);
+    })
+    .catch(err => {
+        document.getElementById('takeaway').textContent = 'No se pudo cargar architecture-map-data.json: ' + err.message;
+    });
+
+function renderTakeaway(rows) {
+    const externos = rows.filter(r => r.tipo === 'externo').length;
+    const conObsolescencia = rows.filter(r => r.obsolescencia && !/no verificado/i.test(r.obsolescencia)).length;
+    document.getElementById('takeaway').textContent =
+        `${rows.length} servicios mapeados alrededor de whatsapp-docker, ${externos} APIs externas de pago, ${conObsolescencia} con una señal de obsolescencia ya identificada.`;
+}
+
+function renderTable(rows) {
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    rows.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.id = 'row-' + r.id;
+        tr.innerHTML = `
+            <td>${esc(r.nombre)}</td>
+            <td><span class="pill ${TIPO_PILL[r.tipo] || 'pill-hermano'}">${TIPO_LABEL[r.tipo] || r.tipo}</span></td>
+            <td class="rol">${esc(r.rol)}</td>
+            <td class="dim">${esc(r.costo)}</td>
+            <td class="dim">${esc(r.obsolescencia)}</td>
+            <td>${esc(r.ultima_revision)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+}
+
+function renderGraph(rows) {
+    const wrap = document.getElementById('graph');
+    const width = wrap.clientWidth || 600;
+    const height = 440;
+
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const nodes = rows.map(r => ({ id: r.id, nombre: r.nombre, tipo: r.tipo }));
+    const links = [];
+    rows.forEach(r => {
+        (Array.isArray(r.depende_de) ? r.depende_de : []).forEach(depId => {
+            if (byId.has(depId)) links.push({ source: r.id, target: depId });
+        });
+    });
+
+    const svg = d3.select('#graph').append('svg')
+        .attr('viewBox', [0, 0, width, height])
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    svg.append('defs').append('marker')
+        .attr('id', 'arrow')
+        .attr('viewBox', '0 -5 10 10')
+        .attr('refX', 18).attr('refY', 0)
+        .attr('markerWidth', 7).attr('markerHeight', 7)
+        .attr('orient', 'auto')
+        .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#2A3942');
+
+    const sim = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(110).strength(0.5))
+        .force('charge', d3.forceManyBody().strength(-260))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collide', d3.forceCollide(42));
+
+    const link = svg.append('g').selectAll('line')
+        .data(links).join('line').attr('class', 'link').attr('marker-end', 'url(#arrow)');
+
+    const node = svg.append('g').selectAll('g')
+        .data(nodes).join('g').attr('class', 'node')
+        .on('click', (event, d) => {
+            document.querySelectorAll('tr.row-sel').forEach(el => el.classList.remove('row-sel'));
+            const row = document.getElementById('row-' + d.id);
+            if (row) { row.classList.add('row-sel'); row.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        });
+
+    node.append('circle')
+        .attr('r', d => d.tipo === 'core' ? 16 : 12)
+        .attr('fill', d => TIPO_COLOR[d.tipo] || '#E9EDEF');
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', d => (d.tipo === 'core' ? 16 : 12) + 14)
+        .text(d => d.nombre.length > 18 ? d.nombre.slice(0, 17) + '…' : d.nombre);
+
+    sim.on('tick', () => {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    setTimeout(() => sim.stop(), 4000);
+}
+</script>
+</body>
+</html>
