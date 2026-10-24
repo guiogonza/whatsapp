@@ -1,119 +1,232 @@
-[
-  {
-    "id": "wpp-bot",
-    "nombre": "whatsapp-docker (wpp-bot)",
-    "rol": "Servidor central: mantiene la(s) sesion(es) de WhatsApp (Baileys) + Cloud API. Sirve 8 bots.",
-    "tipo": "core",
-    "repo_local": "C:\\Documentos\\whatsapp docker",
-    "servidor": "/root/whatsapp-api (contenedor wpp-bot)",
-    "depende_de": ["cloud-api", "hesego-operatividad", "preop-hesego", "preop-rastrear", "insp-hesego", "mt5-fx", "deepseek-api"],
-    "lo_llaman": ["hesego-operatividad", "insp-hesego", "turnos-co"],
-    "costo": "VPS compartido (sin desglose por proyecto todavia) + Postgres/Redis propios",
-    "obsolescencia": "Dockerfile con 'version' en docker-compose.yml marcado obsoleto por Compose (warning real visto en deploys de oct-2026). Baileys (libreria no oficial de WhatsApp) se rompe cada vez que Meta cambia el protocolo -- riesgo estructural, no puntual.",
-    "ultima_revision": "2026-10-23 (esta sesion)"
-  },
-  {
-    "id": "hesego-operatividad",
-    "nombre": "hesego-operatividad",
-    "rol": "GPSwox/plataformagps (menu HESEGO, asignar placa, ubicacion) + menu RASTREAR + Operatividad. Extraido del monolito en ago-2026.",
-    "tipo": "hermano",
-    "repo_local": "C:\\Documentos\\hesego operatividad",
-    "servidor": "/root/hesego-operatividad",
-    "depende_de": ["wpp-bot", "gpswox-api-externa"],
-    "lo_llaman": ["wpp-bot"],
-    "costo": "No documentado",
-    "obsolescencia": "docker-compose.yml tambien con 'version' obsoleto. Imagen liviana, sin Chromium, build ~1min.",
-    "ultima_revision": "2026-10-23 (esta sesion: menu de Rastrear, SALIR, bloqueo de intentos)"
-  },
-  {
-    "id": "insp-hesego",
-    "nombre": "hesego-inspecciones",
-    "rol": "Backend web de Inspeccion Hesego (checklist 20 items, fotos). wpp-bot solo reenvia por webhook.",
-    "tipo": "hermano",
-    "repo_local": "C:\\Documentos\\Hesego preoperacional\\hesego-inspecciones",
-    "servidor": "/root/hesego-inspecciones (insp-backend, insp-frontend, insp-db)",
-    "depende_de": ["wpp-bot"],
-    "lo_llaman": ["wpp-bot"],
-    "costo": "No documentado",
-    "obsolescencia": "Bug real corregido oct-2026: llamaba a wpp-bot por dominio publico (api.rastrear.com.co) en vez de red interna de Docker -- cortes de DNS dejaban inspecciones colgadas. Ya corregido (red interna + reintentos).",
-    "ultima_revision": "2026-10-15 (fix de red interna, esta sesion)"
-  },
-  {
-    "id": "preop-hesego",
-    "nombre": "Preoperacional Hesego",
-    "rol": "Backend web del Preoperacional de Hesego (checklist diario del vehiculo).",
-    "tipo": "hermano",
-    "repo_local": "C:\\Documentos\\Hesego preoperacional\\hesego-preoperacional",
-    "servidor": "/root/hesego-preoperacional (preop-backend, preop-frontend, preop-db)",
-    "depende_de": [],
-    "lo_llaman": ["wpp-bot"],
-    "costo": "No documentado",
-    "obsolescencia": "No verificado en esta sesion",
-    "ultima_revision": "No verificado en esta sesion"
-  },
-  {
-    "id": "preop-rastrear",
-    "nombre": "Preoperacional Rastrear",
-    "rol": "Instancia independiente del Preoperacional, propia de Rastrear (otro dominio, otra base de datos).",
-    "tipo": "hermano",
-    "repo_local": "No identificado en este equipo",
-    "servidor": "rastrear.com.co/preoperacional",
-    "depende_de": [],
-    "lo_llaman": ["wpp-bot"],
-    "costo": "No documentado",
-    "obsolescencia": "No verificado en esta sesion",
-    "ultima_revision": "No verificado en esta sesion"
-  },
-  {
-    "id": "mt5-fx",
-    "nombre": "mt5-dashboard-fxpro",
-    "rol": "Dashboard de trading (paper trading) + asistente IA (DeepSeek) que responde 'fx <pregunta>'.",
-    "tipo": "hermano",
-    "repo_local": "C:\\Documentos\\Fx",
-    "servidor": "/opt/mt5-fxpro (nota: /opt, no /root)",
-    "depende_de": ["deepseek-api", "wpp-bot"],
-    "lo_llaman": ["wpp-bot"],
-    "costo": "DeepSeek API (modelo economico, sin cifra documentada)",
-    "obsolescencia": "No verificado en esta sesion",
-    "ultima_revision": "2026-10-06 (integracion fx-commands.js, sesion anterior)"
-  },
-  {
-    "id": "turnos-co",
-    "nombre": "turnos_co",
-    "rol": "Enturnamiento de vehiculos por GPS para descargue. Manda plantilla Meta aprobada 'turno_descargue'; si falla, cae a texto libre via wpp-bot (Baileys).",
-    "tipo": "hermano",
-    "repo_local": "C:\\Documentos\\turnos_co",
-    "servidor": "/root/turnos (o similar, confirmar)",
-    "depende_de": ["cloud-api", "wpp-bot"],
-    "lo_llaman": ["cloud-api"],
-    "costo": "No documentado",
-    "obsolescencia": "Nota propia del repo: certbot del VPS roto para renovacion manual (parche en systemd ya puesto). No verificado mas a fondo en esta sesion.",
-    "ultima_revision": "Trampa de TURNO/TURNOS corregida 2026-10-23 (esta sesion, del lado de wpp-bot)"
-  },
-  {
-    "id": "cloud-api",
-    "nombre": "WhatsApp Cloud API (Meta)",
-    "rol": "Servicio externo de Meta. Numero oficial de negocio -- plantillas aprobadas, botones interactivos, mensajes fuera de Baileys.",
-    "tipo": "externo",
-    "repo_local": "-",
-    "servidor": "graph.facebook.com (externo)",
-    "depende_de": [],
-    "lo_llaman": ["wpp-bot", "turnos-co"],
-    "costo": "Meta cobra por conversacion segun categoria de plantilla -- sin cifra documentada en este repo",
-    "obsolescencia": "Meta versiona su API (hoy v21.0, configurable); hay que revisar deprecaciones periodicamente.",
-    "ultima_revision": "2026-10-23 (bug de sendInteractiveMessage sin exportar, corregido esta sesion)"
-  },
-  {
-    "id": "deepseek-api",
-    "nombre": "DeepSeek API",
-    "rol": "LLM externo usado por el asistente de FX (tool-calling sobre datos reales) y por el OCR de turnos_co.",
-    "tipo": "externo",
-    "repo_local": "-",
-    "servidor": "api.deepseek.com (externo)",
-    "depende_de": [],
-    "lo_llaman": ["mt5-fx", "turnos-co"],
-    "costo": "Elegido por ser la opcion mas economica entre los proveedores probados -- sin cifra documentada",
-    "obsolescencia": "No soporta response_format json_schema estricto (conocido, workaround ya aplicado en turnos_co)",
-    "ultima_revision": "No verificado en esta sesion"
-  }
-]
+{
+  "generado": "2026-10-24 — curado a mano a partir de AGENTS.md y de las sesiones de trabajo; timestamps de despliegue sí son reales (docker inspect en vivo)",
+  "servicios": [
+    {
+      "id": "wpp-bot",
+      "nombre": "whatsapp-docker (wpp-bot)",
+      "rol": "Servidor central: mantiene la(s) sesion(es) de WhatsApp (Baileys) + Cloud API. Sirve 8 bots.",
+      "tipo": "core",
+      "repo_local": "C:\\Documentos\\whatsapp docker",
+      "servidor": "/root/whatsapp-api (contenedor wpp-bot)",
+      "software": "Node 20.20.2 — Express, @whiskeysockets/baileys (WhatsApp no oficial), axios, pg (Postgres), ioredis (Redis), multer, pino/winston",
+      "ultimo_despliegue": { "fecha": "2026-10-23 13:02 UTC", "donde": "contenedor wpp-bot, /root/whatsapp-api (docker inspect en vivo)" },
+      "costo": "VPS compartido (sin desglose por proyecto todavia) + Postgres/Redis propios",
+      "obsolescencia": "Dockerfile con 'version' en docker-compose.yml marcado obsoleto por Compose (warning real visto en deploys de oct-2026). Baileys (libreria no oficial de WhatsApp) se rompe cada vez que Meta cambia el protocolo -- riesgo estructural, no puntual.",
+      "ultima_revision": "2026-10-23 (esta sesion)"
+    },
+    {
+      "id": "hesego-operatividad",
+      "nombre": "hesego-operatividad",
+      "rol": "GPSwox/plataformagps (menu HESEGO, asignar placa, ubicacion) + menu RASTREAR + Operatividad. Extraido del monolito en ago-2026.",
+      "tipo": "hermano",
+      "repo_local": "C:\\Documentos\\hesego operatividad",
+      "servidor": "/root/hesego-operatividad",
+      "software": "Node 20.20.2 — Express, axios, pg (Postgres), xlsx, multer. Sin Chromium (imagen liviana).",
+      "ultimo_despliegue": { "fecha": "2026-10-22 18:57 UTC", "donde": "contenedor hesego-operatividad, /root/hesego-operatividad (docker inspect en vivo)" },
+      "costo": "No documentado",
+      "obsolescencia": "docker-compose.yml tambien con 'version' obsoleto. Build ~1min.",
+      "ultima_revision": "2026-10-23 (esta sesion: menu de Rastrear, SALIR, bloqueo de intentos)"
+    },
+    {
+      "id": "insp-hesego",
+      "nombre": "hesego-inspecciones",
+      "rol": "Backend web de Inspeccion Hesego (checklist 20 items, fotos). wpp-bot solo reenvia por webhook.",
+      "tipo": "hermano",
+      "repo_local": "C:\\Documentos\\Hesego preoperacional\\hesego-inspecciones",
+      "servidor": "/root/hesego-inspecciones (insp-backend, insp-frontend, insp-db)",
+      "software": "Node 20.20.2 (confirmado en vivo) — dependencias no inventariadas en detalle esta sesion",
+      "ultimo_despliegue": { "fecha": "2026-10-15 14:11 UTC", "donde": "contenedor insp-backend, /root/hesego-inspecciones (docker inspect en vivo)" },
+      "costo": "No documentado",
+      "obsolescencia": "Bug real corregido oct-2026: llamaba a wpp-bot por dominio publico (api.rastrear.com.co) en vez de red interna de Docker -- cortes de DNS dejaban inspecciones colgadas. Ya corregido (red interna + reintentos).",
+      "ultima_revision": "2026-10-15 (fix de red interna, esta sesion)"
+    },
+    {
+      "id": "preop-hesego",
+      "nombre": "Preoperacional Hesego",
+      "rol": "Backend web del Preoperacional de Hesego (checklist diario del vehiculo).",
+      "tipo": "hermano",
+      "repo_local": "C:\\Documentos\\Hesego preoperacional\\hesego-preoperacional",
+      "servidor": "/root/hesego-preoperacional (preop-backend, preop-frontend, preop-db)",
+      "software": "Node 20.20.2 (confirmado en vivo) — dependencias no inventariadas en detalle esta sesion",
+      "ultimo_despliegue": { "fecha": "2026-09-30 13:29 UTC", "donde": "contenedor preop-backend, /root/hesego-preoperacional (docker inspect en vivo)" },
+      "costo": "No documentado",
+      "obsolescencia": "No verificado en esta sesion",
+      "ultima_revision": "No verificado en esta sesion"
+    },
+    {
+      "id": "preop-rastrear",
+      "nombre": "Preoperacional Rastrear",
+      "rol": "Instancia independiente del Preoperacional, propia de Rastrear (otro dominio, otra base de datos).",
+      "tipo": "hermano",
+      "repo_local": "No identificado en este equipo",
+      "servidor": "rastrear.com.co/preoperacional",
+      "software": "No verificado en esta sesion (dominio externo, contenedor no inspeccionado)",
+      "ultimo_despliegue": { "fecha": "No verificado en esta sesion", "donde": "-" },
+      "costo": "No documentado",
+      "obsolescencia": "No verificado en esta sesion",
+      "ultima_revision": "No verificado en esta sesion"
+    },
+    {
+      "id": "mt5-fx",
+      "nombre": "mt5-dashboard-fxpro",
+      "rol": "Dashboard de trading (paper trading) + asistente IA (DeepSeek) que responde 'fx <pregunta>'.",
+      "tipo": "hermano",
+      "repo_local": "C:\\Documentos\\Fx",
+      "servidor": "/opt/mt5-fxpro (nota: /opt, no /root)",
+      "software": "Python 3.12.15 (confirmado en vivo) — Flask, proveedores de IA intercambiables (DeepSeek activo hoy)",
+      "ultimo_despliegue": { "fecha": "2026-10-13 16:33 UTC", "donde": "contenedor mt5-dashboard-fxpro, /opt/mt5-fxpro (docker inspect en vivo)" },
+      "costo": "DeepSeek API (modelo economico, sin cifra documentada)",
+      "obsolescencia": "No verificado en esta sesion",
+      "ultima_revision": "2026-10-06 (integracion fx-commands.js, sesion anterior)"
+    },
+    {
+      "id": "turnos-co",
+      "nombre": "turnos_co",
+      "rol": "Enturnamiento de vehiculos por GPS para descargue. Manda plantilla Meta aprobada 'turno_descargue'; si falla, cae a texto libre via wpp-bot (Baileys).",
+      "tipo": "hermano",
+      "repo_local": "C:\\Documentos\\turnos_co",
+      "servidor": "/root/turnos (contenedores turnos-backend-1, turnos-frontend-1, turnos-db-1)",
+      "software": "Python 3.12.15 (confirmado en vivo) — Flask + Postgres, OCR multi-proveedor (Anthropic/OpenAI/DeepSeek/Tesseract)",
+      "ultimo_despliegue": { "fecha": "2026-10-24 03:24 UTC", "donde": "contenedor turnos-backend-1, /root/turnos (docker inspect en vivo)" },
+      "costo": "No documentado",
+      "obsolescencia": "Nota propia del repo: certbot del VPS roto para renovacion manual (parche en systemd ya puesto). No verificado mas a fondo en esta sesion.",
+      "ultima_revision": "Trampa de TURNO/TURNOS corregida 2026-10-23 (esta sesion, del lado de wpp-bot)"
+    },
+    {
+      "id": "cloud-api",
+      "nombre": "WhatsApp Cloud API (Meta)",
+      "rol": "Servicio externo de Meta. Numero oficial de negocio -- plantillas aprobadas, botones interactivos, mensajes fuera de Baileys.",
+      "tipo": "externo",
+      "repo_local": "-",
+      "servidor": "graph.facebook.com (externo)",
+      "software": "No aplica (servicio externo de Meta, no autoalojado)",
+      "ultimo_despliegue": { "fecha": "No aplica", "donde": "Meta lo versiona (hoy v21.0, configurable)" },
+      "costo": "Meta cobra por conversacion segun categoria de plantilla -- sin cifra documentada en este repo",
+      "obsolescencia": "Meta versiona su API (hoy v21.0, configurable); hay que revisar deprecaciones periodicamente.",
+      "ultima_revision": "2026-10-23 (bug de sendInteractiveMessage sin exportar, corregido esta sesion)"
+    },
+    {
+      "id": "deepseek-api",
+      "nombre": "DeepSeek API",
+      "rol": "LLM externo usado por el asistente de FX (tool-calling sobre datos reales) y por el OCR de turnos_co.",
+      "tipo": "externo",
+      "repo_local": "-",
+      "servidor": "api.deepseek.com (externo)",
+      "software": "No aplica (servicio externo de DeepSeek, no autoalojado)",
+      "ultimo_despliegue": { "fecha": "No aplica", "donde": "-" },
+      "costo": "Elegido por ser la opcion mas economica entre los proveedores probados -- sin cifra documentada",
+      "obsolescencia": "No soporta response_format json_schema estricto (conocido, workaround ya aplicado en turnos_co)",
+      "ultima_revision": "No verificado en esta sesion"
+    }
+  ],
+  "enlaces": [
+    {
+      "id": "wpp-bot->hesego-operatividad",
+      "de": "wpp-bot", "a": "hesego-operatividad",
+      "protocolo": "HTTP interno (red de Docker)",
+      "metodo": "POST", "endpoint": "http://hesego-operatividad:4300/webhook/incoming",
+      "payload": "{ phoneNumber, message, sessionName }",
+      "auth": "header X-Internal-Secret (GPSWOX_WEBHOOK_SHARED_SECRET)",
+      "nota": "Reenvío de cualquier mensaje de la sesión dedicada GPSwox que no haya matcheado TURNOS/PREOP/INSPECCION en wpp-bot."
+    },
+    {
+      "id": "hesego-operatividad->wpp-bot",
+      "de": "hesego-operatividad", "a": "wpp-bot",
+      "protocolo": "HTTP interno (red de Docker)",
+      "metodo": "POST", "endpoint": "/api/gpswox/session/start-inspection  ó  /api/gpswox/session/start-preop",
+      "payload": "{ phoneNumber [, tenant: 'hesego'|'rastrear'] }",
+      "auth": "header X-Internal-Secret",
+      "nota": "Arranca Inspección o Preoperacional desde el menú de Hesego/Rastrear -- esos flujos solo existen en wpp-bot, no en hesego-operatividad."
+    },
+    {
+      "id": "insp-hesego->wpp-bot",
+      "de": "insp-hesego", "a": "wpp-bot",
+      "protocolo": "HTTP interno (red de Docker, antes dominio público)",
+      "metodo": "POST", "endpoint": "/api/inspeccion/fotos-vehiculo-completadas",
+      "payload": "{ phoneNumber, fotos }",
+      "auth": "header x-internal-secret (INSP_INTERNAL_SECRET)",
+      "nota": "Avisa que llegaron las 4 fotos del vehículo. Tuvo el bug real de DNS corregido el 2026-10-15 (ver obsolescencia de insp-hesego)."
+    },
+    {
+      "id": "wpp-bot->insp-hesego",
+      "de": "wpp-bot", "a": "insp-hesego",
+      "protocolo": "HTTP",
+      "metodo": "POST", "endpoint": "rutas /internal/* de INSP_API_URL (ej. whatsapp-upload-token)",
+      "payload": "datos de la sesión de inspección (placa, auditor, sede, etc.)",
+      "auth": "header x-internal-secret",
+      "nota": "Genera el link único de fotos con cámara obligatoria para el auditor."
+    },
+    {
+      "id": "wpp-bot->preop-hesego",
+      "de": "wpp-bot", "a": "preop-hesego",
+      "protocolo": "HTTP",
+      "metodo": "POST / GET", "endpoint": "/rest/v1/* y /internal/* de PREOP_API_URL",
+      "payload": "login de vehículo, ítems dañados, fotos",
+      "auth": "header x-internal-secret (PREOP_INTERNAL_SECRET)",
+      "nota": "Login del vehículo, crear preoperacional, mapear ítems dañados, subir fotos."
+    },
+    {
+      "id": "wpp-bot->preop-rastrear",
+      "de": "wpp-bot", "a": "preop-rastrear",
+      "protocolo": "HTTP",
+      "metodo": "POST / GET", "endpoint": "mismas rutas que preop-hesego, pero en PREOP_RASTREAR_API_URL (rastrear.com.co)",
+      "payload": "igual que preop-hesego",
+      "auth": "header x-internal-secret (PREOP_RASTREAR_INTERNAL_SECRET, secreto distinto)",
+      "nota": "Segunda instancia independiente del Preoperacional, propia de Rastrear -- mismo código cliente, backend y base de datos distintos."
+    },
+    {
+      "id": "wpp-bot->mt5-fx",
+      "de": "wpp-bot", "a": "mt5-fx",
+      "protocolo": "HTTP interno (red de Docker)",
+      "metodo": "POST", "endpoint": "POST /webhook/incoming (mismo patrón que hesego-operatividad)",
+      "payload": "{ phoneNumber, message, sessionName: 'fx-assistant', sincrono: true }",
+      "auth": "sin secreto adicional documentado",
+      "nota": "Reenvía cualquier pregunta de trading ('fx ...') al asistente DeepSeek; espera la respuesta en el mismo request (modo síncrono)."
+    },
+    {
+      "id": "mt5-fx->deepseek-api",
+      "de": "mt5-fx", "a": "deepseek-api",
+      "protocolo": "HTTPS (API externa)",
+      "metodo": "POST", "endpoint": "https://api.deepseek.com/chat/completions",
+      "payload": "mensajes + definición de tools (trading_tools.py)",
+      "auth": "Bearer API key",
+      "nota": "Tool-calling sobre datos reales de solo lectura (SQLite en modo ro) -- el LLM nunca calcula ni inventa cifras."
+    },
+    {
+      "id": "turnos-co->cloud-api",
+      "de": "turnos-co", "a": "cloud-api",
+      "protocolo": "HTTPS (API externa)",
+      "metodo": "POST", "endpoint": "Graph API de Meta, plantilla aprobada",
+      "payload": "plantilla 'turno_descargue' (placa, novedad, pendientes)",
+      "auth": "Bearer token de Meta",
+      "nota": "Primer intento de envío de cada aviso de turno; si falla, cae al enlace de abajo."
+    },
+    {
+      "id": "turnos-co->wpp-bot",
+      "de": "turnos-co", "a": "wpp-bot",
+      "protocolo": "HTTP",
+      "metodo": "POST", "endpoint": "endpoint de envío directo de wpp-bot (texto libre vía Baileys)",
+      "payload": "texto del aviso",
+      "auth": "No confirmado en esta sesión",
+      "nota": "Respaldo cuando la plantilla de Meta falla -- requiere que el bot tenga una sesión de WhatsApp realmente conectada."
+    },
+    {
+      "id": "cloud-api->wpp-bot",
+      "de": "cloud-api", "a": "wpp-bot",
+      "protocolo": "HTTPS (webhook de Meta)",
+      "metodo": "POST", "endpoint": "POST /webhook  ó  /webhook/whatsapp",
+      "payload": "mensajes entrantes y estados de entrega (sent/delivered/read/failed)",
+      "auth": "verificado por hub.verify_token en el GET de suscripción",
+      "nota": "Aquí se detecta TURNO/TURNOS hoy (corregido 2026-10-23) y se atiende el bot de Encuesta de Riesgo Psicosocial."
+    },
+    {
+      "id": "wpp-bot->cloud-api",
+      "de": "wpp-bot", "a": "cloud-api",
+      "protocolo": "HTTPS (API externa)",
+      "metodo": "POST", "endpoint": "graph.facebook.com/{version}/{phone_id}/messages",
+      "payload": "texto, plantillas aprobadas, o interactivos (botones cta_url)",
+      "auth": "Bearer token (WHATSAPP_CLOUD_TOKEN)",
+      "nota": "Mensajes salientes de alta prioridad (alertas GPS, botón de Turnos, etc.) -- siempre tiene prioridad sobre Baileys (fix de sept-2026)."
+    }
+  ]
+}

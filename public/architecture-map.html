@@ -45,23 +45,51 @@
 
     #graph { width: 100%; height: 440px; }
     #graph svg { width: 100%; height: 100%; display: block; }
-    .node circle { stroke: var(--bg-card); stroke-width: 2px; cursor: pointer; }
+    .node circle { stroke: var(--bg-card); stroke-width: 2px; cursor: pointer; transition: r .15s; }
+    .node:hover circle { filter: brightness(1.25); }
     .node text {
         font-size: 11px; fill: var(--text-primary);
         paint-order: stroke; stroke: var(--bg-card); stroke-width: 3px;
+        pointer-events: none;
     }
-    .link { stroke: var(--border-color); stroke-width: 1.4px; }
+    .link-hit { stroke: transparent; stroke-width: 14px; cursor: pointer; }
+    .link { stroke: var(--border-color); stroke-width: 1.4px; pointer-events: none; transition: stroke .15s, stroke-width .15s; }
+    .link-hit:hover + .link, .link.sel { stroke: var(--info); stroke-width: 2.4px; }
+    .link.pulse { stroke: var(--primary); stroke-width: 2.6px; }
 
     .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--text-secondary); }
     .legend span { display: inline-flex; align-items: center; gap: 6px; }
     .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .legend .line { width: 16px; height: 2px; display: inline-block; }
+
+    .hint { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+
+    /* Panel de detalle (nodo o enlace seleccionado) */
+    #detail { display: none; }
+    #detail.open { display: block; }
+    #detail .close-x { float: right; cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+    #detail h3 { font-size: 15px; margin-bottom: 10px; }
+    #detail .kv { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; font-size: 13px; margin-bottom: 4px; }
+    #detail .kv dt { color: var(--text-secondary); }
+    #detail .kv dd { word-break: break-word; }
+    #detail .kv code { background: var(--bg-received); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+    #detail .enlaces-list { margin-top: 14px; }
+    #detail .enlaces-list .e-row {
+        display: flex; justify-content: space-between; gap: 10px;
+        padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12.5px;
+        border: 1px solid var(--border-color); margin-bottom: 6px;
+    }
+    #detail .enlaces-list .e-row:hover { border-color: var(--info); }
+    #detail .enlaces-list .e-row .arrow { color: var(--text-secondary); }
 
     .table-wrap { overflow-x: auto; }
     table { border-collapse: collapse; width: 100%; font-size: 13px; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
     th { color: var(--text-secondary); font-weight: 600; white-space: nowrap; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
-    td.rol { max-width: 30ch; }
-    td.dim { color: var(--text-secondary); font-size: 12px; max-width: 32ch; }
+    td.rol { max-width: 28ch; }
+    td.dim { color: var(--text-secondary); font-size: 12px; max-width: 26ch; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: rgba(255,255,255,.03); }
 
     .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
     .pill-core { background: rgba(37,211,102,.18); color: var(--primary); }
@@ -84,23 +112,30 @@
 
     <div class="card">
         <h2>Dependencias</h2>
-        <p class="note">Flecha = "depende de" (el que manda la flecha necesita al que la recibe para funcionar). Clic en un nodo para resaltar su fila en la tabla. Datos curados a mano, no es una consulta en vivo — se edita en <code>architecture-map-data.json</code>.</p>
+        <p class="note">Clic en un <strong>nodo</strong> para ver su ficha completa (stack, último despliegue, costo). Clic en una <strong>línea</strong> para ver exactamente qué se mandan: protocolo, endpoint y payload.</p>
         <div id="graph"></div>
         <div class="legend">
             <span><i style="background:var(--primary)"></i>Este repo (core)</span>
             <span><i style="background:var(--text-primary);opacity:.6"></i>Proyecto hermano</span>
             <span><i style="background:var(--warning)"></i>Servicio externo (de pago)</span>
+            <span><i class="line" style="background:var(--info)"></i>Línea seleccionada</span>
+        </div>
+        <p class="hint" id="rt-hint">⏱️ Actividad en tiempo real: aún no conectada — ver nota al final de la página.</p>
+
+        <div id="detail" class="card" style="margin-top:16px; background:var(--bg-received);">
+            <span class="close-x" onclick="closeDetail()">cerrar ✕</span>
+            <div id="detail-body"></div>
         </div>
     </div>
 
     <div class="card">
         <h2>Detalle por servicio</h2>
-        <p class="note">Costo y obsolescencia: lo documentado hoy. "No documentado" es honesto, no un cero.</p>
+        <p class="note">Costo y obsolescencia: lo documentado hoy. "No documentado" es honesto, no un cero. Clic en una fila abre la misma ficha que el nodo del grafo.</p>
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
-                        <th>Servicio</th><th>Tipo</th><th>Rol</th><th>Costo</th><th>Señal de obsolescencia</th><th>Última revisión</th>
+                        <th>Servicio</th><th>Tipo</th><th>Rol</th><th>Costo</th><th>Señal de obsolescencia</th><th>Último despliegue</th>
                     </tr>
                 </thead>
                 <tbody id="tbody"></tbody>
@@ -109,7 +144,7 @@
     </div>
 
     <footer>
-        Generado por Claude · datos en <a href="architecture-map-data.json" target="_blank">architecture-map-data.json</a>
+        Generado por Claude · datos en <a href="architecture-map-data.json" target="_blank">architecture-map-data.json</a> · sin fuente en vivo todavía
     </footer>
 </div>
 
@@ -119,40 +154,27 @@ const TIPO_LABEL = { core: 'Core', hermano: 'Hermano', externo: 'Externo' };
 const TIPO_PILL = { core: 'pill-core', hermano: 'pill-hermano', externo: 'pill-externo' };
 const TIPO_COLOR = { core: '#25D366', hermano: '#E9EDEF', externo: '#F7C948' };
 
+let SERVICIOS = [], ENLACES = [], BY_ID = new Map();
+
 fetch('architecture-map-data.json')
     .then(r => r.json())
-    .then(rows => {
-        renderTakeaway(rows);
-        renderTable(rows);
-        renderGraph(rows);
+    .then(data => {
+        SERVICIOS = data.servicios || [];
+        ENLACES = data.enlaces || [];
+        BY_ID = new Map(SERVICIOS.map(s => [s.id, s]));
+        renderTakeaway();
+        renderTable();
+        renderGraph();
     })
     .catch(err => {
         document.getElementById('takeaway').textContent = 'No se pudo cargar architecture-map-data.json: ' + err.message;
     });
 
-function renderTakeaway(rows) {
-    const externos = rows.filter(r => r.tipo === 'externo').length;
-    const conObsolescencia = rows.filter(r => r.obsolescencia && !/no verificado/i.test(r.obsolescencia)).length;
+function renderTakeaway() {
+    const externos = SERVICIOS.filter(r => r.tipo === 'externo').length;
+    const conObsolescencia = SERVICIOS.filter(r => r.obsolescencia && !/no verificado/i.test(r.obsolescencia)).length;
     document.getElementById('takeaway').textContent =
-        `${rows.length} servicios mapeados alrededor de whatsapp-docker, ${externos} APIs externas de pago, ${conObsolescencia} con una señal de obsolescencia ya identificada.`;
-}
-
-function renderTable(rows) {
-    const tbody = document.getElementById('tbody');
-    tbody.innerHTML = '';
-    rows.forEach(r => {
-        const tr = document.createElement('tr');
-        tr.id = 'row-' + r.id;
-        tr.innerHTML = `
-            <td>${esc(r.nombre)}</td>
-            <td><span class="pill ${TIPO_PILL[r.tipo] || 'pill-hermano'}">${TIPO_LABEL[r.tipo] || r.tipo}</span></td>
-            <td class="rol">${esc(r.rol)}</td>
-            <td class="dim">${esc(r.costo)}</td>
-            <td class="dim">${esc(r.obsolescencia)}</td>
-            <td>${esc(r.ultima_revision)}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+        `${SERVICIOS.length} servicios, ${ENLACES.length} conexiones mapeadas, ${externos} APIs externas de pago, ${conObsolescencia} con una señal de obsolescencia ya identificada.`;
 }
 
 function esc(s) {
@@ -161,19 +183,33 @@ function esc(s) {
     return d.innerHTML;
 }
 
-function renderGraph(rows) {
+function renderTable() {
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    SERVICIOS.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.id = 'row-' + r.id;
+        tr.className = 'clickable';
+        tr.onclick = () => showNodeDetail(r.id);
+        tr.innerHTML = `
+            <td>${esc(r.nombre)}</td>
+            <td><span class="pill ${TIPO_PILL[r.tipo] || 'pill-hermano'}">${TIPO_LABEL[r.tipo] || r.tipo}</span></td>
+            <td class="rol">${esc(r.rol)}</td>
+            <td class="dim">${esc(r.costo)}</td>
+            <td class="dim">${esc(r.obsolescencia)}</td>
+            <td class="dim">${esc(r.ultimo_despliegue ? r.ultimo_despliegue.fecha : r.ultima_revision)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderGraph() {
     const wrap = document.getElementById('graph');
     const width = wrap.clientWidth || 600;
     const height = 440;
 
-    const byId = new Map(rows.map(r => [r.id, r]));
-    const nodes = rows.map(r => ({ id: r.id, nombre: r.nombre, tipo: r.tipo }));
-    const links = [];
-    rows.forEach(r => {
-        (Array.isArray(r.depende_de) ? r.depende_de : []).forEach(depId => {
-            if (byId.has(depId)) links.push({ source: r.id, target: depId });
-        });
-    });
+    const nodes = SERVICIOS.map(r => ({ id: r.id, nombre: r.nombre, tipo: r.tipo }));
+    const links = ENLACES.map(e => ({ id: e.id, source: e.de, target: e.a }));
 
     const svg = d3.select('#graph').append('svg')
         .attr('viewBox', [0, 0, width, height])
@@ -193,16 +229,24 @@ function renderGraph(rows) {
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collide', d3.forceCollide(42));
 
-    const link = svg.append('g').selectAll('line')
-        .data(links).join('line').attr('class', 'link').attr('marker-end', 'url(#arrow)');
+    const linkGroup = svg.append('g');
+
+    const link = linkGroup.selectAll('line.link')
+        .data(links).join('line')
+        .attr('class', 'link')
+        .attr('data-edge-id', d => d.id)
+        .attr('marker-end', 'url(#arrow)');
+
+    // línea invisible más gruesa: hace la conexión fácil de clickear sin que
+    // el trazo visible tenga que ser grueso también
+    const linkHit = linkGroup.selectAll('line.link-hit')
+        .data(links).join('line')
+        .attr('class', 'link-hit')
+        .on('click', (event, d) => showEdgeDetail(d.id));
 
     const node = svg.append('g').selectAll('g')
         .data(nodes).join('g').attr('class', 'node')
-        .on('click', (event, d) => {
-            document.querySelectorAll('tr.row-sel').forEach(el => el.classList.remove('row-sel'));
-            const row = document.getElementById('row-' + d.id);
-            if (row) { row.classList.add('row-sel'); row.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-        });
+        .on('click', (event, d) => showNodeDetail(d.id));
 
     node.append('circle')
         .attr('r', d => d.tipo === 'core' ? 16 : 12)
@@ -216,10 +260,80 @@ function renderGraph(rows) {
     sim.on('tick', () => {
         link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
             .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        linkHit.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
         node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
     setTimeout(() => sim.stop(), 4000);
+}
+
+function openDetail() { document.getElementById('detail').classList.add('open'); }
+function closeDetail() {
+    document.getElementById('detail').classList.remove('open');
+    document.querySelectorAll('.link.sel').forEach(el => el.classList.remove('sel'));
+    document.querySelectorAll('tr.row-sel').forEach(el => el.classList.remove('row-sel'));
+}
+
+function enlacesDe(id) {
+    return ENLACES.filter(e => e.de === id || e.a === id);
+}
+
+function showNodeDetail(id) {
+    const s = BY_ID.get(id);
+    if (!s) return;
+    document.querySelectorAll('.link.sel').forEach(el => el.classList.remove('sel'));
+    document.querySelectorAll('tr.row-sel').forEach(el => el.classList.remove('row-sel'));
+    const row = document.getElementById('row-' + id);
+    if (row) { row.classList.add('row-sel'); row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+
+    const dep = s.ultimo_despliegue || { fecha: s.ultima_revision, donde: '-' };
+    const enlaces = enlacesDe(id);
+
+    document.getElementById('detail-body').innerHTML = `
+        <h3>${esc(s.nombre)} <span class="pill ${TIPO_PILL[s.tipo] || 'pill-hermano'}">${TIPO_LABEL[s.tipo] || s.tipo}</span></h3>
+        <dl class="kv">
+            <dt>Rol</dt><dd>${esc(s.rol)}</dd>
+            <dt>Repo local</dt><dd><code>${esc(s.repo_local)}</code></dd>
+            <dt>Servidor</dt><dd><code>${esc(s.servidor)}</code></dd>
+            <dt>Software</dt><dd>${esc(s.software || 'No documentado')}</dd>
+            <dt>Último despliegue</dt><dd>${esc(dep.fecha)} — ${esc(dep.donde)}</dd>
+            <dt>Costo</dt><dd>${esc(s.costo)}</dd>
+            <dt>Obsolescencia</dt><dd>${esc(s.obsolescencia)}</dd>
+        </dl>
+        <div class="enlaces-list">
+            <div class="note" style="margin-bottom:8px;">Conexiones (${enlaces.length}) — clic para el detalle técnico:</div>
+            ${enlaces.map(e => `
+                <div class="e-row" onclick="showEdgeDetail('${e.id}')">
+                    <span>${esc(BY_ID.get(e.de)?.nombre || e.de)} <span class="arrow">→</span> ${esc(BY_ID.get(e.a)?.nombre || e.a)}</span>
+                    <span class="arrow">${esc(e.metodo || '')}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    openDetail();
+}
+
+function showEdgeDetail(edgeId) {
+    const e = ENLACES.find(x => x.id === edgeId);
+    if (!e) return;
+    document.querySelectorAll('.link.sel').forEach(el => el.classList.remove('sel'));
+    const line = document.querySelector(`.link[data-edge-id="${CSS.escape(edgeId)}"]`);
+    if (line) line.classList.add('sel');
+
+    const de = BY_ID.get(e.de), a = BY_ID.get(e.a);
+    document.getElementById('detail-body').innerHTML = `
+        <h3>${esc(de?.nombre || e.de)} <span class="arrow">→</span> ${esc(a?.nombre || e.a)}</h3>
+        <dl class="kv">
+            <dt>Protocolo</dt><dd>${esc(e.protocolo)}</dd>
+            <dt>Método</dt><dd><code>${esc(e.metodo)}</code></dd>
+            <dt>Endpoint</dt><dd><code>${esc(e.endpoint)}</code></dd>
+            <dt>Payload</dt><dd><code>${esc(e.payload)}</code></dd>
+            <dt>Autenticación</dt><dd>${esc(e.auth)}</dd>
+            <dt>Nota</dt><dd>${esc(e.nota)}</dd>
+        </dl>
+    `;
+    openDetail();
 }
 </script>
 </body>
