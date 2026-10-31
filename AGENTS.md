@@ -297,3 +297,13 @@ dominio público, aunque exista.
 Repo con remoto en GitHub: `https://github.com/guiogonza/whatsapp.git`,
 rama `main`. Antes de `git push`, hacer `git fetch` — es común que haya
 commits remotos hechos desde otra máquina/sesión que no están en local.
+
+## Cointra: inicio/fin de jornada con preoperacional (2026-10-31)
+
+- **Palabra de acceso `COINTRA`** (tercera empresa junto a HESEGO y RASTREAR; `lib/session/empresa-pref.js`). Menú: `1` Inicio de jornada, `2` Fin de jornada. El menú real de producción vive en `hesego-operatividad` (`lib/gpswox-session.js`); la copia de `lib/session/gpswox-session.js` de este repo es el respaldo local. Operatividad llama a `POST /api/gpswox/session/start-preop` con `{tenant:'cointra', accion:'inicio'|'fin'}`.
+- **Inicio** (`preop-flow.js` → `iniciarJornada`): usa el preoperacional de Rastrear (tenant `rastrear`) eligiendo solo la empresa `COINTRA`. Pasos: placa (propone el vehículo asignado al celular; con `SI` lo usa; la placa debe existir en Cointra, si no responde que no existe) → si el vehículo ya tiene preoperacional hoy, avisa con el enlace → conductor por defecto del vehículo (¿eres tú? SI/NO) o cédula (`CEDULA`, `CONFIRMAR_CEDULA`) → odómetro **obligatorio** (ya no existe SALTAR, aplica a todos los preoperacionales) → buen estado/novedad → enlace de fotos con viñetas (5 fotos del vehículo, 3 si es moto; 1 por cada daño).
+- **Fin** (`iniciarFinJornada`, pasos `FIN_PLACA` → `FIN_ODOMETRO`): llama a `/internal/jornada/fin-wa` del backend de Rastrear; si la placa no es la de la jornada abierta, pide la correcta.
+- **Aviso final:** el backend de Rastrear llama a `POST /internal/complete-inspection` de este bot (secreto = `PREOP_RASTREAR_INTERNAL_SECRET`) y el bot envía "Jornada iniciada" con el enlace `/ver/<id>` del preoperacional realizado.
+- **SALIR** termina el flujo en cualquier paso. El menú de Cointra se reabre con cualquier mensaje (memoria de 24 h en `hesego-operatividad`, se pierde al reiniciarlo).
+- `preop-api.js` nuevo: `finalizarJornada`, `conductorPorPlaca`, `conductorPorCedula`, `vehiculosPorTelefono`.
+- **Despliegue:** el `server-baileys.js` del servidor difiere del de este repo; se le aplicó el cambio sobre el del servidor (no copiar el local encima sin comparar). Reconstruir con `docker compose build wpp-bot && up -d wpp-bot` en `/root/whatsapp-api` (reinicia el bot compartido: avisar antes; `fx-session-1/2` piden QR siempre, es normal).
