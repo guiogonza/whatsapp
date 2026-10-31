@@ -1830,7 +1830,7 @@ app.post('/api/gpswox/session/start-preop', async (req, res) => {
             }
         }
 
-        const { phoneNumber, tenant } = req.body;
+        const { phoneNumber, tenant, accion } = req.body;
         if (!phoneNumber) {
             return res.status(400).json({ success: false, error: 'phoneNumber es requerido' });
         }
@@ -1843,6 +1843,11 @@ app.post('/api/gpswox/session/start-preop', async (req, res) => {
 
         const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
         const preopFlow = require('./lib/session/preop-flow');
+        if (tenant === 'cointra') { // Cointra: 'inicio' = preoperacional como inicio de jornada, 'fin' = placa + odómetro final
+            if (accion === 'fin') await preopFlow.iniciarFinJornada(session, jid);
+            else await preopFlow.iniciarJornada(session, jid);
+            return res.json({ success: true });
+        }
         const trigger = tenant === 'rastrear' ? 'RPREOP' : 'PREOP';
         await preopFlow.handleMessage(session, gpswoxSessionName, jid, trigger, null, session.socket);
         res.json({ success: true });
@@ -1879,6 +1884,38 @@ app.post('/api/inspeccion/fotos-vehiculo-completadas', async (req, res) => {
         const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
         const inspFlow = require('./lib/session/inspeccion-flow');
         await inspFlow.continuarDespuesDeFotosVehiculo(session, gpswoxSessionName, jid, fotos, session.socket);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /internal/complete-inspection - Llamado por el backend de Preoperacional de Rastrear cuando el
+ * conductor termina de subir las fotos: avisa por WhatsApp con el enlace del preoperacional realizado
+ * (y, si es Cointra, que la jornada quedó iniciada). Mismo secreto que PREOP_RASTREAR_INTERNAL_SECRET.
+ */
+app.post('/internal/complete-inspection', async (req, res) => {
+    try {
+        const provided = req.headers['x-internal-secret'];
+        if (!config.PREOP_RASTREAR_INTERNAL_SECRET || provided !== config.PREOP_RASTREAR_INTERNAL_SECRET) {
+            return res.status(401).json({ success: false, error: 'secreto invalido' });
+        }
+        const { phone, placa, ver_url, estado, jornada_iniciada } = req.body || {};
+        const digitos = String(phone || '').replace(/\D/g, '');
+        if (!digitos || !ver_url) return res.status(400).json({ success: false, error: 'phone y ver_url son requeridos' });
+
+        const gpswoxSessionName = gpswoxSession.getGPSwoxSessionName();
+        const session = sessionManager.getSession(gpswoxSessionName);
+        if (!session || !session.socket || session.state !== config.SESSION_STATES.READY) {
+            return res.status(503).json({ success: false, error: 'Sesion GPSwox no disponible' });
+        }
+        const jid = `${digitos.length === 10 ? '57' + digitos : digitos}@s.whatsapp.net`;
+        const titulo = jornada_iniciada ? '🟢 *Jornada iniciada*' : '✅ *Preoperacional registrado*';
+        const estadoTxt = estado ? `\nEstado: *${String(estado).replace(/_/g, ' ')}*` : '';
+        const { sendMessageWithRetry } = require('./lib/session/messaging');
+        await sendMessageWithRetry(session, jid,
+            `${titulo}\n\nVehículo: *${placa || ''}*${estadoTxt}\n\n📄 Aquí está tu preoperacional realizado:\n${ver_url}`, 3);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
