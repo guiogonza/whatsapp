@@ -1843,6 +1843,7 @@ app.post('/api/gpswox/session/start-preop', async (req, res) => {
 
         const jid = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
         const preopFlow = require('./lib/session/preop-flow');
+        require('./lib/session/empresa-pref').guardar(jid, tenant).catch(() => {});   // el "PREOP" siguiente entra por la misma empresa
         if (tenant === 'cointra') { // Cointra: 'inicio' = preoperacional como inicio de jornada, 'fin' = placa + odómetro final
             if (accion === 'fin') await preopFlow.iniciarFinJornada(session, jid);
             else await preopFlow.iniciarJornada(session, jid);
