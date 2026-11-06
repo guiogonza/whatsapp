@@ -1313,6 +1313,19 @@ app.post('/api/cloud/send', async (req, res) => {
                     error: result.error.response?.data?.error?.message || result.error.message || 'Error enviando plantilla'
                 };
             }
+        } else if (message && req.body.canal === 'cloud') {
+            // Texto libre por Cloud API, SOLO si quien llama pide canal:'cloud' expresamente: es para
+            // contestar a alguien que acaba de escribirle a ESTE numero (ventana de servicio de 24 h,
+            // sin costo) y que la respuesta salga por el mismo numero y no por una sesion Baileys
+            // (ej. confirmacion del flujo PUERTO). Fuera de la ventana Meta lo rechaza y el llamador
+            // decide el respaldo. Sin canal sigue valiendo la regla de abajo: texto libre solo por Baileys.
+            result = await cloudApi.sendTextMessage(destNumber, message);
+            if (!result.success && result.error) {
+                result = {
+                    ...result,
+                    error: result.error.response?.data?.error?.message || result.error.message || 'Error enviando texto por Cloud API'
+                };
+            }
         } else if (message) {
             // Texto libre: NUNCA usar Cloud API (costo). Solo Baileys.
             const activeSessions = sessionManager.getActiveSessions();

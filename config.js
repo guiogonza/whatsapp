@@ -139,6 +139,12 @@ module.exports = {
     // Palabra "turno": el bot responde con el enlace de la app de turnos de descargue.
     TURNOS_TRIGGER_KEYWORDS: (process.env.TURNOS_TRIGGER_KEYWORDS || 'TURNO,TURNOS').split(',').map(s => s.trim().toUpperCase()),
     TURNOS_URL: process.env.TURNOS_URL || 'https://turnos.apptu.net/app',
+    // Flujo "PUERTO": lista de transportadoras de Turnos + enlace único para fotografiar el
+    // manifiesto y los 4 precintos (lib/session/puerto-flow.js). La API de Turnos se llama por la
+    // red interna de Docker (turnos-backend-1 comparte whatsapp-api_whatsapp-network con este bot).
+    PUERTO_TRIGGER_KEYWORDS: (process.env.PUERTO_TRIGGER_KEYWORDS || 'PUERTO').split(',').map(s => s.trim().toUpperCase()),
+    TURNOS_API_URL: process.env.TURNOS_API_URL || 'http://turnos-backend-1:8080',
+    PUERTO_BOT_SECRET: process.env.PUERTO_BOT_SECRET || '',
     PREOP_RASTREAR_API_URL: process.env.PREOP_RASTREAR_API_URL || 'https://rastrear.com.co/preoperacional',
     PREOP_RASTREAR_INTERNAL_SECRET: process.env.PREOP_RASTREAR_INTERNAL_SECRET || '',
     // "RASTREAR" solo (el nombre de la empresa) ya NO esta aqui -- ahora abre el
