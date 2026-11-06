@@ -156,6 +156,10 @@ module.exports = {
     // Bot de Inspección (Hesego) — módulo hermano de Preoperacional
     // ============================================
     INSP_API_URL: process.env.INSP_API_URL || 'https://inspecciones.logisticahesego.com',
+    // Llamadas servidor a servidor al backend de inspecciones por la red interna de Docker
+    // (ej. http://insp-backend:3100). INSP_API_URL se queda PUBLICA: arma el enlace /ver/<id> que
+    // recibe el usuario. Vacio = las llamadas siguen yendo por INSP_API_URL como antes.
+    INSP_API_INTERNAL_URL: process.env.INSP_API_INTERNAL_URL || '',
     INSP_TRIGGER_KEYWORDS: (process.env.INSP_TRIGGER_KEYWORDS || 'INSPECCION,INSPECCIONAR,INSPECCIÓN').split(',').map(s => s.trim().toUpperCase()),
     // Secreto compartido para /internal/* del backend de Inspección (generar el
     // link único de fotos con cámara obligatoria — mismo secreto que INSP_INTERNAL_SECRET allá)
