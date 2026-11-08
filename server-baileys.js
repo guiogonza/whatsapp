@@ -341,8 +341,31 @@ app.get('/', async (req, res, next) => {
     if (!to || !message) return next();
 
     try {
-        const cleanedMessage = cleanGPSMessage(message);
-        const result = await sessionManager.sendMessageHybrid(to, cleanedMessage);
+        let cleanedMessage = cleanGPSMessage(message);
+        const textoOriginal = cleanedMessage;
+        // Pasarela de GPSwox: lo que no es una alerta (p. ej. "Enviar SMS de prueba") saldria como texto libre y
+        // WhatsApp lo rechaza fuera de la ventana de 24 h (131047). Se envuelve en la plantilla alerta_vehiculo.
+        try {
+            const cloud = require('./lib/session/whatsapp-cloud-api');
+            if (cloud.isConfigured() && !cloud.parseAlertMessage(cleanedMessage)) {
+                const txt = String(cleanedMessage).replace(/[*\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) || 'Mensaje';
+                const hora = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', hour12: false }).replace(',', '');
+                cleanedMessage = `hola RASTREAR te informa una alerta en su vehículo *GPSwox* ha presentado *${txt}* Ubicación: Ver GPS Hora: ${hora}`;
+                console.log('[GATEWAY] Mensaje que no es alerta: se envia con la plantilla alerta_vehiculo');
+            }
+        } catch (e) { console.log('[GATEWAY] envoltura de plantilla fallo:', e.message); }
+        let result = await sessionManager.sendMessageHybrid(to, cleanedMessage);
+        // Si la Cloud API no pudo y hay una sesion Baileys activa, se envia el texto original por ahi
+        if (!result || !result.success) {
+            try {
+                const activas = typeof sessionManager.getActiveSessions === 'function' ? sessionManager.getActiveSessions() : [];
+                if (activas.length > 0 && typeof sessionManager.sendMessageWithRetry === 'function') {
+                    console.log('[GATEWAY] Cloud API fallo, enviando por Baileys (' + activas[0].name + ')');
+                    const r2 = await sessionManager.sendMessageWithRetry(activas[0], formatPhoneNumber(to), textoOriginal, 3);
+                    if (r2 && r2.success !== false) result = { success: true, method: 'baileys', session: activas[0].name };
+                }
+            } catch (e) { console.log('[GATEWAY] respaldo Baileys fallo:', e.message); }
+        }
         forwardControlAlertAsync(to, cleanedMessage, result);
         res.json(result);
     } catch (error) {
@@ -1862,7 +1885,7 @@ app.post('/api/gpswox/session/start-preop', async (req, res) => {
             else await preopFlow.iniciarJornada(session, jid);
             return res.json({ success: true });
         }
-        const trigger = tenant === 'rastrear' ? 'RPREOP' : 'PREOP';
+        const trigger = tenant === 'rastrear' ? 'PREOPR' : 'PREOP';
         await preopFlow.handleMessage(session, gpswoxSessionName, jid, trigger, null, session.socket);
         res.json({ success: true });
     } catch (error) {

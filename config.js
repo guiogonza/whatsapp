@@ -138,19 +138,23 @@ module.exports = {
     // Mismo bot y número; la palabra clave decide a qué backend se habla (ver preop-flow.js).
     // Palabra "turno": el bot responde con el enlace de la app de turnos de descargue.
     TURNOS_TRIGGER_KEYWORDS: (process.env.TURNOS_TRIGGER_KEYWORDS || 'TURNO,TURNOS').split(',').map(s => s.trim().toUpperCase()),
-    TURNOS_URL: process.env.TURNOS_URL || 'https://turnos.apptu.net/app',
+    // /apps (no /app): pantalla que lleva a instalar la PWA y, si ya esta instalada, entra directo a /app
+    TURNOS_URL: process.env.TURNOS_URL || 'https://turnos.apptu.net/apps',
     // Flujo "PUERTO": lista de transportadoras de Turnos + enlace único para fotografiar el
     // manifiesto y los 4 precintos (lib/session/puerto-flow.js). La API de Turnos se llama por la
     // red interna de Docker (turnos-backend-1 comparte whatsapp-api_whatsapp-network con este bot).
     PUERTO_TRIGGER_KEYWORDS: (process.env.PUERTO_TRIGGER_KEYWORDS || 'PUERTO').split(',').map(s => s.trim().toUpperCase()),
     TURNOS_API_URL: process.env.TURNOS_API_URL || 'http://turnos-backend-1:8080',
     PUERTO_BOT_SECRET: process.env.PUERTO_BOT_SECRET || '',
+    // Odómetro del GPS (Torre): el bot del preoperacional lo muestra al conductor para que lo confirme.
+    TORRE_API_URL: process.env.TORRE_API_URL || 'https://torre.apptu.net',
+    TORRE_API_TOKEN: process.env.TORRE_API_TOKEN || '',
     PREOP_RASTREAR_API_URL: process.env.PREOP_RASTREAR_API_URL || 'https://rastrear.com.co/preoperacional',
     PREOP_RASTREAR_INTERNAL_SECRET: process.env.PREOP_RASTREAR_INTERNAL_SECRET || '',
     // "RASTREAR" solo (el nombre de la empresa) ya NO esta aqui -- ahora abre el
     // menu propio de Rastrear (hesego-operatividad/lib/gpswox-session.js), que
     // incluye Preoperacional como una de sus opciones, no un acceso directo.
-    PREOP_RASTREAR_TRIGGER_KEYWORDS: (process.env.PREOP_RASTREAR_TRIGGER_KEYWORDS || 'RPREOP,PREOP RASTREAR,PREOPERACIONAL RASTREAR').split(',').map(s => s.trim().toUpperCase()),
+    PREOP_RASTREAR_TRIGGER_KEYWORDS: (process.env.PREOP_RASTREAR_TRIGGER_KEYWORDS || 'PREOPR,PREOP RASTREAR,PREOPERACIONAL RASTREAR').split(',').map(s => s.trim().toUpperCase()),
 
     // ============================================
     // Bot de Inspección (Hesego) — módulo hermano de Preoperacional
@@ -160,6 +164,9 @@ module.exports = {
     // (ej. http://insp-backend:3100). INSP_API_URL se queda PUBLICA: arma el enlace /ver/<id> que
     // recibe el usuario. Vacio = las llamadas siguen yendo por INSP_API_URL como antes.
     INSP_API_INTERNAL_URL: process.env.INSP_API_INTERNAL_URL || '',
+    // Minutos sin que la persona conteste para que su conversacion con un bot se reinicie por completo
+    // (preoperacional, inspeccion, puerto). Pasado ese tiempo el siguiente mensaje se trata como nuevo.
+    BOT_INACTIVIDAD_MIN: parseInt(process.env.BOT_INACTIVIDAD_MIN || '5', 10),
     INSP_TRIGGER_KEYWORDS: (process.env.INSP_TRIGGER_KEYWORDS || 'INSPECCION,INSPECCIONAR,INSPECCIÓN').split(',').map(s => s.trim().toUpperCase()),
     // Secreto compartido para /internal/* del backend de Inspección (generar el
     // link único de fotos con cámara obligatoria — mismo secreto que INSP_INTERNAL_SECRET allá)
