@@ -141,7 +141,7 @@ Edita el archivo `lib/session/gpswox-api.js`:
 
 ```javascript
 const GPSWOX_CONFIG = {
-    BASE_URL: 'https://plataforma.sistemagps.online/api',
+    BASE_URL: 'https://gps.rastrear.com.co/api',
     API_HASH: 'TU_HASH_DE_API_AQUI'
 };
 ```

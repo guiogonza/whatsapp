@@ -86,7 +86,7 @@ DEF456GHI → DEF-456GHI  ✅
 
 ### Configuración Actual (Editable)
 ```javascript
-BASE_URL: 'https://plataforma.sistemagps.online/api'
+BASE_URL: 'https://gps.rastrear.com.co/api'
 API_HASH: '$2y$10$q8oTWg/6WPee2w8oE3ebCOVEFK60Zlsb6d0nyqU1Vxx3GgMhm/xzG'
 ```
 

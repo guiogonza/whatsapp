@@ -188,10 +188,10 @@ module.exports = {
     // GPSwox Platform Servers
     // ============================================
     // DEV: http://213.199.45.139/
-    // PRD: http://142.132.149.111/
+    // PRD: https://gps.rastrear.com.co/ (el servidor anterior, 142.132.149.111, ya no se usa)
     GPSWOX_API_BASE_DEV: process.env.GPSWOX_API_BASE_DEV || 'http://213.199.45.139/api',
-    GPSWOX_API_BASE_PRD: process.env.GPSWOX_API_BASE_PRD || 'http://142.132.149.111/api',
-    GPSWOX_API_HASH_PRD: process.env.GPSWOX_API_HASH_PRD || '$2y$10$olDjm0MFRwAAszdePy4H6.W2oXAAx7jht7jPlx3.qxunehfBA6.n2',
+    GPSWOX_API_BASE_PRD: process.env.GPSWOX_API_BASE_PRD || 'https://gps.rastrear.com.co/api',
+    GPSWOX_API_HASH_PRD: process.env.GPSWOX_API_HASH_PRD || '',
     GPSWOX_API_HASH_DEV: process.env.GPSWOX_API_HASH_DEV || '$2y$10$7bj.tJXGHGydLk4PRxux5ODsXLoMLvcfUnnM6nAF8aq4fXozkpnhq',
 
     // Sesión especial GPSwox (múltiples sesiones separadas por coma)
