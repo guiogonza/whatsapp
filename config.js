@@ -167,6 +167,8 @@ module.exports = {
     // Minutos sin que la persona conteste para que su conversacion con un bot se reinicie por completo
     // (preoperacional, inspeccion, puerto). Pasado ese tiempo el siguiente mensaje se trata como nuevo.
     BOT_INACTIVIDAD_MIN: parseInt(process.env.BOT_INACTIVIDAD_MIN || '5', 10),
+    // La Encuesta de Riesgo Psicosocial es mas larga y la contesta el empleado en sus ratos libres: 30 min, no 5
+    BOT_ENCUESTA_INACTIVIDAD_MIN: parseInt(process.env.BOT_ENCUESTA_INACTIVIDAD_MIN || '30', 10),
     INSP_TRIGGER_KEYWORDS: (process.env.INSP_TRIGGER_KEYWORDS || 'INSPECCION,INSPECCIONAR,INSPECCIÓN').split(',').map(s => s.trim().toUpperCase()),
     // Secreto compartido para /internal/* del backend de Inspección (generar el
     // link único de fotos con cámara obligatoria — mismo secreto que INSP_INTERNAL_SECRET allá)
