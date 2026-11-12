@@ -13,3 +13,6 @@ uploads/
 *.backup
 public/*.bak
 .env
+
+# Copias de respaldo hechas a mano antes de parchar
+*.bak-*
