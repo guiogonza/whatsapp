@@ -1406,6 +1406,27 @@ app.post('/api/encuesta-bot/enviar', async (req, res) => {
 });
 
 /**
+ * GET /api/twilio/saldo - Saldo de la cuenta de Twilio (llamadas de voz de Turnos) para el panel.
+ * El token de Twilio vive solo en Turnos: aqui se le pregunta a su backend por la red interna (X-Bot-Secret) y se guarda
+ * 5 minutos en memoria para no consultar a Twilio en cada refresco del panel.
+ */
+let twilioSaldoCache = { at: 0, data: null };
+app.get('/api/twilio/saldo', async (req, res) => {
+    try {
+        if (!config.PUERTO_BOT_SECRET) return res.status(503).json({ success: false, error: 'No configurado' });
+        if (!twilioSaldoCache.data || Date.now() - twilioSaldoCache.at > 5 * 60 * 1000) {
+            const r = await axios.get(`${config.TURNOS_API_URL}/api/interno/twilio-saldo`, {
+                headers: { 'X-Bot-Secret': config.PUERTO_BOT_SECRET }, timeout: 15000
+            });
+            twilioSaldoCache = { at: Date.now(), data: { saldo: r.data.saldo, moneda: r.data.moneda } };
+        }
+        res.json({ success: true, ...twilioSaldoCache.data, actualizado: new Date(twilioSaldoCache.at).toISOString() });
+    } catch (error) {
+        res.status(502).json({ success: false, error: 'No se pudo consultar el saldo de Twilio' });
+    }
+});
+
+/**
  * GET /api/cloud/stats - Estadísticas de WhatsApp Cloud API con costos
  * Pricing Colombia (utility templates): ~$0.0085 USD por mensaje
  * 1000 conversaciones gratis/mes (service conversations)

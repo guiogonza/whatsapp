@@ -703,16 +703,36 @@ async function updateRotationInfo() {
     }
 }
 
+// Saldo de Twilio (llamadas de voz de Turnos). Aviso en amarillo bajo US$5 y en rojo bajo US$2 (≈ 130 llamadas de 1 minuto a US$0,0377).
+async function loadTwilioSaldo() {
+    const el = document.getElementById('twilioSaldo');
+    if (!el) return;
+    try {
+        const r = await fetch(`${API_URL}/api/twilio/saldo`);
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'sin dato');
+        const llamadas = Math.floor(d.saldo / 0.0377);
+        const color = d.saldo < 2 ? 'text-red-600 font-bold' : d.saldo < 5 ? 'text-yellow-600 font-semibold' : 'text-gray-600';
+        el.className = `text-xs mb-1 ${color}`;
+        el.textContent = `📞 Saldo Twilio: ${d.moneda === 'USD' ? 'US$' : d.moneda + ' '}${d.saldo.toFixed(2)} (≈ ${llamadas.toLocaleString('es-CO')} llamadas)`;
+    } catch (e) {
+        el.className = 'text-xs mb-1 text-gray-400';
+        el.textContent = '📞 Saldo Twilio: no disponible';
+    }
+}
+
 function startRotationUpdates() {
     if (rotationUpdateInterval) clearInterval(rotationUpdateInterval);
     updateRotationInfo();
     loadSessions();
     loadCloudApiStats();
+    loadTwilioSaldo();
     startCountdownInterval(); // Iniciar cuentas regresivas
     rotationUpdateInterval = setInterval(() => {
         updateRotationInfo();
         loadSessions();
         loadCloudApiStats();
+        loadTwilioSaldo();
     }, 30000);
 }
 
