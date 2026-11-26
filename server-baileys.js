@@ -3710,11 +3710,13 @@ async function initialize() {
         // (solo si hesego-operatividad NO esta desplegado; si GPSWOX_WEBHOOK_URL
         // esta configurado, ese proyecto corre su propio scheduler para evitar
         // recordatorios duplicados)
-        if (!config.GPSWOX_WEBHOOK_URL) {
+        // Nov. 2026: las tareas de operatividad (recordatorios de las 8 y 9 a. m.) se apagaron junto con hesego-operatividad y YA NO arrancan
+        // solas al quitar GPSWOX_WEBHOOK_URL. Para encenderlas aquí hay que poner OPERATIVIDAD_SCHEDULER=1 (y que hesego-operatividad no corra).
+        if (process.env.OPERATIVIDAD_SCHEDULER === '1' && !config.GPSWOX_WEBHOOK_URL) {
             const operational = require('./lib/session/gpswox-operational');
             operational.startDailyScheduler(sessionManager);
         } else {
-            console.log('⏭️ Scheduler de operatividad delegado a hesego-operatividad (GPSWOX_WEBHOOK_URL configurado)');
+            console.log('⏭️ Scheduler de operatividad apagado (OPERATIVIDAD_SCHEDULER distinto de 1 o reenvío a hesego-operatividad activo)');
         }
 
         console.log('ÃƒÂƒÃ‚Â¢ÃƒÂ‚Ã‚ÂœÃƒÂ‚Ã‚Â… Sistema iniciado correctamente\n');
