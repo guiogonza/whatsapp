@@ -45,7 +45,7 @@ anterior y no se usa. **Reversa:** ver el `AGENTS.md` de `hesego-operatividad`.
 ## Palabras clave que activan cada bot (estado real, oct. 2026)
 
 Todos estos triggers se evalúan en `lib/session/core.js` de **este** repo
-(antes de reenviar nada a `hesego-operatividad`), excepto donde se indica
+(el flujo de GPSwox se procesa aquí mismo desde nov. 2026), excepto donde se indica
 lo contrario. Case-insensitive, se compara el mensaje completo en
 mayúsculas contra estas listas (configurables por variable de entorno, los
 valores de abajo son los default en `config.js` si la variable no está
@@ -80,14 +80,10 @@ primero en `core.js` junto a HESEGO/RASTREAR porque parecía "un trigger
 más" — nunca se disparaba en producción porque esos mensajes jamás pasan
 por Baileys. Si se toca TURNOS, el archivo real es `webhook.js`.
 
-**Puente hesego-operatividad → whatsapp-docker para flujos que solo viven
-aquí**: cuando el menú de Hesego u Rastrear necesita arrancar Inspección o
-Preoperacional (que son módulos de este repo, no de hesego-operatividad),
-`hesego-operatividad/lib/whatsappSender.js` llama de vuelta a un endpoint
-interno de aquí (`startInspection` → `POST /api/gpswox/session/start-inspection`,
-`startPreopRastrear` → `POST /api/gpswox/session/start-preop`), con el
-mismo secreto compartido (`GPSWOX_WEBHOOK_SHARED_SECRET`) que usa el
-webhook en la otra dirección.
+**Puente interno para Inspección y Preoperacional (nov. 2026):** cuando el menú de Hesego, Rastrear o Cointra necesita arrancar Inspección o
+Preoperacional, `lib/session/gpswox-puente-local.js` los inicia directo con la sesión real (`startInspection`, `startPreopRastrear`,
+`startJornadaCointra`). Antes lo hacía `hesego-operatividad/lib/whatsappSender.js` llamando por HTTP a `POST /api/gpswox/session/start-inspection` y
+`/start-preop` de `server-baileys.js` con `GPSWOX_WEBHOOK_SHARED_SECRET`; esos endpoints se conservan (sin uso) por si se revierte.
 
 **Bots que NO se activan por palabra clave** (corren por canal propio, no
 por texto en WhatsApp): Notificaciones GPS genéricas (bot #7, llegan por
@@ -255,7 +251,7 @@ decenas de proyectos y las cosas se mueven):
 | Carpeta local (Windows) | Contenedor(es) | Compose project / ruta remota |
 |---|---|---|
 | `C:\Documentos\whatsapp docker` | `wpp-bot` | `whatsapp-api` → `/root/whatsapp-api` |
-| `C:\Documentos\hesego operatividad` | `hesego-operatividad` | `hesego-operatividad` → `/root/hesego-operatividad` |
+| `C:\Documentos\hesego operatividad` | `hesego-operatividad` (**apagado** desde 2026-11-26, `restart=no`) | `hesego-operatividad` → `/root/hesego-operatividad` |
 | `C:\Documentos\Hesego preoperacional\hesego-preoperacional` | `preop-backend`, `preop-frontend`, `preop-db` | `hesego-preoperacional` → `/root/hesego-preoperacional` |
 | `C:\Documentos\Hesego preoperacional\hesego-inspecciones` | `insp-backend`, `insp-frontend`, `insp-db` | `hesego-inspecciones` → `/root/hesego-inspecciones` |
 | `C:\Documentos\Hesego preoperacional\hesego-usuarios` | `usr-backend`, `usr-db` | portal SSO unificado (no confirmado el nombre exacto del compose project) |
@@ -291,17 +287,17 @@ commits remotos hechos desde otra máquina/sesión que no están en local.
 
 ## Cointra: inicio/fin de jornada con preoperacional (2026-10-31)
 
-- **Palabra de acceso `COINTRA`** (tercera empresa junto a HESEGO y RASTREAR; `lib/session/empresa-pref.js`). Menú: `1` Inicio de jornada, `2` Fin de jornada. El menú real de producción vive en `hesego-operatividad` (`lib/gpswox-session.js`); la copia de `lib/session/gpswox-session.js` de este repo es el respaldo local. Operatividad llama a `POST /api/gpswox/session/start-preop` con `{tenant:'cointra', accion:'inicio'|'fin'}`.
+- **Palabra de acceso `COINTRA`** (tercera empresa junto a HESEGO y RASTREAR; `lib/session/empresa-pref.js`). Menú: `1` Inicio de jornada, `2` Fin de jornada. El menú vive en `lib/session/gpswox-session.js` de este repo (antes en `hesego-operatividad`) y arranca la jornada con `gpswox-puente-local.js` (`startJornadaCointra`, `accion` = `inicio`|`fin`).
 - **Inicio** (`preop-flow.js` → `iniciarJornada`): usa el preoperacional de Rastrear (tenant `rastrear`) eligiendo solo la empresa `COINTRA`. Pasos: placa (propone el vehículo asignado al celular; con `SI` lo usa; la placa debe existir en Cointra, si no responde que no existe) → si el vehículo ya tiene preoperacional hoy, avisa con el enlace → conductor por defecto del vehículo (¿eres tú? SI/NO) o cédula (`CEDULA`, `CONFIRMAR_CEDULA`) → odómetro **obligatorio** (ya no existe SALTAR, aplica a todos los preoperacionales) → buen estado/novedad → enlace de fotos con viñetas (5 fotos del vehículo, 3 si es moto; 1 por cada daño).
 - **Fin** (`iniciarFinJornada`, pasos `FIN_PLACA` → `FIN_ODOMETRO`): llama a `/internal/jornada/fin-wa` del backend de Rastrear; si la placa no es la de la jornada abierta, pide la correcta.
 - **Aviso final:** el backend de Rastrear llama a `POST /internal/complete-inspection` de este bot (secreto = `PREOP_RASTREAR_INTERNAL_SECRET`) y el bot envía "Jornada iniciada" con el enlace `/ver/<id>` del preoperacional realizado.
-- **SALIR** termina el flujo en cualquier paso. El menú de Cointra se reabre con cualquier mensaje (memoria de 24 h en `hesego-operatividad`, se pierde al reiniciarlo).
+- **SALIR** termina el flujo en cualquier paso. El menú de Cointra se reabre con cualquier mensaje (memoria de 24 h en este bot, se pierde al reiniciarlo).
 - `preop-api.js` nuevo: `finalizarJornada`, `conductorPorPlaca`, `conductorPorCedula`, `vehiculosPorTelefono`.
 - **Despliegue:** el `server-baileys.js` del servidor difiere del de este repo; se le aplicó el cambio sobre el del servidor (no copiar el local encima sin comparar). Reconstruir con `docker compose build wpp-bot && up -d wpp-bot` en `/root/whatsapp-api` (reinicia el bot compartido: avisar antes; `fx-session-1/2` piden QR siempre, es normal).
 
 ## Menú de Hesego (nov. 2026) y flujo PUERTO
 
-- **Menú `HESEGO` reducido** (`hesego-operatividad/lib/gpswox-session.js`): "Bienvenido a bot hesego", *1* Consultar placa y última ubicación, *2* Inspección Hesego y *3* Asignar usuario a vehículo y *4* Quitar usuario de vehículo (internamente se traducen a las opciones 2, 8, 1 y 9 del menú completo; los manejadores 1-8 siguen intactos; el detalle de «quitar» está en el `AGENTS.md` de `hesego-operatividad`). El menú completo anterior (8 opciones, "Bienvenido a plataformagps") quedó archivado en la constante `MENU_COMPLETO_ARCHIVADO` y se reactiva poniendo `HESEGO_MENU_COMPLETO=1` en el `.env` de `hesego-operatividad`. El respaldo local de este repo es ahora una copia del flujo de producción (ver «Copia local al día» arriba).
+- **Menú `HESEGO` reducido** (`lib/session/gpswox-session.js`): "Bienvenido a bot hesego", *1* Consultar placa y última ubicación, *2* Inspección Hesego y *3* Asignar usuario a vehículo y *4* Quitar usuario de vehículo (internamente se traducen a las opciones 2, 8, 1 y 9 del menú completo; los manejadores 1-8 siguen intactos; el detalle de «quitar» está en el `AGENTS.md` de `hesego-operatividad`). El menú completo anterior (8 opciones, "Bienvenido a plataformagps") quedó archivado en la constante `MENU_COMPLETO_ARCHIVADO` y se reactiva poniendo `HESEGO_MENU_COMPLETO=1` en el `.env` de `hesego-operatividad`. El respaldo local de este repo es ahora una copia del flujo de producción (ver «Copia local al día» arriba).
 - **`PUERTO`**: variables en el `.env` de este bot — `PUERTO_BOT_SECRET` (mismo valor que en el `.env` de turnos_co; sin él el flujo queda apagado), `TURNOS_API_URL` (default `http://turnos-backend-1:8080`, red interna `whatsapp-api_whatsapp-network`) y `PUERTO_TRIGGER_KEYWORDS` (default `PUERTO`). Recorrido: `PUERTO` → transportadora (número) → **cliente de Turnos (solo COINTRA; variable `PUERTO_CLIENTE_TRANSPORTADORAS`, default `COINTRA`, nombres separados por coma); las demás transportadoras usan el cliente `PUERTO_CLIENTE_DEFECTO` (default `BUCANERO`)** (número) → **placa** (3 letras + 3 números, sin espacios ni guiones; si no cumple, la vuelve a pedir) → botón con el enlace. Detalle de la API, tablas y enlace: `AGENTS.md` de turnos_co (sección "Registro en puerto").
 - **`POST /api/cloud/send` con `canal: "cloud"`** (parche en `server-baileys.js`, nov. 2026): manda el texto libre por la Cloud API en vez de por Baileys. Sin ese campo sigue la regla de siempre (texto libre solo por Baileys, para no generar costo). Solo sirve dentro de las 24 h del último mensaje de la persona; lo usa Turnos para que la confirmación del registro de puerto salga por el mismo número donde se escribió `PUERTO`, con respaldo al envío normal si Meta la rechaza.
 
