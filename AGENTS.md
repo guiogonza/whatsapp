@@ -37,20 +37,18 @@ a `http://hesego-operatividad:4300`). Confirma con:
 ```bash
 ssh -i "$SSHK" root@164.68.118.86 "grep GPSWOX_WEBHOOK_URL /root/whatsapp-api/.env"
 ```
-Si de todos modos editas el fallback aquí, aplica el mismo cambio en ambos
+Si de todos modos editas la copia de aquí, aplica el mismo cambio en ambos
 archivos para que no diverjan.
 
-**Drift conocido (oct. 2026) entre ambos archivos:** el fallback de aquí
-(`lib/session/gpswox-session.js`) tiene su PROPIO selector de empresa
-(distinto del menú de Rastrear descrito abajo, construido antes y nunca
-portado a producción) vía `empresa-pref.js` + tabla `bot_empresa_elegida`
-en la BD de **este** repo. El archivo real de producción
-(`hesego-operatividad/lib/gpswox-session.js`) no usa ese mecanismo — tiene
-su propio menú de Rastrear standalone (ver tabla abajo), construido
-directamente ahí. No se intentó unificar los dos (nadie lo pidió
-todavía) — si se toca el menú de Rastrear, el archivo real a editar es
-`hesego-operatividad/lib/gpswox-session.js`, el fallback de aquí queda
-weirdly adelantado en un diseño distinto que no está en uso.
+**Copia local al día (nov. 2026, ya NO hay drift de diseño):** `lib/session/gpswox-session.js` de este repo es ahora una copia
+del archivo de producción de `hesego-operatividad`, adaptada: mismas rutas de `require` de este repo, las tres acciones que antes
+daban la vuelta por HTTP (Inspección, Preoperacional de Rastrear, jornada de Cointra) viven en `lib/session/gpswox-puente-local.js`
+(llaman directo a `inspeccion-flow.js`/`preop-flow.js` con la sesión real) y conserva dos funciones que usa el resto del bot
+(`isGPSwoxDedicatedMode`, `getGPSwoxSessionNames`). Se verificó con una prueba diferencial: las mismas 13 conversaciones (177
+mensajes: menús de HESEGO/RASTREAR/COINTRA, consultar placa, asignar, quitar, SALIR/MENU, palabras sueltas, bloqueo y tope diario)
+contra los dos archivos, con un GPSwox simulado, dieron respuestas idénticas. **Sigue sin usarse en producción** mientras
+`GPSWOX_WEBHOOK_URL` esté configurada; no incluye Operatividad ni Odoo (el módulo `gpswox-operational.js` de aquí es el anterior).
+Si cambia el original, hay que repetir la adaptación y la comparación: `node scripts/pruebas/gpswox-diferencial.js <ruta del gpswox-session.js> <salida.json>` (una vez con el de producción y otra con este; luego comparar los dos JSON) y `node scripts/pruebas/gpswox-puente-local.test.js <raíz del repo con />` para el puente local.
 
 ## Palabras clave que activan cada bot (estado real, oct. 2026)
 
@@ -311,7 +309,7 @@ commits remotos hechos desde otra máquina/sesión que no están en local.
 
 ## Menú de Hesego (nov. 2026) y flujo PUERTO
 
-- **Menú `HESEGO` reducido** (`hesego-operatividad/lib/gpswox-session.js`): "Bienvenido a bot hesego", *1* Consultar placa y última ubicación, *2* Inspección Hesego y *3* Asignar usuario a vehículo y *4* Quitar usuario de vehículo (internamente se traducen a las opciones 2, 8, 1 y 9 del menú completo; los manejadores 1-8 siguen intactos; el detalle de «quitar» está en el `AGENTS.md` de `hesego-operatividad`). El menú completo anterior (8 opciones, "Bienvenido a plataformagps") quedó archivado en la constante `MENU_COMPLETO_ARCHIVADO` y se reactiva poniendo `HESEGO_MENU_COMPLETO=1` en el `.env` de `hesego-operatividad`. **Respaldo local actualizado (nov. 2026):** `lib/session/gpswox-session.js` de este repo ahora tiene el mismo menú corto de 4 opciones para `HESEGO` y el flujo de **quitar usuario de vehículo** (copiado de producción, junto con `removeDeviceFromUser`/`getDeviceUserIdsEstricto` en `lib/session/gpswox-api.js`). Diferencias a propósito: aquí «quitar» es la opción interna **10** (la 9 es Preoperacional) y `HESEGO_MENU_COMPLETO=1` muestra el menú de 9+1 opciones de esta copia; conserva su selector de empresa (`empresa-pref.js`) y, en *asignar*, la sugerencia «¿Quisiste decir…?» de `findSimilarPlates`, que producción no tiene (el resto del flujo de asignar ya era equivalente). Sigue sin usarse en producción (solo corre si falta `GPSWOX_WEBHOOK_URL`), así que **no hizo falta desplegarlo**; si se despliega, el reinicio del bot es el de siempre.
+- **Menú `HESEGO` reducido** (`hesego-operatividad/lib/gpswox-session.js`): "Bienvenido a bot hesego", *1* Consultar placa y última ubicación, *2* Inspección Hesego y *3* Asignar usuario a vehículo y *4* Quitar usuario de vehículo (internamente se traducen a las opciones 2, 8, 1 y 9 del menú completo; los manejadores 1-8 siguen intactos; el detalle de «quitar» está en el `AGENTS.md` de `hesego-operatividad`). El menú completo anterior (8 opciones, "Bienvenido a plataformagps") quedó archivado en la constante `MENU_COMPLETO_ARCHIVADO` y se reactiva poniendo `HESEGO_MENU_COMPLETO=1` en el `.env` de `hesego-operatividad`. El respaldo local de este repo es ahora una copia del flujo de producción (ver «Copia local al día» arriba).
 - **`PUERTO`**: variables en el `.env` de este bot — `PUERTO_BOT_SECRET` (mismo valor que en el `.env` de turnos_co; sin él el flujo queda apagado), `TURNOS_API_URL` (default `http://turnos-backend-1:8080`, red interna `whatsapp-api_whatsapp-network`) y `PUERTO_TRIGGER_KEYWORDS` (default `PUERTO`). Recorrido: `PUERTO` → transportadora (número) → **cliente de Turnos (solo COINTRA; variable `PUERTO_CLIENTE_TRANSPORTADORAS`, default `COINTRA`, nombres separados por coma); las demás transportadoras usan el cliente `PUERTO_CLIENTE_DEFECTO` (default `BUCANERO`)** (número) → **placa** (3 letras + 3 números, sin espacios ni guiones; si no cumple, la vuelve a pedir) → botón con el enlace. Detalle de la API, tablas y enlace: `AGENTS.md` de turnos_co (sección "Registro en puerto").
 - **`POST /api/cloud/send` con `canal: "cloud"`** (parche en `server-baileys.js`, nov. 2026): manda el texto libre por la Cloud API en vez de por Baileys. Sin ese campo sigue la regla de siempre (texto libre solo por Baileys, para no generar costo). Solo sirve dentro de las 24 h del último mensaje de la persona; lo usa Turnos para que la confirmación del registro de puerto salga por el mismo número donde se escribió `PUERTO`, con respaldo al envío normal si Meta la rechaza.
 
