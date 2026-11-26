@@ -9,17 +9,17 @@ Este archivo cubre lo operativo: qué es cada cosa, dónde vive, cómo desplegar
 
 `whatsapp-docker` (`server-baileys.js`, contenedor `wpp-bot` en producción)
 es el servidor Express que mantiene la(s) sesión(es) de WhatsApp (Baileys) y
-sirve **8 bots**. La mayoría de la lógica conversacional vive aquí mismo,
-pero dos módulos (GPSwox/plataformagps y Operatividad) fueron extraídos al
-proyecto hermano `hesego-operatividad` (agosto 2026) — este repo solo
-reenvía esos mensajes por webhook, no procesa su lógica en producción. Ver
-`AGENTS.md` de `hesego-operatividad` (`C:\Documentos\hesego operatividad\AGENTS.md`)
-para el detalle de ese servicio.
+sirve los bots. **Desde el 2026-11-26 toda la lógica conversacional vive aquí**,
+incluido el flujo de GPSwox/plataformagps (asignar y quitar usuario, consultar
+placa, menús de HESEGO/RASTREAR/COINTRA). El proyecto hermano
+`hesego-operatividad`, de donde se había extraído en agosto 2026, está **apagado**
+(contenedor detenido; ver su `AGENTS.md` y la reversa). Las tareas de Operatividad,
+la sincronización con Odoo y su panel se apagaron a propósito.
 
 | # | Bot | Dónde vive el código en producción |
 |---|-----|----|
-| 1 | GPSwox/plataformagps (asignar placa, consultar ubicación) | `hesego-operatividad` (este repo solo reenvía por webhook) |
-| 2 | Operatividad (vehículos no operativos, vencimientos) | `hesego-operatividad` |
+| 1 | GPSwox/plataformagps (asignar y quitar usuario, consultar ubicación, menús) | aquí: `lib/session/gpswox-session.js` (+ `gpswox-api.js`, `gpswox-puente-local.js`) |
+| 2 | Operatividad (vehículos no operativos, vencimientos) | **apagado** (nov. 2026); el módulo viejo `gpswox-operational.js` de aquí no arranca (`OPERATIVIDAD_SCHEDULER=1` lo encendería) |
 | 3 | Inspección Hesego (checklist 20 ítems) | aquí: `lib/session/inspeccion-flow.js` |
 | 4 | Preoperacional Hesego | aquí: `lib/session/preop-flow.js` |
 | 5 | FX/MT5 (alertas de trading) | aquí: `lib/session/fx-commands.js` |
@@ -27,28 +27,20 @@ para el detalle de ese servicio.
 | 7 | Notificaciones GPS genéricas | aquí: `/webhook`, `/webhook/whatsapp` |
 | 8 | Auto-respuesta IA (OpenAI) | aquí: `lib/session/core.js` |
 
-**Trampa común:** si te piden ajustar el flujo de "asignar placa a
-usuario" (opción 1 del menú GPSwox), el archivo real a editar es
-`lib/gpswox-session.js` en `C:\Documentos\hesego operatividad`, **no**
-`lib/session/gpswox-session.js` de este repo — ese es solo un fallback que
-corre únicamente si la variable `GPSWOX_WEBHOOK_URL` no está configurada en
-el `.env` del servidor (en producción normal sí está configurada, apuntando
-a `http://hesego-operatividad:4300`). Confirma con:
+**Dónde editar el flujo de GPSwox:** `lib/session/gpswox-session.js` de **este** repo (ya es el real). Es una copia adaptada del que tenía
+`hesego-operatividad`; el reenvío por webhook (`GPSWOX_WEBHOOK_URL` en el `.env`) está **vacío**, y `core.js` procesa los mensajes de la sesión
+GPSwox aquí mismo. Si alguien vuelve a poner esa variable, el bot reenviaría a un servicio que está apagado. Confirma con:
 ```bash
 ssh -i "$SSHK" root@164.68.118.86 "grep GPSWOX_WEBHOOK_URL /root/whatsapp-api/.env"
 ```
-Si de todos modos editas la copia de aquí, aplica el mismo cambio en ambos
-archivos para que no diverjan.
 
-**Copia local al día (nov. 2026, ya NO hay drift de diseño):** `lib/session/gpswox-session.js` de este repo es ahora una copia
-del archivo de producción de `hesego-operatividad`, adaptada: mismas rutas de `require` de este repo, las tres acciones que antes
-daban la vuelta por HTTP (Inspección, Preoperacional de Rastrear, jornada de Cointra) viven en `lib/session/gpswox-puente-local.js`
-(llaman directo a `inspeccion-flow.js`/`preop-flow.js` con la sesión real) y conserva dos funciones que usa el resto del bot
-(`isGPSwoxDedicatedMode`, `getGPSwoxSessionNames`). Se verificó con una prueba diferencial: las mismas 13 conversaciones (177
-mensajes: menús de HESEGO/RASTREAR/COINTRA, consultar placa, asignar, quitar, SALIR/MENU, palabras sueltas, bloqueo y tope diario)
-contra los dos archivos, con un GPSwox simulado, dieron respuestas idénticas. **Sigue sin usarse en producción** mientras
-`GPSWOX_WEBHOOK_URL` esté configurada; no incluye Operatividad ni Odoo (el módulo `gpswox-operational.js` de aquí es el anterior).
-Si cambia el original, hay que repetir la adaptación y la comparación: `node scripts/pruebas/gpswox-diferencial.js <ruta del gpswox-session.js> <salida.json>` (una vez con el de producción y otra con este; luego comparar los dos JSON) y `node scripts/pruebas/gpswox-puente-local.test.js <raíz del repo con />` para el puente local.
+**Origen del flujo (nov. 2026):** `lib/session/gpswox-session.js` es el archivo de producción de `hesego-operatividad` adaptado a este repo: mismas
+rutas de `require`, tres acciones que antes daban la vuelta por HTTP (Inspección, Preoperacional de Rastrear, jornada de Cointra) ahora en
+`lib/session/gpswox-puente-local.js` (llaman directo a `inspeccion-flow.js`/`preop-flow.js` con la sesión real) y dos funciones que usa el resto
+del bot (`isGPSwoxDedicatedMode`, `getGPSwoxSessionNames`). Se verificó con una prueba diferencial: las mismas 13 conversaciones (177 mensajes)
+contra los dos archivos, con un GPSwox simulado, dieron respuestas idénticas. Para repetirla: `node scripts/pruebas/gpswox-diferencial.js <ruta del
+gpswox-session.js> <salida.json>` y `node scripts/pruebas/gpswox-puente-local.test.js <raíz del repo con />`. El módulo de operatividad de aquí es el
+anterior y no se usa. **Reversa:** ver el `AGENTS.md` de `hesego-operatividad`.
 
 ## Palabras clave que activan cada bot (estado real, oct. 2026)
 
@@ -61,10 +53,10 @@ puesta):
 
 | Palabra(s) | Abre | Dónde se maneja |
 |---|---|---|
-| `HESEGO` | Menú de administración de Hesego (asignar placa, consultar ubicación, Operatividad, lanzar Inspección/Preop desde el menú) — siempre abre/reinicia, es la palabra de entrada "desde afuera" | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
-| `RASTREAR` | Menú propio de Rastrear: *1* Preoperacional, *2* Consultar placa y última ubicación (misma lógica que la opción 2 de Hesego, GPSwox es genérico), *3* Consultar documentos y *4* Registrar gastos (estas dos últimas responden "próximamente, en desarrollo") — igual que HESEGO, siempre abre/reinicia desde afuera | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
-| `MENU`, `MENÚ` | Vuelve al tope del menú en el que ya estés (Hesego o Rastrear) — **solo si hay una conversación activa**; sin conversación (recién entraste o escribiste `SALIR`) no hace nada, se trata como palabra sin reconocer | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
-| `SALIR` | Termina cualquier conversación/flujo activo (Hesego, Rastrear, Preop, Inspección) y responde un mensaje neutral sin abrir ningún menú ni mencionar las palabras clave (evita invitar a probarlas todas) | `hesego-operatividad/lib/gpswox-session.js` (webhook); `preop-flow.js`/`inspeccion-flow.js` aquí reenvían "salir" ahí si hay sesión local activa |
+| `HESEGO` | Menú de administración de Hesego (asignar placa, consultar ubicación, Operatividad, lanzar Inspección/Preop desde el menú) — siempre abre/reinicia, es la palabra de entrada "desde afuera" | `lib/session/gpswox-session.js` (aquí; antes en hesego-operatividad) |
+| `RASTREAR` | Menú propio de Rastrear: *1* Preoperacional, *2* Consultar placa y última ubicación (misma lógica que la opción 2 de Hesego, GPSwox es genérico), *3* Consultar documentos y *4* Registrar gastos (estas dos últimas responden "próximamente, en desarrollo") — igual que HESEGO, siempre abre/reinicia desde afuera | `lib/session/gpswox-session.js` (aquí; antes en hesego-operatividad) |
+| `MENU`, `MENÚ` | Vuelve al tope del menú en el que ya estés (Hesego o Rastrear) — **solo si hay una conversación activa**; sin conversación (recién entraste o escribiste `SALIR`) no hace nada, se trata como palabra sin reconocer | `lib/session/gpswox-session.js` (aquí; antes en hesego-operatividad) |
+| `SALIR` | Termina cualquier conversación/flujo activo (Hesego, Rastrear, Preop, Inspección) y responde un mensaje neutral sin abrir ningún menú ni mencionar las palabras clave (evita invitar a probarlas todas) | `lib/session/gpswox-session.js` (aquí; antes en hesego-operatividad); `preop-flow.js`/`inspeccion-flow.js` aquí reenvían "salir" ahí si hay sesión local activa |
 | `PREOPR`, `PREOP RASTREAR`, `PREOPERACIONAL RASTREAR` | Acceso directo al Preoperacional de Rastrear, sin pasar por el menú (lo que la opción *1* del menú de Rastrear usa internamente vía el endpoint `/api/gpswox/session/start-preop`) | aquí: `lib/session/preop-flow.js` |
 | `PREOP`, `PREOPERACIONAL` | Preoperacional de la empresa que el teléfono eligió antes (o Hesego por defecto si nunca eligió) | aquí: `lib/session/preop-flow.js` (`tenantFromTrigger` → `'auto'` → `empresa-pref.js`) |
 | `PREOP HESEGO`, `PREOPERACIONAL HESEGO` | Preoperacional de Hesego explícito | aquí: `lib/session/preop-flow.js` |
@@ -72,7 +64,7 @@ puesta):
 | `fx`, `/fx`, `!fx`, `posiciones`, `balance`, `estado`, `trading`, `mt5` (+ lo que sigue, libre) | Asistente de trading (DeepSeek) | aquí: `lib/session/fx-commands.js` → reenvía a `mt5-dashboard-fxpro` |
 | `PUERTO` | Flujo de registro en puerto (**Cloud API**, mismo número y mismo webhook que `TURNO`, NO Baileys): lista las transportadoras de Turnos numeradas → el usuario elige una → (**solo si la transportadora es COINTRA**; las demás registran el cliente **BUCANERO** por defecto, sin preguntar, y pasan directo a la placa) lista los **clientes** de Turnos numerados (`GET /api/puerto/clientes`) y elige uno → escribe la placa → recibe un enlace único (`/puerto?t=…` de turnos_co, vence a los 30 min) para fotografiar el manifiesto y los 4 precintos juntos en UNA foto, con OCR. `SALIR`/`CANCELAR` termina; el estado vive en memoria (5 min sin responder) | aquí: `lib/session/puerto-flow.js`, enganchado en `lib/session/webhook.js`; datos y fotos en `turnos_co` (`routes_puerto.py`) |
 | `CANCELAR` | Aborta el flujo de Preoperacional/Inspección en curso (se queda donde estaba, a diferencia de SALIR que termina todo) | dentro de cada flujo |
-| Cualquier otra palabra, sin conversación activa, en la sesión dedicada GPSwox | Aviso de "bot de notificaciones, escribe el nombre de la empresa o la palabra de acceso" (nunca nombra las palabras) — a las **5** palabras que no corresponden (sueltas u opciones inválidas de un menú) bloqueo de 10 min y, si vuelve a pasar con otras 5, de 30 min (bloqueo real, ni las palabras de acceso funcionan mientras dura; avisa cuánto falta); tope de 100 mensajes por día por número — ver `AGENTS.md` de `hesego-operatividad` | `hesego-operatividad/lib/gpswox-session.js` (webhook) |
+| Cualquier otra palabra, sin conversación activa, en la sesión dedicada GPSwox | Aviso de "bot de notificaciones, escribe el nombre de la empresa o la palabra de acceso" (nunca nombra las palabras) — a las **5** palabras que no corresponden (sueltas u opciones inválidas de un menú) bloqueo de 10 min y, si vuelve a pasar con otras 5, de 30 min (bloqueo real, ni las palabras de acceso funcionan mientras dura; avisa cuánto falta); tope de 100 mensajes por día por número — ver `AGENTS.md` de `hesego-operatividad` | `lib/session/gpswox-session.js` (aquí; antes en hesego-operatividad) |
 
 **`TURNO`/`TURNOS` NO está en esta tabla a propósito** — es el único trigger
 que NO llega por la sesión dedicada de Baileys (GPSwox). Los conductores le
